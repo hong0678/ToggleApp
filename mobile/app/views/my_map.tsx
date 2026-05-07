@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, KeyboardAvoidingView, Platform, ScrollView, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useSegments } from 'expo-router';
+import { AppBottomNav } from '@/components/app-bottom-nav';
 
 // TODO: API 연동을 위한 타입 정의
 export interface MyMapData {
@@ -13,6 +14,8 @@ const { width } = Dimensions.get('window');
 
 export default function MyMapScreen() {
   const router = useRouter();
+  const segments = useSegments();
+  const showInternalTabBar = segments[0] !== '(tabs)';
   
   // TODO: API 데이터 연동용 state (현재는 빈 배열로 empty state 렌더링)
   const [data, setData] = useState<MyMapData[]>([]);
@@ -79,25 +82,7 @@ export default function MyMapScreen() {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      {/* 4-Item Bottom Navigation Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/views/map_around')}>
-          <Ionicons name="location-outline" size={24} color="#8f9bb3" />
-          <Text style={styles.tabText}>주변</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/views/list_all')}>
-          <Ionicons name="list" size={24} color="#8f9bb3" />
-          <Text style={styles.tabText}>리스트</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/views/saved_places')}>
-          <Ionicons name="heart-outline" size={24} color="#8f9bb3" />
-          <Text style={styles.tabText}>저장</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Ionicons name="person" size={24} color="#fff" />
-          <Text style={[styles.tabText, styles.tabTextActive]}>마이</Text>
-        </TouchableOpacity>
-      </View>
+      {showInternalTabBar ? <AppBottomNav activeTab="my" /> : null}
     </LinearGradient>
     </>
   );

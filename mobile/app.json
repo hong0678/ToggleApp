@@ -4,7 +4,7 @@
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/mainLogo_toggle.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -38,9 +38,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/mainLogo_toggle.png",
-          "imageWidth": 200,
+          "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#101524",
+          "backgroundColor": "#ffffff",
           "dark": {
             "backgroundColor": "#101524"
           }

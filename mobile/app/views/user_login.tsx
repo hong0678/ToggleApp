@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  ActivityIndicator,
   StyleSheet,
   Text,
   View,
@@ -9,21 +11,23 @@ import {
   Platform,
   Dimensions,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Link } from 'expo-router';
+import { authApi } from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
 export default function UserLoginScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<'user' | 'owner'>('user'); // 'user' is active by default here
+  const [role, setRole] = useState<'user' | 'owner'>('user');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If role is changed to owner, navigate to owner login
   const handleRoleChange = (newRole: 'user' | 'owner') => {
     setRole(newRole);
     if (newRole === 'owner') {
@@ -31,85 +35,61 @@ export default function UserLoginScreen() {
     }
   };
 
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      Alert.alert('로그인 정보 확인', '이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await authApi.login(email.trim(), password);
+      router.replace('/views/map_around');
+    } catch (error) {
+      Alert.alert('로그인 실패', error instanceof Error ? error.message : '로그인 중 문제가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <LinearGradient
-      colors={['#5c7aff', '#86a0ff', '#b3c4ff']} 
-      style={styles.container}
-    >
+    <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        
-        {/* Back Button (Optional, but good for navigation UX) */}
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={28} color="#fff" />
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <Ionicons name="chevron-back" size={28} color="#0ea5a4" />
         </TouchableOpacity>
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-        >
-          {/* Glassmorphism Card */}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <View style={styles.card}>
+            <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
             <Text style={styles.title}>Toggle</Text>
             <Text style={styles.subtitle}>실시간으로 연결되는 우리 동네</Text>
 
-            {/* Role Selector */}
             <View style={styles.roleContainer}>
               <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === 'user' ? styles.roleButtonActive : null,
-                ]}
+                style={[styles.roleButton, role === 'user' && styles.roleButtonActive]}
                 onPress={() => handleRoleChange('user')}
                 activeOpacity={0.8}
               >
-                <Ionicons
-                  name="person-outline"
-                  size={18}
-                  color={role === 'user' ? '#333' : 'rgba(255, 255, 255, 0.7)'}
-                  style={styles.roleIcon}
-                />
-                <Text
-                  style={[
-                    styles.roleText,
-                    role === 'user' ? styles.roleTextActive : null,
-                  ]}
-                >
-                  일반 사용자
-                </Text>
+                <Ionicons name="person-outline" size={18} color={role === 'user' ? '#0ea5a4' : '#94a3b8'} style={styles.roleIcon} />
+                <Text style={[styles.roleText, role === 'user' && styles.roleTextActive]}>일반 사용자</Text>
               </TouchableOpacity>
-              
               <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === 'owner' ? styles.roleButtonActive : null,
-                ]}
+                style={[styles.roleButton, role === 'owner' && styles.roleButtonActive]}
                 onPress={() => handleRoleChange('owner')}
                 activeOpacity={0.8}
               >
-                <MaterialCommunityIcons
-                  name="storefront-outline"
-                  size={18}
-                  color={role === 'owner' ? '#333' : 'rgba(255, 255, 255, 0.7)'}
-                  style={styles.roleIcon}
-                />
-                <Text
-                  style={[
-                    styles.roleText,
-                    role === 'owner' ? styles.roleTextActive : null,
-                  ]}
-                >
-                  점주
-                </Text>
+                <MaterialCommunityIcons name="storefront-outline" size={18} color={role === 'owner' ? '#0ea5a4' : '#94a3b8'} style={styles.roleIcon} />
+                <Text style={[styles.roleText, role === 'owner' && styles.roleTextActive]}>점주</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Input Fields */}
             <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
+              <Ionicons name="person-outline" size={20} color="#0ea5a4" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="이메일을 입력하세요"
-                placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                placeholderTextColor="#94a3b8"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -118,25 +98,21 @@ export default function UserLoginScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={20} color="#0ea5a4" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="비밀번호"
-                placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                placeholderTextColor="#94a3b8"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
               />
             </View>
 
-            {/* Sub Options: Keep logged in, Find ID/PW, Signup */}
             <View style={styles.optionsRow}>
-              <TouchableOpacity 
-                style={styles.checkboxContainer} 
-                onPress={() => setKeepLoggedIn(!keepLoggedIn)}
-              >
+              <TouchableOpacity style={styles.checkboxContainer} onPress={() => setKeepLoggedIn(!keepLoggedIn)}>
                 <View style={[styles.checkbox, keepLoggedIn && styles.checkboxChecked]}>
-                  {keepLoggedIn && <Ionicons name="checkmark" size={14} color="#333" />}
+                  {keepLoggedIn && <Ionicons name="checkmark" size={14} color="#0ea5a4" />}
                 </View>
                 <Text style={styles.optionsText}>로그인 상태 유지</Text>
               </TouchableOpacity>
@@ -153,13 +129,17 @@ export default function UserLoginScreen() {
               </Link>
             </View>
 
-            {/* Submit Button */}
-            <TouchableOpacity style={styles.submitButton} activeOpacity={0.8}>
-              <Text style={styles.submitText}>로그인</Text>
-              <Ionicons name="chevron-forward" size={20} color="#1E3A8A" />
+            <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} activeOpacity={0.85} disabled={isSubmitting} onPress={handleLogin}>
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.submitText}>로그인</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#fff" />
+                </>
+              )}
             </TouchableOpacity>
 
-            {/* Guest Link */}
             <Link href="/" asChild>
               <TouchableOpacity style={styles.guestLink}>
                 <Text style={styles.guestLinkText}>로그인 없이 지도 둘러보기</Text>
@@ -175,158 +155,43 @@ export default function UserLoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  backBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
-    left: 20,
-    zIndex: 10,
-    padding: 8,
-  },
-  keyboardView: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  backBtn: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 40, left: 20, zIndex: 10, padding: 8 },
+  keyboardView: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   card: {
     width: width * 0.88,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: '#fff',
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: '#e2e8f0',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 5,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
   },
-  title: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: '#FFF',
-    marginBottom: 6,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#FFF',
-    marginBottom: 28,
-    opacity: 0.85,
-    fontWeight: '500',
-  },
-  roleContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    borderRadius: 14,
-    padding: 5,
-    width: '100%',
-    marginBottom: 20,
-  },
-  roleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  roleButtonActive: {
-    backgroundColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  logo: { width: 52, height: 52, resizeMode: 'contain', marginBottom: 6 },
+  title: { fontSize: 32, fontWeight: '900', color: '#0f172a', marginBottom: 4 },
+  subtitle: { fontSize: 13, color: '#64748b', marginBottom: 24, fontWeight: '600' },
+  roleContainer: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 14, padding: 5, width: '100%', marginBottom: 18 },
+  roleButton: { flex: 1, flexDirection: 'row', paddingVertical: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
+  roleButtonActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
   roleIcon: { marginRight: 6 },
-  roleText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  roleTextActive: { color: '#333' },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 14,
-    width: '100%',
-    paddingHorizontal: 16,
-    height: 52,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
+  roleText: { color: '#94a3b8', fontSize: 15, fontWeight: '600' },
+  roleTextActive: { color: '#0ea5a4' },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 14, width: '100%', paddingHorizontal: 16, height: 52, marginBottom: 14, borderWidth: 1, borderColor: '#e2e8f0' },
   inputIcon: { marginRight: 12 },
-  input: {
-    flex: 1,
-    color: '#FFF',
-    fontSize: 15,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    width: '100%',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  linksRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 24,
-    paddingHorizontal: 4,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    marginRight: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#FFF',
-  },
-  optionsText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 13,
-  },
-  submitButton: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    width: '100%',
-    height: 56,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  submitText: {
-    color: '#1a3b8b',
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginRight: 6,
-  },
-  guestLink: {
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  guestLinkText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 13,
-    textDecorationLine: 'underline',
-  },
+  input: { flex: 1, color: '#0f172a', fontSize: 15 },
+  optionsRow: { flexDirection: 'row', justifyContent: 'flex-start', width: '100%', marginBottom: 12, paddingHorizontal: 4 },
+  linksRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 24, paddingHorizontal: 4 },
+  checkboxContainer: { flexDirection: 'row', alignItems: 'center' },
+  checkbox: { width: 18, height: 18, borderRadius: 4, backgroundColor: '#fff', marginRight: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1' },
+  checkboxChecked: { backgroundColor: '#e6fffb', borderColor: '#0ea5a4' },
+  optionsText: { color: '#64748b', fontSize: 13 },
+  submitButton: { flexDirection: 'row', backgroundColor: '#0ea5a4', width: '100%', height: 56, borderRadius: 14, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
+  submitButtonDisabled: { opacity: 0.72 },
+  submitText: { color: '#fff', fontSize: 17, fontWeight: 'bold', marginRight: 6 },
+  guestLink: { marginTop: 24, marginBottom: 8 },
+  guestLinkText: { color: '#64748b', fontSize: 13, textDecorationLine: 'underline' },
 });

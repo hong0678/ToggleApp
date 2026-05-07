@@ -14,13 +14,16 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { AppBottomNav } from '@/components/app-bottom-nav';
 
 const { height: windowHeight } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
-const DEFAULT_SHEET_HEIGHT = 280;
-const MAX_SHEET_HEIGHT = Math.min(windowHeight - 150, 620);
+const BOTTOM_NAV_HEIGHT = 78;
+const DEFAULT_SHEET_HEIGHT = Math.min(windowHeight * 0.54, windowHeight - BOTTOM_NAV_HEIGHT - 12);
+const MAX_SHEET_HEIGHT = windowHeight - BOTTOM_NAV_HEIGHT - 12;
 
 type CategoryOption = {
   label: string;
@@ -58,7 +61,10 @@ const clamp = (value: number, min: number, max: number) => {
 
 export default function MapAroundScreen() {
   const router = useRouter();
+  const segments = useSegments();
+  const showInternalTabBar = segments[0] !== '(tabs)';
   const webViewRef = useRef<React.ElementRef<typeof WebView>>(null);
+  const cardScrollRef = useRef<ScrollView>(null);
   const sheetHeight = useRef(new Animated.Value(DEFAULT_SHEET_HEIGHT)).current;
   const sheetHeightValue = useRef(DEFAULT_SHEET_HEIGHT);
   const dragStartHeight = useRef(DEFAULT_SHEET_HEIGHT);
@@ -70,7 +76,7 @@ export default function MapAroundScreen() {
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [isSheetExpanded, setIsSheetExpanded] = useState(true);
   const [isMapSortOpen, setIsMapSortOpen] = useState(false);
-  const [activeMapSort, setActiveMapSort] = useState('기본순');
+  const [selectedMapSorts, setSelectedMapSorts] = useState<string[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<KakaoPlacePreview[]>([]);
   const [isPlacesLoading, setIsPlacesLoading] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{
@@ -85,6 +91,29 @@ export default function MapAroundScreen() {
     { title: '리뷰 많은 순', subtitle: '리뷰가 많은 순' },
     { title: '찜 많은 순', subtitle: '찜이 많은 순' },
   ];
+
+  const mapSortButtonLabel = selectedMapSorts.length === 0
+    ? '기본순'
+    : selectedMapSorts.length === 1
+      ? selectedMapSorts[0]
+      : `${selectedMapSorts[0]} 외 ${selectedMapSorts.length - 1}개`;
+
+  const toggleMapSort = useCallback((title: string) => {
+    setSelectedMapSorts((current) => (
+      current.includes(title)
+        ? current.filter((item) => item !== title)
+        : [...current, title]
+    ));
+  }, []);
+
+  const resetAndCloseMapSorts = useCallback(() => {
+    setSelectedMapSorts([]);
+    setIsMapSortOpen(false);
+  }, []);
+
+  const closeMapSortPanel = useCallback(() => {
+    setIsMapSortOpen(false);
+  }, []);
 
   const searchPlacesByCategory = useCallback((category: CategoryOption) => {
     setIsPlacesLoading(true);
@@ -210,6 +239,20 @@ export default function MapAroundScreen() {
     moveToCurrentLocation(false);
   }, [moveToCurrentLocation]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setIsCategoryMenuOpen(false);
+      setIsMapSortOpen(false);
+      setSelectedMapSorts([]);
+      setActiveFilter('전체');
+      setIsSheetExpanded(true);
+      setSheetHeight(DEFAULT_SHEET_HEIGHT, false);
+      requestAnimationFrame(() => {
+        cardScrollRef.current?.scrollTo({ y: 0, animated: false });
+      });
+    }, [setSheetHeight])
+  );
+
   const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
@@ -322,7 +365,7 @@ export default function MapAroundScreen() {
             });
           }
 
-          function renderPlaces(places) {
+          function renderPlaces(places, shouldFitMap) {
             clearPlaceMarkers();
 
             var bounds = new kakao.maps.LatLngBounds();
@@ -341,7 +384,7 @@ export default function MapAroundScreen() {
               bounds.extend(position);
             }
 
-            if (limitedPlaces.length > 0) {
+            if (shouldFitMap !== false && limitedPlaces.length > 0) {
               map.setBounds(bounds);
             }
 
@@ -394,7 +437,9 @@ export default function MapAroundScreen() {
             };
 
             if (activeCategoryCode) {
-              runCategorySearch(activeCategoryCode, searchOptions).then(renderPlaces);
+              runCategorySearch(activeCategoryCode, searchOptions).then(function(places) {
+                renderPlaces(places, false);
+              });
               return;
             }
 
@@ -402,16 +447,48 @@ export default function MapAroundScreen() {
               Promise.all(defaultCategoryCodes.map(function(code) {
                 return runCategorySearch(code, searchOptions);
               })).then(function(results) {
-                renderPlaces([].concat.apply([], results));
+                renderPlaces([].concat.apply([], results), false);
               });
               return;
             }
 
-            runKeywordSearch(activeCategoryLabel, searchOptions).then(renderPlaces);
+            runKeywordSearch(activeCategoryLabel, searchOptions).then(function(places) {
+              renderPlaces(places, false);
+            });
           };
 
           window.searchPlacesInCurrentMap = function() {
-            window.searchPlacesByCategory(activeCategoryLabel, activeCategoryCode);
+            if (!map || !placesService || !window.kakao) return;
+
+            postToApp({ type: 'places-loading' });
+
+            var center = map.getCenter();
+            var searchOptions = {
+              location: new kakao.maps.LatLng(center.getLat(), center.getLng()),
+              sort: kakao.maps.services.SortBy.DISTANCE,
+              radius: 2000,
+              size: 15
+            };
+
+            if (activeCategoryCode) {
+              runCategorySearch(activeCategoryCode, searchOptions).then(function(places) {
+                renderPlaces(places, false);
+              });
+              return;
+            }
+
+            if (activeCategoryLabel === '전체') {
+              Promise.all(defaultCategoryCodes.map(function(code) {
+                return runCategorySearch(code, searchOptions);
+              })).then(function(results) {
+                renderPlaces([].concat.apply([], results), false);
+              });
+              return;
+            }
+
+            runKeywordSearch(activeCategoryLabel, searchOptions).then(function(places) {
+              renderPlaces(places, false);
+            });
           };
 
           window.moveToCurrentLocation = function(lat, lng) {
@@ -621,26 +698,35 @@ export default function MapAroundScreen() {
               activeOpacity={0.85}
               onPress={() => setIsMapSortOpen((previous) => !previous)}
             >
-              <Text style={styles.mapSortButtonText}>
-                정렬 기준 : <Text style={styles.mapSortValue}>{activeMapSort}</Text>
-              </Text>
+              <View style={styles.mapSortButtonTextWrap}>
+                <Text style={styles.mapSortButtonText}>정렬 기준</Text>
+                <Text style={styles.mapSortValue}>{mapSortButtonLabel}</Text>
+              </View>
               <Ionicons name={isMapSortOpen ? 'chevron-up' : 'chevron-down'} size={22} color="#fff" />
             </TouchableOpacity>
 
             {isMapSortOpen ? (
               <View style={styles.mapSortPanel}>
+                <View style={styles.mapSortPanelHeader}>
+                  <Text style={styles.mapSortPanelTitle}>필터 선택</Text>
+                  <View style={styles.mapSortPanelActions}>
+                    <TouchableOpacity onPress={resetAndCloseMapSorts} activeOpacity={0.8}>
+                      <Text style={styles.mapSortClearText}>기본정렬</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={closeMapSortPanel} activeOpacity={0.85} style={styles.mapSortDoneButton}>
+                      <Text style={styles.mapSortDoneText}>완료</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
                 {mapSortOptions.map((option) => {
-                  const isActive = activeMapSort === option.title;
+                  const isActive = selectedMapSorts.includes(option.title);
 
                   return (
                     <TouchableOpacity
                       key={option.title}
                       style={styles.mapSortOption}
                       activeOpacity={0.85}
-                      onPress={() => {
-                        setActiveMapSort(option.title);
-                        setIsMapSortOpen(false);
-                      }}
+                      onPress={() => toggleMapSort(option.title)}
                     >
                       <View>
                         <Text style={styles.mapSortOptionTitle}>{option.title}</Text>
@@ -655,7 +741,12 @@ export default function MapAroundScreen() {
               </View>
             ) : null}
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cardScroll}>
+            <ScrollView
+              ref={cardScrollRef}
+              showsVerticalScrollIndicator={false}
+              style={styles.cardScroll}
+              contentContainerStyle={styles.cardScrollContent}
+            >
             {isPlacesLoading ? (
               <Text style={styles.emptyText}>장소를 불러오는 중...</Text>
             ) : nearbyPlaces.length === 0 ? (
@@ -699,25 +790,7 @@ export default function MapAroundScreen() {
           ) : null}
       </Animated.View>
 
-      {/* 4-Item Bottom Navigation Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Ionicons name="location" size={24} color="#fff" />
-          <Text style={[styles.tabText, styles.tabTextActive]}>주변</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/views/list_all')}>
-          <Ionicons name="list" size={24} color="#8f9bb3" />
-          <Text style={styles.tabText}>리스트</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/views/saved_places')}>
-          <Ionicons name="heart-outline" size={24} color="#8f9bb3" />
-          <Text style={styles.tabText}>저장</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/views/my_map')}>
-          <Ionicons name="person-outline" size={24} color="#8f9bb3" />
-          <Text style={styles.tabText}>마이</Text>
-        </TouchableOpacity>
-      </View>
+      {showInternalTabBar ? <AppBottomNav activeTab="map" /> : null}
     </View>
   );
 }
@@ -725,11 +798,11 @@ export default function MapAroundScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f7fbfc',
   },
   mapPlaceholder: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#e6e4e0',
+    backgroundColor: '#eef7f7',
   },
   gridOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -756,25 +829,31 @@ const styles = StyleSheet.create({
   },
   markerText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 
-  topOverlay: { position: 'absolute', top: 0, width: '100%', zIndex: 10 },
-  searchContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: Platform.OS === 'android' ? 20 : 0, alignItems: 'center' },
-  menuButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  searchInputBox: { flex: 1, height: 44, backgroundColor: '#333', borderRadius: 22, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
-  searchTextPlaceholder: { color: 'rgba(255,255,255,0.7)', fontSize: 15, marginLeft: 10 },
+  topOverlay: {
+    position: 'absolute',
+    top: 0,
+    width: '100%',
+    zIndex: 10,
+    paddingTop: Platform.OS === 'android' ? 12 : 0,
+  },
+  searchContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 0, alignItems: 'center' },
+  menuButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#0ea5a4', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  searchInputBox: { flex: 1, height: 44, backgroundColor: '#fff', borderRadius: 22, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: '#dbeff0' },
+  searchTextPlaceholder: { color: '#94a3b8', fontSize: 15, marginLeft: 10 },
   
   filterWrapper: { marginTop: 12 },
   filterScrollView: { width: '100%' },
   filterScroll: { paddingHorizontal: 16, paddingRight: 28 },
-  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#555', marginRight: 8 },
-  filterPillActive: { backgroundColor: '#86a0ff' },
-  filterText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  filterTextActive: { color: '#fff' },
+  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', marginRight: 8, borderWidth: 1, borderColor: '#d8eceb' },
+  filterPillActive: { backgroundColor: '#e4fbf9', borderColor: '#8bd8d6' },
+  filterText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  filterTextActive: { color: '#0ea5a4' },
 
   searchThisAreaContainer: { alignItems: 'center', marginTop: 16 },
-  searchThisAreaButton: { flexDirection: 'row', backgroundColor: '#222', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
-  searchThisAreaText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  searchThisAreaButton: { flexDirection: 'row', backgroundColor: '#e6fbfa', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, alignItems: 'center', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  searchThisAreaText: { color: '#0ea5a4', fontSize: 14, fontWeight: '700' },
 
-  gpsButton: { position: 'absolute', right: 16, top: 160, width: 44, height: 44, borderRadius: 22, backgroundColor: '#555', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+  gpsButton: { position: 'absolute', right: 16, top: 160, width: 44, height: 44, borderRadius: 22, backgroundColor: '#0ea5a4', alignItems: 'center', justifyContent: 'center', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 3 },
 
   categoryOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -787,13 +866,13 @@ const styles = StyleSheet.create({
   },
   categoryPanel: {
     width: 284,
-    backgroundColor: '#171c2a',
+    backgroundColor: '#f2fbfa',
     paddingHorizontal: 22,
     paddingTop: 22,
     paddingBottom: 20,
   },
   categoryTitle: {
-    color: '#dfe5f3',
+    color: '#0f172a',
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 20,
@@ -807,64 +886,77 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     marginBottom: 8,
+    backgroundColor: '#f8fbfc',
   },
   categoryItemActive: {
-    backgroundColor: '#3f86f7',
+    backgroundColor: '#e6fbfa',
   },
   categoryItemText: {
-    color: 'rgba(255,255,255,0.62)',
+    color: '#64748b',
     fontSize: 18,
     fontWeight: '700',
   },
   categoryItemTextActive: {
-    color: '#fff',
+    color: '#0ea5a4',
   },
 
   bottomSheet: {
     position: 'absolute',
-    bottom: 80,
+    bottom: BOTTOM_NAV_HEIGHT,
     left: 0,
     right: 0,
     zIndex: 10,
     elevation: 10,
     width: '100%',
-    backgroundColor: '#1e2336',
+    backgroundColor: '#f2fbfa',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20,
-    shadowColor: '#000', 
+    shadowColor: '#0f172a', 
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 10,
-    paddingBottom: 20,
+    paddingBottom: 12,
     overflow: 'hidden',
   },
-  sheetToggle: { alignItems: 'center', paddingTop: 12, paddingBottom: 14 },
-  handleBar: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2 },
-  bottomSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sheetToggle: { alignItems: 'center', paddingTop: 10, paddingBottom: 10 },
+  handleBar: { width: 40, height: 4, backgroundColor: '#d7e8ea', borderRadius: 2 },
+  bottomSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  bottomSheetTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginRight: 12 },
-  openOnlyBadge: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  openOnlyText: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
-  viewAllText: { color: '#86a0ff', fontSize: 14 },
+  bottomSheetTitle: { fontSize: 18, fontWeight: 'bold', color: '#0f172a', marginRight: 12 },
+  openOnlyBadge: { borderWidth: 1, borderColor: '#d8eceb', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  openOnlyText: { color: '#64748b', fontSize: 12 },
+  viewAllText: { color: '#0ea5a4', fontSize: 14 },
   mapSortButton: {
-    height: 52,
+    height: 48,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: '#d8eceb',
+    backgroundColor: '#f7fbfc',
     paddingHorizontal: 18,
-    marginBottom: 14,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   mapSortButtonText: {
-    color: 'rgba(255,255,255,0.68)',
+    color: '#64748b',
     fontSize: 17,
     fontWeight: '800',
   },
+  mapSortButtonTextWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginRight: 12,
+    minWidth: 0,
+  },
   mapSortValue: {
-    color: '#fff',
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'right',
+    flexShrink: 1,
   },
   mapSortPanel: {
     position: 'absolute',
@@ -874,26 +966,64 @@ const styles = StyleSheet.create({
     zIndex: 3,
     elevation: 3,
     borderRadius: 22,
-    backgroundColor: 'rgba(12,18,31,0.96)',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#d8eceb',
     paddingVertical: 8,
     paddingHorizontal: 18,
+  },
+  mapSortPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  mapSortPanelActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mapSortPanelTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  mapSortClearText: {
+    color: '#0ea5a4',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mapSortDoneButton: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: '#e6fbfa',
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapSortDoneText: {
+    color: '#0ea5a4',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   mapSortOption: {
     minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
   mapSortOptionTitle: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 2,
   },
   mapSortOptionSubtitle: {
-    color: 'rgba(255,255,255,0.56)',
+    color: '#64748b',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -902,44 +1032,47 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: '#d8eceb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapSortRadioActive: {
-    borderColor: '#8cb4ff',
-    backgroundColor: 'rgba(140,180,255,0.12)',
+    borderColor: '#0ea5a4',
+    backgroundColor: '#e6fbfa',
   },
-  
   cardScroll: { flex: 1 },
-  emptyText: { color: 'rgba(255,255,255,0.62)', fontSize: 14, fontWeight: '600', paddingVertical: 20, textAlign: 'center' },
-  storeCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  storeName: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  categoryBadge: { backgroundColor: 'rgba(255,255,255,0.1)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 16 },
-  categoryText: { color: '#8cb4ff', fontSize: 12 },
+  cardScrollContent: {
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  emptyText: { color: '#64748b', fontSize: 14, fontWeight: '600', paddingVertical: 20, textAlign: 'center' },
+  storeCard: { backgroundColor: '#fff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e6eef1', marginBottom: 8, shadowColor: '#0f172a', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  storeName: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
+  categoryBadge: { backgroundColor: '#eefbfb', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 10 },
+  categoryText: { color: '#0ea5a4', fontSize: 12 },
   
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   statusBadge: { backgroundColor: '#00e676', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
   statusText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  unknownStatusBadge: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
-  unknownStatusText: { color: 'rgba(255,255,255,0.78)', fontSize: 12, fontWeight: 'bold' },
-  statusUpdateText: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
+  unknownStatusBadge: { backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
+  unknownStatusText: { color: '#334155', fontSize: 12, fontWeight: 'bold' },
+  statusUpdateText: { color: '#64748b', fontSize: 12 },
   
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  infoText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, marginLeft: 8 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  infoText: { color: '#64748b', fontSize: 14, marginLeft: 8 },
 
   bottomTabBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     height: 85,
-    backgroundColor: '#232634',
+    backgroundColor: '#fff',
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderColor: '#34384b',
+    borderColor: '#eceef3',
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 25 : 10,
   },
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { color: '#8f9bb3', fontSize: 11, marginTop: 4 },
-  tabTextActive: { color: '#fff', fontWeight: 'bold' },
+  tabTextActive: { color: '#0ea5a4', fontWeight: 'bold' },
 });

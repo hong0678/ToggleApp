@@ -3,11 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Ima
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
 
-  const menuItems = [
+  const menuItems: { title: string; route: Href; icon: string }[] = [
     { title: '실시간 상태 관리', route: '/views/owner_status_manage', icon: 'time-outline' },
     { title: '운영시간 관리', route: '/views/owner_hours_manage', icon: 'calendar-outline' },
     { title: '메뉴 관리', route: '/views/owner_menu_manage', icon: 'restaurant-outline' },
