@@ -1,112 +1,451 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
+  Image,
+  Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+export default function ExploreScreen() {
+  const router = useRouter();
 
-export default function TabTwoScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.heroShell}>
+            <View style={styles.topRow}>
+              <View style={styles.brand}>
+                <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
+                <View style={styles.brandCopy}>
+                  <Text style={styles.brandTitle}>Toggle</Text>
+                  <Text style={styles.brandSubtitle}>새로운 장소와 지도를 둘러봐요</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/my')} activeOpacity={0.85}>
+                <Ionicons name="compass-outline" size={18} color="#0ea5a4" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroTitle}>
+                <Text style={styles.heroAccent}>둘러보기, </Text>새로운 발견
+              </Text>
+              <Text style={styles.heroSubtitle}>다른 사람들의 추천과 지금 인기 있는 장소를 확인해보세요</Text>
+            </View>
+          </View>
+
+          <View style={styles.quickRow}>
+            <TouchableOpacity style={[styles.quickCard, styles.quickCardA]} onPress={() => router.push('/map')} activeOpacity={0.9}>
+              <View style={styles.quickIconCircle}>
+                <Ionicons name="location-outline" size={23} color="#0ea5a4" />
+              </View>
+              <Text style={styles.quickTitle}>지금 열린 곳</Text>
+              <Text style={styles.quickSubtitleSmall}>내 주변에서 바로 확인해요</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.quickCard, styles.quickCardB]} onPress={() => router.push('/views/search_nickname')} activeOpacity={0.9}>
+              <View style={styles.quickIconCircle}>
+                <Ionicons name="people-outline" size={23} color="#f59e0b" />
+              </View>
+              <Text style={styles.quickTitle}>사람들 지도</Text>
+              <Text style={styles.quickSubtitleSmall}>다른 사람의 코스를 구경해요</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.mapCard}>
+            <View style={styles.mapChip}>
+              <Ionicons name="radio-button-on-outline" size={14} color="#0ea5a4" />
+              <Text style={styles.mapChipText}>지금 인기</Text>
+            </View>
+            <View style={styles.mapPreview}>
+              <Image source={require('@/assets/images/목지도.png')} style={styles.mapPreviewImage} />
+              <View style={styles.mapBackdropGlow} />
+              <View style={[styles.pin, styles.pinLeftTop]}>
+                <Ionicons name="heart" size={10} color="#ff4d74" />
+              </View>
+              <View style={[styles.pin, styles.pinCenter]}>
+                <View style={styles.centerDotOuter}>
+                  <View style={styles.centerDotInner} />
+                </View>
+              </View>
+              <View style={[styles.pin, styles.pinRightTop]}>
+                <Ionicons name="heart" size={10} color="#ff4d74" />
+              </View>
+              <View style={styles.mapHalo} />
+            </View>
+            <View style={styles.mapFooter}>
+              <View>
+                <Text style={styles.mapFooterTitle}>인기 장소와 지도 미리보기</Text>
+                <Text style={styles.mapFooterSub}>홈과 같은 톤으로 둘러보기를 이어가요</Text>
+              </View>
+              <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
+                <Text style={styles.mapFooterButtonText}>리스트 보기</Text>
+                <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="flame-outline" size={18} color="#0ea5a4" />
+              <Text style={styles.sectionTitle}>지금 인기 장소</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/list')}>
+              <Text style={styles.sectionMore}>더보기</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.listCard}>
+            <View style={styles.listRow}>
+              <View style={styles.listBadge}><Text style={styles.listBadgeText}>카페</Text></View>
+              <View style={styles.listInfo}>
+                <Text style={styles.listTitle}>라떼온스</Text>
+                <Text style={styles.listSubtitle}>분위기 좋은 카페 · 160m</Text>
+              </View>
+              <Text style={styles.listLike}>♡ 124</Text>
+            </View>
+            <View style={styles.listDivider} />
+            <View style={styles.listRow}>
+              <View style={[styles.listBadge, styles.listBadgeWarm]}><Text style={styles.listBadgeText}>일식</Text></View>
+              <View style={styles.listInfo}>
+                <Text style={styles.listTitle}>이자카야 하루</Text>
+                <Text style={styles.listSubtitle}>저녁에 가기 좋은 곳 · 240m</Text>
+              </View>
+              <Text style={styles.listLike}>♡ 98</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    backgroundColor: '#f7fbfc',
   },
-  titleContainer: {
+  safeArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === 'ios' ? 8 : 18,
+    paddingBottom: 26,
+  },
+  heroShell: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  topRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  logo: {
+    width: 50,
+    height: 50,
+    resizeMode: 'contain',
+    marginRight: 12,
+  },
+  brandCopy: {
+    justifyContent: 'center',
+  },
+  brandTitle: {
+    color: '#0ea5a4',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  brandSubtitle: {
+    marginTop: 2,
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: {
+    alignItems: 'flex-start',
+  },
+  heroTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  heroAccent: {
+    color: '#0ea5a4',
+  },
+  heroSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 18,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  quickCard: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 112,
+    backgroundColor: '#fff',
+  },
+  quickCardA: {
+    borderColor: '#8dd9d7',
+    backgroundColor: '#e8f8f7',
+  },
+  quickCardB: {
+    borderColor: '#f8d5a6',
+    backgroundColor: '#fff3e4',
+  },
+  quickIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  quickTitle: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  quickSubtitleSmall: {
+    marginTop: 4,
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+  },
+  mapCard: {
+    marginTop: 16,
+    borderRadius: 24,
+    backgroundColor: '#f7fbff',
+    borderWidth: 1,
+    borderColor: '#eef2f7',
+    overflow: 'hidden',
+  },
+  mapChip: {
+    position: 'absolute',
+    left: 14,
+    top: 14,
+    zIndex: 2,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mapChipText: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  mapPreview: {
+    height: 180,
+    backgroundColor: '#eef7f7',
+    overflow: 'hidden',
+  },
+  mapPreviewImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    opacity: 0.9,
+  },
+  mapBackdropGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(230,251,250,0.24)',
+  },
+  pin: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  pinLeftTop: { left: 52, top: 36 },
+  pinCenter: { left: '50%', top: '50%', marginLeft: -18, marginTop: -18 },
+  pinRightTop: { right: 58, top: 38 },
+  centerDotOuter: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerDotInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#0ea5a4',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  mapHalo: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 120,
+    height: 120,
+    marginLeft: -60,
+    marginTop: -60,
+    borderRadius: 60,
+    backgroundColor: 'rgba(14,165,164,0.12)',
+  },
+  mapFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+  },
+  mapFooterTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  mapFooterSub: {
+    marginTop: 4,
+    color: '#64748b',
+    fontSize: 12,
+  },
+  mapFooterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#e6fbfa',
+  },
+  mapFooterButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    marginBottom: 12,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  sectionTitle: {
+    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  sectionMore: {
+    color: '#0ea5a4',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  listCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e6eef1',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  listBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listBadgeWarm: {
+    backgroundColor: '#fff3e4',
+  },
+  listBadgeText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  listInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  listTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  listSubtitle: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  listLike: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  listDivider: {
+    height: 1,
+    backgroundColor: '#eef2f7',
+    marginVertical: 12,
   },
 });

@@ -6,6 +6,7 @@ import {
   PanResponder,
   StyleSheet,
   Text,
+  TextInput,
   View,
   TouchableOpacity,
   SafeAreaView,
@@ -14,16 +15,17 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { AppBottomNav } from '@/components/app-bottom-nav';
+import { tokenStore } from '@/services/api';
 
 const { height: windowHeight } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
 const BOTTOM_NAV_HEIGHT = 78;
-const DEFAULT_SHEET_HEIGHT = Math.min(windowHeight * 0.54, windowHeight - BOTTOM_NAV_HEIGHT - 12);
-const MAX_SHEET_HEIGHT = windowHeight - BOTTOM_NAV_HEIGHT - 12;
+const NEARBY_PLACES_CACHE_KEY = 'toggle.nearbyPlaces';
 
 type CategoryOption = {
   label: string;
@@ -61,13 +63,19 @@ const clamp = (value: number, min: number, max: number) => {
 
 export default function MapAroundScreen() {
   const router = useRouter();
-  const segments = useSegments();
-  const showInternalTabBar = segments[0] !== '(tabs)';
+  const pathname = usePathname();
+  const params = useLocalSearchParams<{ query?: string | string[] }>();
+  const searchParam = Array.isArray(params.query) ? params.query[0] : params.query;
+  const initialSearchQuery = (searchParam ?? '').trim();
+  const showInternalTabBar = pathname !== '/map';
+  const sheetBottomOffset = showInternalTabBar ? BOTTOM_NAV_HEIGHT : 0;
+  const defaultSheetHeight = Math.min(windowHeight * 0.54, windowHeight - sheetBottomOffset - 12);
+  const maxSheetHeight = windowHeight - sheetBottomOffset - 12;
   const webViewRef = useRef<React.ElementRef<typeof WebView>>(null);
   const cardScrollRef = useRef<ScrollView>(null);
-  const sheetHeight = useRef(new Animated.Value(DEFAULT_SHEET_HEIGHT)).current;
-  const sheetHeightValue = useRef(DEFAULT_SHEET_HEIGHT);
-  const dragStartHeight = useRef(DEFAULT_SHEET_HEIGHT);
+  const sheetHeight = useRef(new Animated.Value(defaultSheetHeight)).current;
+  const sheetHeightValue = useRef(defaultSheetHeight);
+  const dragStartHeight = useRef(defaultSheetHeight);
   const currentCoordsRef = useRef<{
     latitude: number;
     longitude: number;
@@ -79,10 +87,13 @@ export default function MapAroundScreen() {
   const [selectedMapSorts, setSelectedMapSorts] = useState<string[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<KakaoPlacePreview[]>([]);
   const [isPlacesLoading, setIsPlacesLoading] = useState(false);
+  const [mapSearchQuery, setMapSearchQuery] = useState(initialSearchQuery);
   const [currentCoords, setCurrentCoords] = useState<{
     latitude: number;
     longitude: number;
   } | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [favoritedPlaceIds, setFavoritedPlaceIds] = useState<string[]>([]);
 
   const categories = CATEGORY_OPTIONS;
   const mapSortOptions = [
@@ -123,6 +134,33 @@ export default function MapAroundScreen() {
     `);
   }, []);
 
+  const searchPlacesByKeyword = useCallback((query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return;
+
+    setIsPlacesLoading(true);
+    webViewRef.current?.injectJavaScript(`
+      window.__togglePendingKeywordQuery = ${JSON.stringify(trimmedQuery)};
+      if (window.searchPlacesByKeyword) {
+        window.searchPlacesByKeyword(${JSON.stringify(trimmedQuery)});
+      }
+      true;
+    `);
+  }, []);
+
+  const submitMapSearch = useCallback(() => {
+    const trimmedQuery = mapSearchQuery.trim();
+
+    if (!trimmedQuery) {
+      setActiveFilter('전체');
+      searchPlacesByCategory({ label: '전체', code: null });
+      return;
+    }
+
+    setActiveFilter(trimmedQuery);
+    searchPlacesByKeyword(trimmedQuery);
+  }, [mapSearchQuery, searchPlacesByCategory, searchPlacesByKeyword]);
+
   const selectCategory = useCallback((category: CategoryOption) => {
     setActiveFilter(category.label);
     setIsCategoryMenuOpen(false);
@@ -130,7 +168,7 @@ export default function MapAroundScreen() {
   }, [searchPlacesByCategory]);
 
   const setSheetHeight = useCallback((nextHeight: number, animated = true) => {
-    const clampedHeight = clamp(nextHeight, MIN_SHEET_HEIGHT, MAX_SHEET_HEIGHT);
+    const clampedHeight = clamp(nextHeight, MIN_SHEET_HEIGHT, maxSheetHeight);
 
     sheetHeightValue.current = clampedHeight;
     setIsSheetExpanded(clampedHeight > MIN_SHEET_HEIGHT + 24);
@@ -151,7 +189,7 @@ export default function MapAroundScreen() {
     }
 
     sheetHeight.setValue(clampedHeight);
-  }, [sheetHeight]);
+  }, [maxSheetHeight, sheetHeight]);
 
   const sheetPanResponder = useRef(
     PanResponder.create({
@@ -241,16 +279,41 @@ export default function MapAroundScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
+
+      const loadAuthState = async () => {
+        const accessToken = await tokenStore.getAccessToken();
+        if (!active) return;
+        setIsLoggedIn(Boolean(accessToken));
+      };
+
+      void loadAuthState();
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    if (!initialSearchQuery) return;
+
+    setMapSearchQuery(initialSearchQuery);
+    searchPlacesByKeyword(initialSearchQuery);
+  }, [initialSearchQuery, searchPlacesByKeyword]);
+
+  useFocusEffect(
+    useCallback(() => {
       setIsCategoryMenuOpen(false);
       setIsMapSortOpen(false);
       setSelectedMapSorts([]);
-      setActiveFilter('전체');
+      setActiveFilter(initialSearchQuery || '전체');
       setIsSheetExpanded(true);
-      setSheetHeight(DEFAULT_SHEET_HEIGHT, false);
+      setSheetHeight(defaultSheetHeight, false);
       requestAnimationFrame(() => {
         cardScrollRef.current?.scrollTo({ y: 0, animated: false });
       });
-    }, [setSheetHeight])
+    }, [defaultSheetHeight, initialSearchQuery, setSheetHeight])
   );
 
   const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
@@ -258,8 +321,15 @@ export default function MapAroundScreen() {
       const message = JSON.parse(event.nativeEvent.data);
 
       if (message.type === 'places') {
-        setNearbyPlaces(Array.isArray(message.places) ? message.places : []);
+        const places = Array.isArray(message.places) ? message.places : [];
+        setNearbyPlaces(places);
         setIsPlacesLoading(false);
+
+        try {
+          globalThis.localStorage?.setItem(NEARBY_PLACES_CACHE_KEY, JSON.stringify(places));
+        } catch {
+          // Ignore storage failures; the map result itself is still shown.
+        }
       }
 
       if (message.type === 'places-loading') {
@@ -277,6 +347,26 @@ export default function MapAroundScreen() {
       true;
     `);
   }, []);
+
+  const handleFavoritePress = useCallback(async (placeId: string) => {
+    if (!isLoggedIn) {
+      Alert.alert(
+        '로그인이 필요해요',
+        '찜은 로그인 후 사용할 수 있어요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '로그인 페이지로 이동', onPress: () => router.push('/views/user_login') },
+        ]
+      );
+      return;
+    }
+
+    setFavoritedPlaceIds((current) => (
+      current.includes(placeId)
+        ? current.filter((id) => id !== placeId)
+        : [...current, placeId]
+    ));
+  }, [isLoggedIn, router]);
 
   const kakaoMapHtml = `
     <!DOCTYPE html>
@@ -314,8 +404,10 @@ export default function MapAroundScreen() {
           var placeMarkers = [];
           var placesService = null;
           var pendingCurrentLocation = null;
+          var pendingKeywordQuery = window.__togglePendingKeywordQuery || ${JSON.stringify(initialSearchQuery)};
           var activeCategoryLabel = '전체';
           var activeCategoryCode = null;
+          var activeKeywordQuery = pendingKeywordQuery;
           var defaultCategoryCodes = ['FD6', 'CE7', 'CS2', 'MT1', 'PM9', 'HP8', 'PO3', 'CT1', 'SC4', 'SW8', 'PK6'];
 
           function postToApp(payload) {
@@ -420,7 +512,39 @@ export default function MapAroundScreen() {
             });
           }
 
+          function createSearchOptions() {
+            var center = map.getCenter();
+            return {
+              location: new kakao.maps.LatLng(center.getLat(), center.getLng()),
+              sort: kakao.maps.services.SortBy.DISTANCE,
+              radius: 2000,
+              size: 15
+            };
+          }
+
+          window.searchPlacesByKeyword = function(query) {
+            activeKeywordQuery = (query || '').trim();
+            pendingKeywordQuery = activeKeywordQuery;
+            activeCategoryLabel = activeKeywordQuery || '전체';
+            activeCategoryCode = null;
+
+            if (!map || !placesService || !window.kakao) return;
+
+            if (!activeKeywordQuery) {
+              window.searchPlacesByCategory('전체', null);
+              return;
+            }
+
+            pendingKeywordQuery = '';
+            postToApp({ type: 'places-loading' });
+            runKeywordSearch(activeKeywordQuery, createSearchOptions()).then(function(places) {
+              renderPlaces(places, false);
+            });
+          };
+
           window.searchPlacesByCategory = function(label, categoryCode) {
+            activeKeywordQuery = '';
+            pendingKeywordQuery = '';
             activeCategoryLabel = label || '전체';
             activeCategoryCode = categoryCode || null;
 
@@ -428,13 +552,7 @@ export default function MapAroundScreen() {
 
             postToApp({ type: 'places-loading' });
 
-            var center = map.getCenter();
-            var searchOptions = {
-              location: new kakao.maps.LatLng(center.getLat(), center.getLng()),
-              sort: kakao.maps.services.SortBy.DISTANCE,
-              radius: 2000,
-              size: 15
-            };
+            var searchOptions = createSearchOptions();
 
             if (activeCategoryCode) {
               runCategorySearch(activeCategoryCode, searchOptions).then(function(places) {
@@ -462,13 +580,14 @@ export default function MapAroundScreen() {
 
             postToApp({ type: 'places-loading' });
 
-            var center = map.getCenter();
-            var searchOptions = {
-              location: new kakao.maps.LatLng(center.getLat(), center.getLng()),
-              sort: kakao.maps.services.SortBy.DISTANCE,
-              radius: 2000,
-              size: 15
-            };
+            var searchOptions = createSearchOptions();
+
+            if (activeKeywordQuery) {
+              runKeywordSearch(activeKeywordQuery, searchOptions).then(function(places) {
+                renderPlaces(places, false);
+              });
+              return;
+            }
 
             if (activeCategoryCode) {
               runCategorySearch(activeCategoryCode, searchOptions).then(function(places) {
@@ -511,6 +630,11 @@ export default function MapAroundScreen() {
             });
 
             if (placesService) {
+              if (pendingKeywordQuery || activeKeywordQuery) {
+                window.searchPlacesByKeyword(pendingKeywordQuery || activeKeywordQuery);
+                return;
+              }
+
               window.searchPlacesByCategory(activeCategoryLabel, activeCategoryCode);
             }
           };
@@ -538,6 +662,8 @@ export default function MapAroundScreen() {
 
                 if (pendingCurrentLocation) {
                   window.moveToCurrentLocation(pendingCurrentLocation.lat, pendingCurrentLocation.lng);
+                } else if (pendingKeywordQuery) {
+                  window.searchPlacesByKeyword(pendingKeywordQuery);
                 } else {
                   window.searchPlacesByCategory(activeCategoryLabel, activeCategoryCode);
                 }
@@ -587,10 +713,18 @@ export default function MapAroundScreen() {
           <TouchableOpacity onPress={() => setIsCategoryMenuOpen(true)} style={styles.menuButton}>
             <Ionicons name="menu" size={24} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.searchInputBox} onPress={() => router.push('/views/map_search')}>
+          <View style={styles.searchInputBox}>
             <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.searchTextPlaceholder}>장소, 버스, 지하철, 주소 검색</Text>
-          </TouchableOpacity>
+            <TextInput
+              style={styles.searchTextInput}
+              value={mapSearchQuery}
+              onChangeText={setMapSearchQuery}
+              onSubmitEditing={submitMapSearch}
+              placeholder="장소, 버스, 지하철, 주소 검색"
+              placeholderTextColor="#94a3b8"
+              returnKeyType="search"
+            />
+          </View>
         </View>
 
         {/* Filter Pills */}
@@ -669,7 +803,7 @@ export default function MapAroundScreen() {
       ) : null}
 
       {/* 3. Bottom Sheet UI: keep only the visible sheet as the touch target so the WebView can receive map gestures. */}
-      <Animated.View pointerEvents="auto" style={[styles.bottomSheet, { height: sheetHeight }]}>
+      <Animated.View pointerEvents="auto" style={[styles.bottomSheet, { bottom: sheetBottomOffset, height: sheetHeight }]}>
           <View
             style={styles.sheetToggle}
             {...sheetPanResponder.panHandlers}
@@ -682,7 +816,7 @@ export default function MapAroundScreen() {
             activeOpacity={0.85}
             onPress={() => {
               setIsMapSortOpen(false);
-              setSheetHeight(isSheetExpanded ? MIN_SHEET_HEIGHT : DEFAULT_SHEET_HEIGHT);
+              setSheetHeight(isSheetExpanded ? MIN_SHEET_HEIGHT : defaultSheetHeight);
             }}
           >
             <View style={styles.headerLeft}>
@@ -756,8 +890,12 @@ export default function MapAroundScreen() {
                 <View style={styles.storeCard} key={place.id}>
                   <View style={styles.cardHeader}>
                     <Text style={styles.storeName}>{place.name}</Text>
-                    <TouchableOpacity>
-                      <Ionicons name="heart-outline" size={24} color="#fff" />
+                    <TouchableOpacity onPress={() => handleFavoritePress(place.id)} activeOpacity={0.8}>
+                      <Ionicons
+                        name={favoritedPlaceIds.includes(place.id) ? 'heart' : 'heart-outline'}
+                        size={24}
+                        color={favoritedPlaceIds.includes(place.id) ? '#ff4d74' : '#0ea5a4'}
+                      />
                     </TouchableOpacity>
                   </View>
                   
@@ -839,7 +977,14 @@ const styles = StyleSheet.create({
   searchContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 0, alignItems: 'center' },
   menuButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#0ea5a4', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   searchInputBox: { flex: 1, height: 44, backgroundColor: '#fff', borderRadius: 22, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: '#dbeff0' },
-  searchTextPlaceholder: { color: '#94a3b8', fontSize: 15, marginLeft: 10 },
+  searchTextInput: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 10,
+    paddingVertical: 0,
+  },
   
   filterWrapper: { marginTop: 12 },
   filterScrollView: { width: '100%' },
@@ -902,7 +1047,6 @@ const styles = StyleSheet.create({
 
   bottomSheet: {
     position: 'absolute',
-    bottom: BOTTOM_NAV_HEIGHT,
     left: 0,
     right: 0,
     zIndex: 10,
@@ -1042,24 +1186,24 @@ const styles = StyleSheet.create({
   },
   cardScroll: { flex: 1 },
   cardScrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 28,
     flexGrow: 1,
   },
   emptyText: { color: '#64748b', fontSize: 14, fontWeight: '600', paddingVertical: 20, textAlign: 'center' },
-  storeCard: { backgroundColor: '#fff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e6eef1', marginBottom: 8, shadowColor: '#0f172a', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  storeName: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
-  categoryBadge: { backgroundColor: '#eefbfb', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 10 },
+  storeCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e6eef1', marginBottom: 10, shadowColor: '#0f172a', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  storeName: { fontSize: 17, fontWeight: 'bold', color: '#0f172a' },
+  categoryBadge: { backgroundColor: '#eefbfb', alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7, marginBottom: 12 },
   categoryText: { color: '#0ea5a4', fontSize: 12 },
   
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   statusBadge: { backgroundColor: '#00e676', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
   statusText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   unknownStatusBadge: { backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
   unknownStatusText: { color: '#334155', fontSize: 12, fontWeight: 'bold' },
   statusUpdateText: { color: '#64748b', fontSize: 12 },
   
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   infoText: { color: '#64748b', fontSize: 14, marginLeft: 8 },
 
   bottomTabBar: {

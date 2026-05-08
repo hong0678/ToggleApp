@@ -44,7 +44,7 @@ export default function UserLoginScreen() {
     try {
       setIsSubmitting(true);
       await authApi.login(email.trim(), password);
-      router.replace('/views/map_around');
+      router.replace('/(tabs)');
     } catch (error) {
       Alert.alert('로그인 실패', error instanceof Error ? error.message : '로그인 중 문제가 발생했습니다.');
     } finally {

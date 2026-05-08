@@ -8,10 +8,9 @@ import {
   SafeAreaView,
   Platform,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { useRouter, Stack, useSegments } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as Location from 'expo-location';
 import { mobileSearchApi, type StoreLookupItemResponse } from '@/services/api';
 import { AppBottomNav } from '@/components/app-bottom-nav';
@@ -33,6 +32,7 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   약국: ['약국'],
 };
 const DEFAULT_RADIUS_METERS = 2000;
+const NEARBY_PLACES_CACHE_KEY = 'toggle.nearbyPlaces';
 type CategoryLabel = (typeof CATEGORY_OPTIONS)[number];
 
 type ListStoreItem = StoreLookupItemResponse & {
@@ -41,9 +41,8 @@ type ListStoreItem = StoreLookupItemResponse & {
 };
 
 export default function ListAllScreen() {
-  const router = useRouter();
-  const segments = useSegments();
-  const showInternalTabBar = segments[0] !== '(tabs)';
+  const pathname = usePathname();
+  const showInternalTabBar = pathname !== '/list';
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [selectedSorts, setSelectedSorts] = useState<string[]>(['가까운 순']);
@@ -104,6 +103,62 @@ export default function ListAllScreen() {
     setIsSortPanelOpen(false);
   };
 
+  const loadCachedMapAroundStores = useCallback(() => {
+    try {
+      const cachedPlaces = globalThis.localStorage?.getItem(NEARBY_PLACES_CACHE_KEY);
+      if (!cachedPlaces) return;
+
+      const places = JSON.parse(cachedPlaces) as {
+        id?: string;
+        name?: string;
+        category?: string;
+        address?: string;
+        distance?: string;
+        phone?: string;
+      }[];
+
+      if (!Array.isArray(places) || places.length === 0) return;
+
+      setStores(places.map((place, index) => ({
+        storeId: Number(place.id?.replace(/\D/g, '')) || index + 1,
+        externalSource: 'kakao',
+        externalPlaceId: place.id ?? `cached-${index}`,
+        name: place.name ?? '이름 정보 없음',
+        categoryName: place.category ?? null,
+        address: place.address ?? null,
+        roadAddress: place.address ?? null,
+        jibunAddress: null,
+        phone: place.phone ?? null,
+        latitude: 0,
+        longitude: 0,
+        businessStatus: null,
+        liveBusinessStatus: null,
+        liveStatusSource: null,
+        verified: false,
+        verifiedAt: null,
+        ownerNotice: null,
+        openTime: null,
+        closeTime: null,
+        breakStart: null,
+        breakEnd: null,
+        rating: null,
+        reviewAverageRating: null,
+        reviewCount: 0,
+        favoriteCount: 0,
+        imageUrls: [],
+        operationalState: null,
+        closureRequestStatus: null,
+        menuEligible: false,
+        menuEditable: false,
+        menuEligibilityReason: null,
+        distance: place.distance ?? '',
+        sourceLabel: place.category ?? '지도',
+      })));
+    } catch {
+      // Cached map results are best-effort only.
+    }
+  }, []);
+
   const getCategoryLabel = useCallback((store: ListStoreItem) => {
     const raw = store.categoryName ?? '';
     if (!raw) return '카테고리 정보 없음';
@@ -162,64 +217,74 @@ export default function ListAllScreen() {
         new Map(documents.map((item) => [item.document.id, item])).values()
       );
 
-      if (uniqueDocuments.length === 0) {
-        setStores([]);
+      if (uniqueDocuments.length > 0) {
+        const lookupResponse = await mobileSearchApi.lookup({
+          items: uniqueDocuments.map((item) => ({
+            externalPlaceId: item.document.id,
+            name: item.document.place_name,
+            address: item.document.road_address_name ?? item.document.address_name ?? '',
+            latitude: Number(item.document.y),
+            longitude: Number(item.document.x),
+            categoryName: item.document.category_name,
+          })),
+        });
+
+        const mergedStores = uniqueDocuments.map((item) => {
+          const resolvedStore = lookupResponse.stores.find((store) => store.externalPlaceId === item.document.id);
+
+          return {
+            ...(resolvedStore ?? {}),
+            storeId: (resolvedStore?.storeId ?? Number(item.document.id.replace(/\D/g, ''))) || 0,
+            externalSource: resolvedStore?.externalSource ?? 'kakao',
+            externalPlaceId: item.document.id,
+            name: resolvedStore?.name ?? item.document.place_name,
+            categoryName: resolvedStore?.categoryName ?? item.document.category_name ?? null,
+            address: resolvedStore?.address ?? item.document.address_name ?? null,
+            roadAddress: resolvedStore?.roadAddress ?? item.document.road_address_name ?? null,
+            jibunAddress: resolvedStore?.jibunAddress ?? null,
+            phone: resolvedStore?.phone ?? item.document.phone ?? null,
+            latitude: resolvedStore?.latitude ?? Number(item.document.y),
+            longitude: resolvedStore?.longitude ?? Number(item.document.x),
+            businessStatus: resolvedStore?.businessStatus ?? null,
+            liveBusinessStatus: resolvedStore?.liveBusinessStatus ?? null,
+            liveStatusSource: resolvedStore?.liveStatusSource ?? null,
+            verified: resolvedStore?.verified ?? false,
+            verifiedAt: resolvedStore?.verifiedAt ?? null,
+            ownerNotice: resolvedStore?.ownerNotice ?? null,
+            openTime: resolvedStore?.openTime ?? null,
+            closeTime: resolvedStore?.closeTime ?? null,
+            breakStart: resolvedStore?.breakStart ?? null,
+            breakEnd: resolvedStore?.breakEnd ?? null,
+            rating: resolvedStore?.rating ?? null,
+            reviewAverageRating: resolvedStore?.reviewAverageRating ?? null,
+            reviewCount: resolvedStore?.reviewCount ?? 0,
+            favoriteCount: resolvedStore?.favoriteCount ?? 0,
+            imageUrls: resolvedStore?.imageUrls ?? [],
+            operationalState: resolvedStore?.operationalState ?? null,
+            closureRequestStatus: resolvedStore?.closureRequestStatus ?? null,
+            menuEligible: resolvedStore?.menuEligible ?? false,
+            menuEditable: resolvedStore?.menuEditable ?? false,
+            menuEligibilityReason: resolvedStore?.menuEligibilityReason ?? null,
+            distance: item.document.distance,
+            sourceLabel: item.sourceLabel,
+          } as ListStoreItem;
+        });
+
+        setStores(mergedStores);
         return;
       }
 
-      const lookupResponse = await mobileSearchApi.lookup({
-        items: uniqueDocuments.map((item) => ({
-          externalPlaceId: item.document.id,
-          name: item.document.place_name,
-          address: item.document.road_address_name ?? item.document.address_name ?? '',
-          latitude: Number(item.document.y),
-          longitude: Number(item.document.x),
-          categoryName: item.document.category_name,
-        })),
+      const nearbyResponse = await mobileSearchApi.nearbyStores({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        radiusMeters: DEFAULT_RADIUS_METERS,
+        limit: 30,
       });
 
-      const mergedStores = uniqueDocuments.map((item) => {
-        const resolvedStore = lookupResponse.stores.find((store) => store.externalPlaceId === item.document.id);
-
-        return {
-          ...(resolvedStore ?? {}),
-          storeId: (resolvedStore?.storeId ?? Number(item.document.id.replace(/\D/g, ''))) || 0,
-          externalSource: resolvedStore?.externalSource ?? 'kakao',
-          externalPlaceId: item.document.id,
-          name: resolvedStore?.name ?? item.document.place_name,
-          categoryName: resolvedStore?.categoryName ?? item.document.category_name ?? null,
-          address: resolvedStore?.address ?? item.document.address_name ?? null,
-          roadAddress: resolvedStore?.roadAddress ?? item.document.road_address_name ?? null,
-          jibunAddress: resolvedStore?.jibunAddress ?? null,
-          phone: resolvedStore?.phone ?? item.document.phone ?? null,
-          latitude: resolvedStore?.latitude ?? Number(item.document.y),
-          longitude: resolvedStore?.longitude ?? Number(item.document.x),
-          businessStatus: resolvedStore?.businessStatus ?? null,
-          liveBusinessStatus: resolvedStore?.liveBusinessStatus ?? null,
-          liveStatusSource: resolvedStore?.liveStatusSource ?? null,
-          verified: resolvedStore?.verified ?? false,
-          verifiedAt: resolvedStore?.verifiedAt ?? null,
-          ownerNotice: resolvedStore?.ownerNotice ?? null,
-          openTime: resolvedStore?.openTime ?? null,
-          closeTime: resolvedStore?.closeTime ?? null,
-          breakStart: resolvedStore?.breakStart ?? null,
-          breakEnd: resolvedStore?.breakEnd ?? null,
-          rating: resolvedStore?.rating ?? null,
-          reviewAverageRating: resolvedStore?.reviewAverageRating ?? null,
-          reviewCount: resolvedStore?.reviewCount ?? 0,
-          favoriteCount: resolvedStore?.favoriteCount ?? 0,
-          imageUrls: resolvedStore?.imageUrls ?? [],
-          operationalState: resolvedStore?.operationalState ?? null,
-          closureRequestStatus: resolvedStore?.closureRequestStatus ?? null,
-          menuEligible: resolvedStore?.menuEligible ?? false,
-          menuEditable: resolvedStore?.menuEditable ?? false,
-          menuEligibilityReason: resolvedStore?.menuEligibilityReason ?? null,
-          distance: item.document.distance,
-          sourceLabel: item.sourceLabel,
-        } as ListStoreItem;
-      });
-
-      setStores(mergedStores);
+      setStores(nearbyResponse.stores.map((store) => ({
+        ...store,
+        sourceLabel: '주변 매장',
+      } as ListStoreItem)));
     } catch (error) {
       setStores([]);
       setStoresError(error instanceof Error ? error.message : '매장 정보를 불러오지 못했어요.');
@@ -231,56 +296,55 @@ export default function ListAllScreen() {
     }
   }, [selectedFilters]);
 
-  useEffect(() => {
-    let active = true;
+  const loadCurrentLocation = useCallback(async () => {
+    setIsStoresLoading(true);
+    setStoresError(null);
 
-    const initializeLocation = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
 
-        if (!active) return;
+      if (status !== 'granted') {
+        setStores([]);
+        setStoresError('위치 권한이 필요해요.');
+        setIsStoresLoading(false);
+        return;
+      }
 
-        if (status !== 'granted') {
-          setStoresError('위치 권한이 필요해요.');
-          setIsStoresLoading(false);
-          return;
-        }
+      const hasServices = await Location.hasServicesEnabledAsync();
 
-        const hasServices = await Location.hasServicesEnabledAsync();
+      if (!hasServices) {
+        setStores([]);
+        setStoresError('위치 서비스를 켜야 주변 매장을 볼 수 있어요.');
+        setIsStoresLoading(false);
+        return;
+      }
 
-        if (!active) return;
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      }).catch(() => Location.getLastKnownPositionAsync());
 
-        if (!hasServices) {
-          setStoresError('위치 서비스를 켜야 주변 매장을 볼 수 있어요.');
-          setIsStoresLoading(false);
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-        if (!active) return;
-
-        const coords = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        };
-
-        setCurrentCoords(coords);
-      } catch {
-        if (!active) return;
+      if (!location) {
+        setStores([]);
         setStoresError('현재 위치를 가져오지 못했어요.');
         setIsStoresLoading(false);
+        return;
       }
-    };
 
-    initializeLocation();
-
-    return () => {
-      active = false;
-    };
+      setCurrentCoords({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    } catch {
+      setStores([]);
+      setStoresError('현재 위치를 가져오지 못했어요.');
+      setIsStoresLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadCachedMapAroundStores();
+    void loadCurrentLocation();
+  }, [loadCachedMapAroundStores, loadCurrentLocation]);
 
   useEffect(() => {
     if (!currentCoords) return;
@@ -295,7 +359,7 @@ export default function ListAllScreen() {
     });
 
     const comparators: Record<string, (a: ListStoreItem, b: ListStoreItem) => number> = {
-      '가까운 순': () => 0,
+      '가까운 순': (a, b) => Number(a.distance || 9007199254740991) - Number(b.distance || 9007199254740991),
       '리뷰 많은 순': (a, b) => (b.reviewCount ?? 0) - (a.reviewCount ?? 0),
       '찜 많은 순': (a, b) => (b.favoriteCount ?? 0) - (a.favoriteCount ?? 0),
       '별점 순': (a, b) => (b.reviewAverageRating ?? b.rating ?? 0) - (a.reviewAverageRating ?? a.rating ?? 0),
@@ -345,30 +409,6 @@ export default function ListAllScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={26} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>통합 리스트</Text>
-          <View style={{width: 26}} />
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchInputContainer}>
-            <Ionicons name="search" size={20} color="#8f9bb3" style={styles.searchIcon} />
-            <TextInput 
-              style={styles.searchInput}
-              placeholder="이름, 카테고리 검색"
-              placeholderTextColor="#8f9bb3"
-            />
-          </View>
-          <TouchableOpacity style={styles.filterIconButton} onPress={() => setIsFilterPanelOpen((previous) => !previous)}>
-            <Ionicons name="options-outline" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
-
         {/* Filter Pills */}
         <View style={styles.filterWrapper}>
           <TouchableOpacity
@@ -425,10 +465,10 @@ export default function ListAllScreen() {
 
         {/* List Info Bar */}
         <View style={styles.listInfoBar}>
-          <Text style={styles.totalCountText}>총 <Text style={{color: '#00e676', fontWeight: 'bold'}}>10</Text>건</Text>
+          <Text style={styles.totalCountText}>총 <Text style={{color: '#0ea5a4', fontWeight: 'bold'}}>{displayedStores.length}</Text>건</Text>
           <View style={styles.listInfoRight}>
-            <TouchableOpacity style={styles.locationSearchBtn}>
-              <MaterialIcons name="my-location" size={14} color="#fff" style={{marginRight: 4}} />
+            <TouchableOpacity style={styles.locationSearchBtn} onPress={loadCurrentLocation} activeOpacity={0.85}>
+              <MaterialIcons name="my-location" size={14} color="#0ea5a4" style={{marginRight: 4}} />
               <Text style={styles.locationSearchText}>현위치 검색</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.sortDropdown} onPress={() => setIsSortPanelOpen((previous) => !previous)}>
@@ -553,27 +593,70 @@ export default function ListAllScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2a2e3d',
+    backgroundColor: '#f7fbfc',
   },
-  header: {
+  heroCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 18,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  heroBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginBottom: 12,
   },
-  backButton: {
-    padding: 4,
+  logo: {
+    width: 46,
+    height: 46,
+    resizeMode: 'contain',
+    marginRight: 10,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFF',
+  heroBrandTextWrap: {
+    flex: 1,
+  },
+  brandName: {
+    color: '#0ea5a4',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  brandSubText: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  heroTitle: {
+    color: '#0f172a',
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 14,
   },
   searchSection: {
     flexDirection: 'row',
+    gap: 12,
+  },
+  searchSectionCompact: {
+    flexDirection: 'row',
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 10,
     gap: 12,
   },
   searchInputContainer: {
@@ -591,7 +674,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#333',
+    color: '#0f172a',
   },
   filterIconButton: {
     width: 48,
@@ -602,6 +685,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterWrapper: {
+    paddingTop: Platform.OS === 'ios' ? 44 : 28,
     marginBottom: 16,
     paddingHorizontal: 16,
   },
@@ -637,9 +721,9 @@ const styles = StyleSheet.create({
   filterSummaryButton: {
     height: 52,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#0ea5a4',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#0ea5a4',
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -653,7 +737,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   filterSummaryLabel: {
-    color: '#8f9bb3',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -668,9 +752,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     padding: 16,
     borderRadius: 18,
-    backgroundColor: 'rgba(12,18,31,0.96)',
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#dbeff0',
   },
   filterPanelHeader: {
     flexDirection: 'row',
@@ -679,7 +763,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   filterPanelTitle: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: '800',
   },
@@ -689,12 +773,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   filterResetText: {
-    color: '#8cb4ff',
+    color: '#0ea5a4',
     fontSize: 13,
     fontWeight: '700',
   },
   filterDoneText: {
-    color: '#fff',
+    color: '#0ea5a4',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -706,7 +790,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   totalCountText: {
-    color: '#8f9bb3',
+    color: '#64748b',
     fontSize: 14,
   },
   listInfoRight: {
@@ -717,31 +801,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#4a5b82',
-    backgroundColor: 'rgba(74, 91, 130, 0.2)',
+    borderColor: '#bfeceb',
+    backgroundColor: '#e6fbfa',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
   },
   locationSearchText: {
-    color: '#fff',
+    color: '#0ea5a4',
     fontSize: 12,
+    fontWeight: '700',
   },
   sortDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3b3f51',
+    backgroundColor: '#fff',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2eef0',
   },
   sortText: {
-    color: '#d1d5db',
+    color: '#0f172a',
     fontSize: 12,
+    fontWeight: '700',
   },
   divider: {
     height: 1,
-    backgroundColor: '#3b3f51',
+    backgroundColor: '#dbeff0',
     width: '100%',
   },
   sortPanel: {
@@ -749,9 +837,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     padding: 16,
     borderRadius: 18,
-    backgroundColor: 'rgba(12,18,31,0.96)',
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#dbeff0',
   },
   sortPanelHeader: {
     flexDirection: 'row',
@@ -760,7 +848,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sortPanelTitle: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: '800',
   },
@@ -770,7 +858,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sortResetText: {
-    color: '#8cb4ff',
+    color: '#0ea5a4',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -785,7 +873,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sortDoneText: {
-    color: '#fff',
+    color: '#0ea5a4',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -797,13 +885,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sortOptionTitle: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 2,
   },
   sortOptionSubtitle: {
-    color: 'rgba(255,255,255,0.56)',
+    color: '#64748b',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -814,14 +902,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyStateTitle: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyStateText: {
-    color: '#8f9bb3',
+    color: '#64748b',
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 20,
@@ -831,25 +919,30 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: '#d8eceb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sortRadioActive: {
-    borderColor: '#8cb4ff',
-    backgroundColor: 'rgba(140,180,255,0.12)',
+    borderColor: '#0ea5a4',
+    backgroundColor: '#e6fbfa',
   },
   listContainer: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   card: {
-    backgroundColor: '#34384b',
+    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: '#e6eef1',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 1,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -860,10 +953,10 @@ const styles = StyleSheet.create({
   storeName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#0f172a',
   },
   categoryBadge: {
-    backgroundColor: 'rgba(66, 107, 255, 0.15)',
+    backgroundColor: '#eefbfb',
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -871,7 +964,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   categoryText: {
-    color: '#8cb4ff',
+    color: '#0ea5a4',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -888,12 +981,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusText: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: 'bold',
   },
   statusUpdateText: {
-    color: '#8f9bb3',
+    color: '#64748b',
     fontSize: 12,
   },
   infoRow: {
@@ -902,13 +995,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   infoText: {
-    color: '#c5c9d6',
-    fontSize: 13,
+    color: '#64748b',
+    fontSize: 14,
     marginLeft: 6,
   },
   cardFooterDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#e6eef1',
     marginVertical: 14,
   },
   cardFooter: {
@@ -922,7 +1015,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   footerText: {
-    color: '#fff',
+    color: '#0f172a',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -930,11 +1023,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    height: 85,
-    backgroundColor: '#232634',
+    height: 78,
+    backgroundColor: '#fff',
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderColor: '#34384b',
+    borderColor: '#eceef3',
     paddingBottom: Platform.OS === 'ios' ? 25 : 10,
     paddingTop: 10,
   },
@@ -949,7 +1042,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tabTextActive: {
-    color: '#fff',
+    color: '#0ea5a4',
     fontWeight: 'bold',
   },
 });

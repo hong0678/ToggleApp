@@ -1,9 +1,37 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, View, Text, StyleSheet, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { publicMapsApi, type PublicMapSearchItemResponse } from '@/services/api';
+import { tokenStore } from '@/services/api';
+
+function LoginGatePanel({
+  onLogin,
+  onSignup,
+}: {
+  onLogin: () => void;
+  onSignup: () => void;
+}) {
+  return (
+    <View style={styles.gateCard}>
+      <View style={styles.gateIconWrap}>
+        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+      </View>
+      <Text style={styles.gateTitle}>사람들 지도를 보려면 로그인하세요</Text>
+      <Text style={styles.gateSubtitle}>다른 사람들의 추천 장소와 코멘트를 확인해볼 수 있어요.</Text>
+      <View style={styles.gateButtons}>
+        <TouchableOpacity style={styles.gateSecondaryButton} onPress={onLogin} activeOpacity={0.9}>
+          <Text style={styles.gateSecondaryButtonText}>로그인</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.gatePrimaryButton} onPress={onSignup} activeOpacity={0.9}>
+          <Text style={styles.gatePrimaryButtonText}>회원가입</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 export default function SearchNicknameScreen() {
   const router = useRouter();
@@ -11,6 +39,22 @@ export default function SearchNicknameScreen() {
   const [results, setResults] = useState<PublicMapSearchItemResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const loadAuth = useCallback(async () => {
+    const token = await tokenStore.getAccessToken();
+    setIsLoggedIn(Boolean(token));
+  }, []);
+
+  useEffect(() => {
+    void loadAuth();
+  }, [loadAuth]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadAuth();
+    }, [loadAuth])
+  );
 
   const searchPublicMaps = async () => {
     if (!nickname.trim()) {
@@ -55,82 +99,89 @@ export default function SearchNicknameScreen() {
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>다른 유저의 공개 마이지도 찾기</Text>
-              <Text style={styles.cardSubtitle}>닉네임으로 검색해서 저장한 장소 목록을 찾아볼 수 있어요.</Text>
+            {isLoggedIn ? (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>다른 유저의 공개 마이지도 찾기</Text>
+                <Text style={styles.cardSubtitle}>닉네임으로 검색해서 저장한 장소 목록을 찾아볼 수 있어요.</Text>
 
-              <View style={styles.inputContainer}>
-                <Ionicons name="search-outline" size={20} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="닉네임을 입력해주세요"
-                  placeholderTextColor="rgba(255, 255, 255, 0.4)"
-                  value={nickname}
-                  onChangeText={setNickname}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                  onSubmitEditing={searchPublicMaps}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.primaryButton, isLoading ? styles.primaryButtonDisabled : null]}
-                disabled={isLoading}
-                onPress={searchPublicMaps}
-                activeOpacity={0.85}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#312e81" />
-                ) : (
-                  <>
-                    <Text style={styles.primaryButtonText}>검색하기</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#312e81" />
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {isLoading ? null : results.length > 0 ? (
-                <View style={styles.resultList}>
-                  {results.map((item) => (
-                    <TouchableOpacity
-                      key={item.publicMapUuid}
-                      style={styles.resultCard}
-                      activeOpacity={0.85}
-                      onPress={() => Alert.alert('공개 마이지도', `지도 ID: ${item.publicMapUuid}`)}
-                    >
-                      <View style={styles.resultAvatar}>
-                        <Ionicons name="person" size={22} color="#fff" />
-                      </View>
-                      <View style={styles.resultContent}>
-                        <Text style={styles.resultNickname}>{item.nickname}</Text>
-                        <Text style={styles.resultTitle}>{item.title || '공개 마이지도'}</Text>
-                        {item.description ? (
-                          <Text style={styles.resultDescription} numberOfLines={2}>
-                            {item.description}
-                          </Text>
-                        ) : null}
-                        <Text style={styles.resultMeta}>저장 장소 {item.savedPlaceCount}개</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.48)" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Ionicons
-                    name={hasSearched ? 'search-outline' : 'map-outline'}
-                    size={54}
-                    color="rgba(255,255,255,0.3)"
+                <View style={styles.inputContainer}>
+                  <Ionicons name="search-outline" size={20} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="닉네임을 입력해주세요"
+                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                    value={nickname}
+                    onChangeText={setNickname}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    onSubmitEditing={searchPublicMaps}
                   />
-                  <Text style={styles.emptyStateText}>
-                    {hasSearched ? '검색 결과가 없습니다.' : '닉네임을 검색해보세요.'}
-                  </Text>
-                  <Text style={styles.emptyStateSubText}>
-                    공개 설정된 유저의 마이지도만 검색됩니다.
-                  </Text>
                 </View>
-              )}
-            </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, isLoading ? styles.primaryButtonDisabled : null]}
+                  disabled={isLoading}
+                  onPress={searchPublicMaps}
+                  activeOpacity={0.85}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#312e81" />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>검색하기</Text>
+                      <Ionicons name="chevron-forward" size={20} color="#312e81" />
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {isLoading ? null : results.length > 0 ? (
+                  <View style={styles.resultList}>
+                    {results.map((item) => (
+                      <TouchableOpacity
+                        key={item.publicMapUuid}
+                        style={styles.resultCard}
+                        activeOpacity={0.85}
+                        onPress={() => Alert.alert('공개 마이지도', `지도 ID: ${item.publicMapUuid}`)}
+                      >
+                        <View style={styles.resultAvatar}>
+                          <Ionicons name="person" size={22} color="#fff" />
+                        </View>
+                        <View style={styles.resultContent}>
+                          <Text style={styles.resultNickname}>{item.nickname}</Text>
+                          <Text style={styles.resultTitle}>{item.title || '공개 마이지도'}</Text>
+                          {item.description ? (
+                            <Text style={styles.resultDescription} numberOfLines={2}>
+                              {item.description}
+                            </Text>
+                          ) : null}
+                          <Text style={styles.resultMeta}>저장 장소 {item.savedPlaceCount}개</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.48)" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons
+                      name={hasSearched ? 'search-outline' : 'map-outline'}
+                      size={54}
+                      color="rgba(255,255,255,0.3)"
+                    />
+                    <Text style={styles.emptyStateText}>
+                      {hasSearched ? '검색 결과가 없습니다.' : '닉네임을 검색해보세요.'}
+                    </Text>
+                    <Text style={styles.emptyStateSubText}>
+                      공개 설정된 유저의 마이지도만 검색됩니다.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <LoginGatePanel
+                onLogin={() => router.push('/views/user_login')}
+                onSignup={() => router.push('/views/user_signup')}
+              />
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -192,6 +243,73 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 22,
+  },
+  gateCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
+  },
+  gateIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  gateTitle: {
+    color: '#0f172a',
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 27,
+  },
+  gateSubtitle: {
+    color: '#64748b',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  gateButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 22,
+  },
+  gateSecondaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#8bd8d6',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gateSecondaryButtonText: {
+    color: '#0ea5a4',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  gatePrimaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 18,
+    backgroundColor: '#0ea5a4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gatePrimaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
   },
   inputContainer: {
     flexDirection: 'row',
