@@ -19,6 +19,7 @@ import { useRouter, Link } from 'expo-router';
 import { authApi } from '@/services/api';
 
 const { width } = Dimensions.get('window');
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function OwnerSignupScreen() {
   const router = useRouter();
@@ -29,6 +30,29 @@ export default function OwnerSignupScreen() {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const normalizedStoreName = storeName.trim();
+  const normalizedEmail = email.trim();
+  const normalizedPassword = password;
+  const normalizedPasswordConfirm = passwordConfirm;
+  const storeNameError =
+    normalizedStoreName.length > 0 && (normalizedStoreName.length < 2 || normalizedStoreName.length > 30)
+      ? '매장명은 2자 이상 30자 이하여야 합니다.'
+      : '';
+  const emailError =
+    normalizedEmail.length > 0 && !EMAIL_REGEX.test(normalizedEmail)
+      ? '올바른 이메일 형식을 입력해주세요.'
+      : '';
+  const passwordError =
+    normalizedPassword.length > 0 && (normalizedPassword.length < 8 || normalizedPassword.length > 100)
+      ? '비밀번호는 8자 이상 100자 이하여야 합니다.'
+      : '';
+  const passwordConfirmError =
+    normalizedPasswordConfirm.length > 0 && normalizedPassword !== normalizedPasswordConfirm
+      ? '비밀번호가 서로 일치하지 않습니다.'
+      : '';
+  const hasInlineErrors = Boolean(storeNameError || emailError || passwordError || passwordConfirmError);
+  const canSubmit = !isSubmitting && !hasInlineErrors;
+
   const handleRoleChange = (newRole: 'user' | 'owner') => {
     setRole(newRole);
     if (newRole === 'user') {
@@ -37,12 +61,17 @@ export default function OwnerSignupScreen() {
   };
 
   const handleSignup = async () => {
-    if (!storeName.trim() || !email.trim() || !password) {
-      Alert.alert('가입 정보 확인', '이름, 이메일, 비밀번호를 모두 입력해주세요.');
+    if (!normalizedStoreName || !normalizedEmail || !normalizedPassword) {
+      Alert.alert('가입 정보 확인', '매장명, 이메일, 비밀번호를 모두 입력해주세요.');
       return;
     }
 
-    if (password !== passwordConfirm) {
+    if (storeNameError || emailError || passwordError) {
+      Alert.alert('가입 정보 확인', '입력 형식을 다시 확인해주세요.');
+      return;
+    }
+
+    if (normalizedPassword !== normalizedPasswordConfirm) {
       Alert.alert('비밀번호 확인', '비밀번호가 서로 일치하지 않습니다.');
       return;
     }
@@ -50,9 +79,9 @@ export default function OwnerSignupScreen() {
     try {
       setIsSubmitting(true);
       await authApi.signup({
-        email: email.trim(),
-        password,
-        ownerDisplayName: storeName.trim(),
+        email: normalizedEmail,
+        password: normalizedPassword,
+        ownerDisplayName: normalizedStoreName,
         role: 'OWNER',
       });
       Alert.alert('가입 완료', '로그인 후 매장 등록을 이어서 진행해주세요.');
@@ -88,27 +117,36 @@ export default function OwnerSignupScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, storeNameError ? styles.inputContainerError : null]}>
               <Ionicons name="happy-outline" size={20} color="#0ea5a4" style={styles.inputIcon} />
               <TextInput style={styles.input} placeholder="매장명 또는 대표자명" placeholderTextColor="#94a3b8" value={storeName} onChangeText={setStoreName} />
             </View>
+            {storeNameError ? <Text style={styles.fieldError}>{storeNameError}</Text> : null}
 
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, emailError ? styles.inputContainerError : null]}>
               <Ionicons name="person-outline" size={20} color="#0ea5a4" style={styles.inputIcon} />
               <TextInput style={styles.input} placeholder="매장 관리자 이메일" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             </View>
+            {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
 
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, passwordError ? styles.inputContainerError : null]}>
               <Ionicons name="lock-closed-outline" size={20} color="#0ea5a4" style={styles.inputIcon} />
               <TextInput style={styles.input} placeholder="비밀번호" placeholderTextColor="#94a3b8" value={password} onChangeText={setPassword} secureTextEntry />
             </View>
+            {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
 
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, passwordConfirmError ? styles.inputContainerError : null]}>
               <Ionicons name="lock-closed-outline" size={20} color="#0ea5a4" style={styles.inputIcon} />
               <TextInput style={styles.input} placeholder="비밀번호 확인" placeholderTextColor="#94a3b8" value={passwordConfirm} onChangeText={setPasswordConfirm} secureTextEntry />
             </View>
+            {passwordConfirmError ? <Text style={styles.fieldError}>{passwordConfirmError}</Text> : null}
 
-            <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} activeOpacity={0.8} disabled={isSubmitting} onPress={handleSignup}>
+            <TouchableOpacity
+              style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+              activeOpacity={0.8}
+              disabled={!canSubmit}
+              onPress={handleSignup}
+            >
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -147,8 +185,10 @@ const styles = StyleSheet.create({
   roleText: { color: '#94a3b8', fontSize: 15, fontWeight: '600' },
   roleTextActive: { color: '#0ea5a4' },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 14, width: '100%', paddingHorizontal: 16, height: 52, marginBottom: 14, borderWidth: 1, borderColor: '#e2e8f0' },
+  inputContainerError: { borderColor: '#ef4444', backgroundColor: '#fff7f7' },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, color: '#0f172a', fontSize: 15 },
+  fieldError: { width: '100%', color: '#ef4444', fontSize: 12, fontWeight: '600', marginTop: -6, marginBottom: 10, paddingHorizontal: 6 },
   submitButton: { flexDirection: 'row', backgroundColor: '#0ea5a4', width: '100%', height: 56, borderRadius: 14, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4, marginTop: 12 },
   submitButtonDisabled: { opacity: 0.72 },
   submitText: { color: '#fff', fontSize: 17, fontWeight: 'bold', marginRight: 6 },

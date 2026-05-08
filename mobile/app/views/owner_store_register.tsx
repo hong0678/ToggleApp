@@ -1,187 +1,376 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, KeyboardAvoidingView, Platform, ScrollView, TextInput } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// TODO: API 연동을 위한 타입 정의
-export interface OwnerStoreRegisterData {
-  id: string;
+import { ownerApi, tokenStore } from '@/services/api';
+
+type FieldKey =
+  | 'storeName'
+  | 'businessNumber'
+  | 'representativeName'
+  | 'businessOpenDate'
+  | 'businessAddress'
+  | 'businessPhone'
+  | 'licenseUri'
+  | 'licenseName'
+  | 'licenseType';
+
+type FormState = Record<FieldKey, string>;
+
+const INITIAL_FORM: FormState = {
+  storeName: '',
+  businessNumber: '',
+  representativeName: '',
+  businessOpenDate: '',
+  businessAddress: '',
+  businessPhone: '',
+  licenseUri: '',
+  licenseName: 'business-license.jpg',
+  licenseType: 'image/jpeg',
+};
+
+function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
+  return (
+    <View style={styles.gateCard}>
+      <View style={styles.gateIconWrap}>
+        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+      </View>
+      <Text style={styles.gateTitle}>매장 등록은 로그인 후 진행할 수 있어요</Text>
+      <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 신청서를 작성하고 제출할 수 있습니다.</Text>
+      <View style={styles.gateButtons}>
+        <TouchableOpacity style={styles.gateSecondaryButton} onPress={onLogin} activeOpacity={0.9}>
+          <Text style={styles.gateSecondaryButtonText}>로그인</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.gatePrimaryButton} onPress={onSignup} activeOpacity={0.9}>
+          <Text style={styles.gatePrimaryButtonText}>회원가입</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
-const { width } = Dimensions.get('window');
+function InputRow({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  icon,
+  keyboardType,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad' | 'number-pad';
+}) {
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.inputContainer}>
+        <Ionicons name={icon} size={18} color="#0ea5a4" style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#94a3b8"
+          keyboardType={keyboardType}
+          autoCapitalize="none"
+        />
+      </View>
+    </View>
+  );
+}
 
 export default function OwnerStoreRegisterScreen() {
   const router = useRouter();
-  
-  // TODO: API 데이터 연동용 state (현재는 빈 배열로 empty state 렌더링)
-  const [data, setData] = useState<OwnerStoreRegisterData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState<FormState>(INITIAL_FORM);
 
-  // TODO: 데이터 패칭 함수 자리
-  const fetchData = async () => {
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      const token = await tokenStore.getAccessToken();
+      if (!active) return;
+      setIsLoggedIn(Boolean(token));
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const isFormValid = useMemo(() => {
+    return (
+      form.storeName.trim().length >= 2 &&
+      form.businessNumber.trim().length >= 6 &&
+      form.representativeName.trim().length >= 2 &&
+      form.businessOpenDate.trim().length >= 8 &&
+      form.businessAddress.trim().length >= 5 &&
+      form.businessPhone.trim().length >= 8 &&
+      form.licenseUri.trim().length > 0
+    );
+  }, [form]);
+
+  const updateField = (key: FieldKey, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!isFormValid) {
+      Alert.alert('입력 확인', '필수 항목을 모두 채워주세요.');
+      return;
+    }
+
     try {
-      setIsLoading(true);
-      // await api.get('/endpoint');
-    } catch (e) {
-      console.error(e);
+      setIsSubmitting(true);
+      await ownerApi.createApplication(
+        {
+          storeName: form.storeName.trim(),
+          businessNumber: form.businessNumber.trim(),
+          representativeName: form.representativeName.trim(),
+          businessOpenDate: form.businessOpenDate.trim(),
+          businessAddress: form.businessAddress.trim(),
+          businessPhone: form.businessPhone.trim(),
+        },
+        {
+          uri: form.licenseUri.trim(),
+          name: form.licenseName.trim() || 'business-license.jpg',
+          type: form.licenseType.trim() || 'image/jpeg',
+        }
+      );
+      Alert.alert('신청 완료', '매장 등록 신청이 접수되었습니다.');
+      router.push('/views/owner_register_status');
+    } catch (error) {
+      Alert.alert('신청 실패', error instanceof Error ? error.message : '매장 등록 신청 중 문제가 발생했습니다.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <LinearGradient colors={['#1e293b', '#312e81', '#4c1d95']} style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/');
-            }
-          }} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>매장 등록 신청</Text>
-          <View style={{width: 28}} />
-        </View>
-
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            
-            {/* Glassmorphism Card */}
-            <View style={styles.card}>
-              
-              <View style={styles.inputContainer}>
-                <Ionicons name="create-outline" size={20} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="입력해주세요"
-                  placeholderTextColor="rgba(255, 255, 255, 0.4)"
-                />
-              </View>
-              
-
-              {/* Empty State */}
-              <View style={styles.emptyState}>
-                <Ionicons name="folder-open-outline" size={54} color="rgba(255,255,255,0.3)" />
-                <Text style={styles.emptyStateText}>
-                  작성된 내용이 없습니다.
-                </Text>
-                <Text style={styles.emptyStateSubText}>
-                  나중에 API 연결 시 여기에 데이터가 표시됩니다.
-                </Text>
-              </View>
-            </View>
-
-            {/* Action Button */}
-            <TouchableOpacity style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>
-                제출하기
-              </Text>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+              <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
             </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </LinearGradient>
+            <View style={styles.headerCopy}>
+              <Text style={styles.headerTitle}>매장 등록 신청</Text>
+              <Text style={styles.headerSubtitle}>사업자 정보와 등록 서류를 입력해 신청하세요.</Text>
+            </View>
+          </View>
+
+          {!isLoggedIn ? (
+            <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+          ) : (
+            <View style={styles.card}>
+              <InputRow
+                label="매장명"
+                value={form.storeName}
+                onChangeText={(value) => updateField('storeName', value)}
+                placeholder="예: Toggle 카페"
+                icon="storefront-outline"
+              />
+              <InputRow
+                label="사업자등록번호"
+                value={form.businessNumber}
+                onChangeText={(value) => updateField('businessNumber', value)}
+                placeholder="예: 123-45-67890"
+                icon="card-outline"
+                keyboardType="numeric"
+              />
+              <InputRow
+                label="대표자명"
+                value={form.representativeName}
+                onChangeText={(value) => updateField('representativeName', value)}
+                placeholder="예: 홍길동"
+                icon="person-outline"
+              />
+              <InputRow
+                label="개업일"
+                value={form.businessOpenDate}
+                onChangeText={(value) => updateField('businessOpenDate', value)}
+                placeholder="예: 2026-05-01"
+                icon="calendar-outline"
+              />
+              <InputRow
+                label="사업장 주소"
+                value={form.businessAddress}
+                onChangeText={(value) => updateField('businessAddress', value)}
+                placeholder="예: 경기 안양시 만안구 ..."
+                icon="location-outline"
+              />
+              <InputRow
+                label="대표 전화번호"
+                value={form.businessPhone}
+                onChangeText={(value) => updateField('businessPhone', value)}
+                placeholder="예: 031-123-4567"
+                icon="call-outline"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.sectionTitle}>사업자등록증 파일</Text>
+              <View style={styles.uploadBox}>
+                <MaterialCommunityIcons name="file-image-plus-outline" size={22} color="#0ea5a4" />
+                <Text style={styles.uploadText}>파일 URI를 입력해서 먼저 연결할 수 있어요.</Text>
+              </View>
+              <InputRow
+                label="파일 URI"
+                value={form.licenseUri}
+                onChangeText={(value) => updateField('licenseUri', value)}
+                placeholder="file:///..."
+                icon="link-outline"
+              />
+              <InputRow
+                label="파일 이름"
+                value={form.licenseName}
+                onChangeText={(value) => updateField('licenseName', value)}
+                placeholder="business-license.jpg"
+                icon="create-outline"
+              />
+              <InputRow
+                label="파일 타입"
+                value={form.licenseType}
+                onChangeText={(value) => updateField('licenseType', value)}
+                placeholder="image/jpeg"
+                icon="pricetag-outline"
+              />
+
+              <TouchableOpacity
+                style={[styles.submitButton, !isFormValid || isSubmitting ? styles.submitButtonDisabled : null]}
+                onPress={handleSubmit}
+                activeOpacity={0.9}
+                disabled={!isFormValid || isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.submitText}>신청서 제출</Text>
+                    <Ionicons name="chevron-forward" size={18} color="#fff" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 50,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 28,
-    padding: 30,
+  container: { flex: 1, backgroundColor: '#f7fbff' },
+  keyboardView: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 32 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
+  backButton: { paddingTop: 4, paddingRight: 4 },
+  headerCopy: { flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
+  headerSubtitle: { marginTop: 6, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  gateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    marginBottom: 24,
-    minHeight: 300,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
+    borderColor: '#dbeff0',
   },
+  gateIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#eefafa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  gateSecondaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0ea5a4',
+  },
+  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  fieldBlock: { marginBottom: 14 },
+  fieldLabel: { color: '#0f172a', fontSize: 13, fontWeight: '800', marginBottom: 8 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    width: '100%',
-    paddingHorizontal: 20,
-    height: 56,
-    marginBottom: 20,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#dbe4ee',
+    paddingHorizontal: 14,
+    height: 52,
   },
-  inputIcon: {
-    marginRight: 12,
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, color: '#0f172a', fontSize: 15 },
+  sectionTitle: { marginTop: 4, marginBottom: 10, color: '#0f172a', fontSize: 14, fontWeight: '800' },
+  uploadBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#eefafa',
+    marginBottom: 14,
   },
-  input: {
-    flex: 1,
-    color: '#FFF',
-    fontSize: 16,
-  },
-  emptyState: {
+  uploadText: { color: '#0f172a', fontSize: 13, flex: 1, lineHeight: 18 },
+  submitButton: {
+    marginTop: 6,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: '#0ea5a4',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    flexDirection: 'row',
+    gap: 6,
   },
-  emptyStateText: {
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 20,
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  emptyStateSubText: {
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 10,
-    fontSize: 13,
-  },
-  primaryButton: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  primaryButtonText: {
-    color: '#312e81',
-    fontSize: 17,
-    fontWeight: 'bold',
-  }
+  submitButtonDisabled: { opacity: 0.6 },
+  submitText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });

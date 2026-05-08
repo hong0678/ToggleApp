@@ -21,6 +21,7 @@ import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { tokenStore } from '@/services/api';
+import { mapCache } from '@/services/mapCache';
 
 const { height: windowHeight } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
@@ -88,6 +89,7 @@ export default function MapAroundScreen() {
   const [nearbyPlaces, setNearbyPlaces] = useState<KakaoPlacePreview[]>([]);
   const [isPlacesLoading, setIsPlacesLoading] = useState(false);
   const [mapSearchQuery, setMapSearchQuery] = useState(initialSearchQuery);
+  const [isMapReady, setIsMapReady] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{
     latitude: number;
     longitude: number;
@@ -296,11 +298,11 @@ export default function MapAroundScreen() {
   );
 
   useEffect(() => {
-    if (!initialSearchQuery) return;
+    if (!initialSearchQuery || !isMapReady) return;
 
     setMapSearchQuery(initialSearchQuery);
     searchPlacesByKeyword(initialSearchQuery);
-  }, [initialSearchQuery, searchPlacesByKeyword]);
+  }, [initialSearchQuery, isMapReady, searchPlacesByKeyword]);
 
   useFocusEffect(
     useCallback(() => {
@@ -323,6 +325,7 @@ export default function MapAroundScreen() {
       if (message.type === 'places') {
         const places = Array.isArray(message.places) ? message.places : [];
         setNearbyPlaces(places);
+        mapCache.setNearbyPlaces(places);
         setIsPlacesLoading(false);
 
         try {
@@ -334,6 +337,10 @@ export default function MapAroundScreen() {
 
       if (message.type === 'places-loading') {
         setIsPlacesLoading(true);
+      }
+
+      if (message.type === 'map-ready') {
+        setIsMapReady(true);
       }
     } catch {
       // Ignore non-JSON messages from the map WebView.
@@ -667,6 +674,8 @@ export default function MapAroundScreen() {
                 } else {
                   window.searchPlacesByCategory(activeCategoryLabel, activeCategoryCode);
                 }
+
+                postToApp({ type: 'map-ready' });
               });
             } catch(e) {
               log('오류 발생: ' + e.message);

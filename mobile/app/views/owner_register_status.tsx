@@ -1,92 +1,180 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, KeyboardAvoidingView, Platform, ScrollView, TextInput } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// TODO: API 연동을 위한 타입 정의
-export interface OwnerRegisterStatusData {
-  id: string;
+import { ownerApi, tokenStore } from '@/services/api';
+import type { OwnerApplicationSummaryResponse } from '@/services/api/owner';
+
+function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
+  return (
+    <View style={styles.gateCard}>
+      <View style={styles.gateIconWrap}>
+        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+      </View>
+      <Text style={styles.gateTitle}>신청 현황을 보려면 로그인하세요</Text>
+      <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 신청 상태와 심사 결과를 확인할 수 있어요.</Text>
+      <View style={styles.gateButtons}>
+        <TouchableOpacity style={styles.gateSecondaryButton} onPress={onLogin} activeOpacity={0.9}>
+          <Text style={styles.gateSecondaryButtonText}>로그인</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.gatePrimaryButton} onPress={onSignup} activeOpacity={0.9}>
+          <Text style={styles.gatePrimaryButtonText}>회원가입</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
-const { width } = Dimensions.get('window');
+function ApplicationCard({ item }: { item: OwnerApplicationSummaryResponse }) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardTopRow}>
+        <View>
+          <Text style={styles.storeName} numberOfLines={1}>{item.storeName}</Text>
+          <Text style={styles.metaText}>{item.businessNumber}</Text>
+        </View>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusPillText}>{item.requestStatus}</Text>
+        </View>
+      </View>
+
+      <View style={styles.infoRow}>
+        <Ionicons name="person-outline" size={16} color="#94a3b8" />
+        <Text style={styles.infoText} numberOfLines={1}>{item.ownerNickname || item.ownerEmail}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Ionicons name="location-outline" size={16} color="#94a3b8" />
+        <Text style={styles.infoText} numberOfLines={2}>{item.businessAddressRaw}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Ionicons name="calendar-outline" size={16} color="#94a3b8" />
+        <Text style={styles.infoText}>신청: {item.submittedAt}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Ionicons name="checkmark-circle-outline" size={16} color="#94a3b8" />
+        <Text style={styles.infoText}>
+          사업자 {item.businessVerificationStatus} · 지도 {item.mapVerificationStatus}
+        </Text>
+      </View>
+
+      {item.rejectReason ? (
+        <View style={styles.rejectBox}>
+          <Text style={styles.rejectLabel}>반려 사유</Text>
+          <Text style={styles.rejectText}>{item.rejectReason}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 export default function OwnerRegisterStatusScreen() {
   const router = useRouter();
-  
-  // TODO: API 데이터 연동용 state (현재는 빈 배열로 empty state 렌더링)
-  const [data, setData] = useState<OwnerRegisterStatusData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [items, setItems] = useState<OwnerApplicationSummaryResponse[]>([]);
 
-  // TODO: 데이터 패칭 함수 자리
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      // await api.get('/endpoint');
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      const token = await tokenStore.getAccessToken();
+      if (!active) return;
+
+      setIsLoggedIn(Boolean(token));
+      if (!token) {
+        setItems([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await ownerApi.listApplications();
+        if (!active) return;
+        setItems(response);
+      } catch {
+        if (!active) return;
+        setItems([]);
+      } finally {
+        if (!active) return;
+        setIsLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
-    <LinearGradient colors={['#1e293b', '#312e81', '#4c1d95']} style={styles.container}>
+    <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/');
-            }
-          }} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+            <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>신청 현황</Text>
-          <View style={{width: 28}} />
+          <TouchableOpacity onPress={() => router.replace('/views/owner_login')} style={styles.headerAction} activeOpacity={0.8}>
+            <Ionicons name="person-outline" size={20} color="#0ea5a4" />
+          </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            
-            {/* Glassmorphism Card */}
-            <View style={styles.card}>
-              
-
-              {/* Empty State */}
-              <View style={styles.emptyState}>
-                <Ionicons name="folder-open-outline" size={54} color="rgba(255,255,255,0.3)" />
-                <Text style={styles.emptyStateText}>
-                  표시할 데이터가 없습니다.
-                </Text>
-                <Text style={styles.emptyStateSubText}>
-                  나중에 API 연결 시 여기에 데이터가 표시됩니다.
-                </Text>
-              </View>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroBadge}>
+              <Ionicons name="list-outline" size={14} color="#0ea5a4" />
+              <Text style={styles.heroBadgeText}>Owner</Text>
             </View>
+            <Text style={styles.heroTitle}>등록 신청을 한눈에 확인해요</Text>
+            <Text style={styles.heroSubtitle}>진행중, 반려, 승인된 신청 상태를 순서대로 볼 수 있습니다.</Text>
+          </View>
 
-            {/* Action Button */}
-            <TouchableOpacity style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>
-                새로고침
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          {!isLoggedIn ? (
+            <LoginGatePanel
+              onLogin={() => router.push('/views/owner_login')}
+              onSignup={() => router.push('/views/owner_signup')}
+            />
+          ) : isLoading ? (
+            <View style={styles.loadingCard}>
+              <ActivityIndicator color="#0ea5a4" />
+              <Text style={styles.loadingText}>신청 현황을 불러오는 중...</Text>
+            </View>
+          ) : items.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="document-text-outline" size={28} color="#94a3b8" />
+              <Text style={styles.emptyTitle}>신청 내역이 없어요</Text>
+              <Text style={styles.emptySubtitle}>매장 등록 신청을 먼저 진행하면 여기서 확인할 수 있어요.</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/views/owner_store_register')} activeOpacity={0.9}>
+                <Text style={styles.primaryButtonText}>매장 등록 신청</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {items.map((item) => (
+                <ApplicationCard key={item.applicationId} item={item} />
+              ))}
+            </View>
+          )}
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -94,85 +182,129 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 50,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 28,
-    padding: 30,
+  backButton: { padding: 6 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  headerAction: { padding: 6 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
+  heroCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    marginBottom: 24,
-    minHeight: 300,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
   },
-  inputContainer: {
+  heroBadge: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    width: '100%',
-    paddingHorizontal: 20,
-    height: 56,
-    marginBottom: 20,
+    gap: 6,
+    backgroundColor: '#eefafa',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 12,
+  },
+  heroBadgeText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
+  heroTitle: { fontSize: 20, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
+  heroSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#dbeff0',
+    marginTop: 8,
   },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    color: '#FFF',
-    fontSize: 16,
-  },
-  emptyState: {
+  gateIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#eefafa',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    marginBottom: 12,
   },
-  emptyStateText: {
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 20,
-    fontSize: 17,
-    fontWeight: '600',
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  gateSecondaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
   },
-  emptyStateSubText: {
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 10,
-    fontSize: 13,
+  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0ea5a4',
   },
-  primaryButton: {
+  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  loadingCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
-    paddingVertical: 20,
+    padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
+    justifyContent: 'center',
+    gap: 12,
   },
-  primaryButtonText: {
-    color: '#312e81',
-    fontSize: 17,
-    fontWeight: 'bold',
-  }
+  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  emptyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginTop: 10 },
+  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  primaryButton: {
+    marginTop: 16,
+    height: 48,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    backgroundColor: '#0ea5a4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  list: { gap: 12 },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  storeName: { fontSize: 17, fontWeight: '900', color: '#0f172a', flex: 1 },
+  metaText: { marginTop: 4, color: '#64748b', fontSize: 12 },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#eefafa',
+  },
+  statusPillText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10 },
+  infoText: { flex: 1, color: '#475569', fontSize: 13, lineHeight: 18 },
+  rejectBox: {
+    marginTop: 14,
+    borderRadius: 14,
+    backgroundColor: '#fff7f7',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 12,
+  },
+  rejectLabel: { color: '#dc2626', fontSize: 12, fontWeight: '800', marginBottom: 6 },
+  rejectText: { color: '#7f1d1d', fontSize: 13, lineHeight: 18 },
 });

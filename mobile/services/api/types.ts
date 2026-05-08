@@ -90,6 +90,54 @@ export type KakaoPlaceSearchResponse = {
   documents: KakaoPlaceDocument[];
 };
 
+export type ResolveStoreRequest = {
+  externalPlaceId: string;
+  name: string;
+  address?: string | null;
+  latitude: number;
+  longitude: number;
+  categoryName?: string | null;
+};
+
+export type ResolveStoreResponse = {
+  storeId: number;
+  externalSource: string;
+  externalPlaceId: string;
+  name: string;
+  categoryName: string | null;
+  address: string | null;
+  roadAddress: string | null;
+  jibunAddress: string | null;
+  phone: string | null;
+  latitude: number;
+  longitude: number;
+  businessStatus: string | null;
+  liveBusinessStatus: string | null;
+  liveStatusSource: string | null;
+  verified: boolean;
+  verifiedAt: string | null;
+  ownerNotice: string | null;
+  openTime: string | null;
+  closeTime: string | null;
+  breakStart: string | null;
+  breakEnd: string | null;
+  rating: number | null;
+  reviewAverageRating: number | null;
+  reviewCount: number;
+  favoriteCount: number;
+  imageUrls: string[];
+  operationalState: string | null;
+  closureRequestStatus: string | null;
+  menuEligible: boolean;
+  menuEditable: boolean;
+  menuEligibilityReason: string | null;
+};
+
+export type StoreLookupRequest = {
+  ids?: number[];
+  keyword?: string;
+};
+
 export type StoreLookupItemResponse = {
   storeId: number;
   externalSource: string;
@@ -128,6 +176,21 @@ export type StoreLookupResponse = {
   stores: StoreLookupItemResponse[];
 };
 
+export type PublicInstitutionLookupRequest = {
+  ids?: number[];
+  items?: {
+    externalPlaceId: string;
+    name?: string | null;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  }[];
+};
+
+export type PublicInstitutionLookupResponse = {
+  institutions: PublicInstitutionLookupItemResponse[];
+};
+
 export type PublicInstitutionLookupItemResponse = {
   id: number;
   externalSource: string;
@@ -148,14 +211,14 @@ export type KakaoLookupResponse = {
 };
 
 export type KakaoLookupRequest = {
-  items: Array<{
+  items: {
     externalPlaceId: string;
     name: string;
     address?: string;
     latitude: number;
     longitude: number;
     categoryName?: string;
-  }>;
+  }[];
 };
 
 export type FavoriteStoreResponse = {
@@ -163,6 +226,40 @@ export type FavoriteStoreResponse = {
   storeId: number;
   favorited: boolean;
   createdAt: string | null;
+};
+
+export type FavoriteStoreListItemResponse = {
+  storeId: number;
+  externalPlaceId: string;
+  name: string;
+  categoryName: string | null;
+  address: string | null;
+  roadAddress: string | null;
+  jibunAddress: string | null;
+  phone: string | null;
+  businessStatus: string | null;
+  liveBusinessStatus: string | null;
+  liveStatusSource: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  ownerNotice: string | null;
+  openTime: string | null;
+  closeTime: string | null;
+  breakStart: string | null;
+  breakEnd: string | null;
+  rating: number | null;
+  verified: boolean;
+  favoriteCount: number;
+  imageUrls: string[];
+  favoritedAt: string;
+};
+
+export type FavoriteStoreListResponse = {
+  content: FavoriteStoreListItemResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 };
 
 export type MyMapPlaceResponse = {

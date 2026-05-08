@@ -12,28 +12,40 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Stack, usePathname } from 'expo-router';
 import * as Location from 'expo-location';
-import { mobileSearchApi, type StoreLookupItemResponse } from '@/services/api';
+import { storesApi, type StoreLookupItemResponse } from '@/services/api';
 import { AppBottomNav } from '@/components/app-bottom-nav';
+import { mapCache } from '@/services/mapCache';
 
-const CATEGORY_OPTIONS = ['전체', '음식점', '카페', '편의점', '대형마트', '약국'] as const;
-const CATEGORY_CODES: Record<(typeof CATEGORY_OPTIONS)[number], string | null> = {
-  전체: null,
-  음식점: 'FD6',
-  카페: 'CE7',
-  편의점: 'CS2',
-  대형마트: 'MT1',
-  약국: 'PM9',
-};
+const CATEGORY_OPTIONS = [
+  '전체',
+  '음식점',
+  '카페',
+  '편의점',
+  '대형마트',
+  '약국',
+  '병원',
+  '기타',
+  '공공기관',
+  '문화시설',
+  '학교',
+  '지하철역',
+  '주차장',
+] as const;
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   음식점: ['음식점', '식당', '맛집', '분식', '한식', '중식', '일식', '양식', '패스트푸드', '치킨', '피자', '햄버거'],
   카페: ['카페', '커피', '디저트', '베이커리'],
   편의점: ['편의점'],
   대형마트: ['대형마트', '마트', '슈퍼'],
   약국: ['약국'],
+  병원: ['병원', '의원', '클리닉'],
+  공공기관: ['공공기관', '관공서', '행정복지센터', '주민센터', '구청', '시청', '동사무소'],
+  문화시설: ['문화시설', '도서관', '미술관', '박물관', '극장', '공연장'],
+  학교: ['학교', '초등학교', '중학교', '고등학교', '대학교'],
+  지하철역: ['지하철역', '역'],
+  주차장: ['주차장', '주차타워', '주차빌딩', '파킹'],
+  기타: ['기타'],
 };
 const DEFAULT_RADIUS_METERS = 2000;
-const NEARBY_PLACES_CACHE_KEY = 'toggle.nearbyPlaces';
-type CategoryLabel = (typeof CATEGORY_OPTIONS)[number];
 
 type ListStoreItem = StoreLookupItemResponse & {
   distance?: string;
@@ -51,6 +63,7 @@ export default function ListAllScreen() {
   const [stores, setStores] = useState<ListStoreItem[]>([]);
   const [isStoresLoading, setIsStoresLoading] = useState(false);
   const [storesError, setStoresError] = useState<string | null>(null);
+  const hasCachedMapResultsRef = React.useRef(false);
 
   const filters = CATEGORY_OPTIONS;
   const sortOptions = [
@@ -105,24 +118,18 @@ export default function ListAllScreen() {
 
   const loadCachedMapAroundStores = useCallback(() => {
     try {
-      const cachedPlaces = globalThis.localStorage?.getItem(NEARBY_PLACES_CACHE_KEY);
-      if (!cachedPlaces) return;
+      const places = mapCache.getNearbyPlaces();
+      if (!Array.isArray(places) || places.length === 0) {
+        hasCachedMapResultsRef.current = false;
+        return;
+      }
 
-      const places = JSON.parse(cachedPlaces) as {
-        id?: string;
-        name?: string;
-        category?: string;
-        address?: string;
-        distance?: string;
-        phone?: string;
-      }[];
-
-      if (!Array.isArray(places) || places.length === 0) return;
+      hasCachedMapResultsRef.current = true;
 
       setStores(places.map((place, index) => ({
-        storeId: Number(place.id?.replace(/\D/g, '')) || index + 1,
+        storeId: Number(place.id.replace(/\D/g, '')) || index + 1,
         externalSource: 'kakao',
-        externalPlaceId: place.id ?? `cached-${index}`,
+        externalPlaceId: place.id,
         name: place.name ?? '이름 정보 없음',
         categoryName: place.category ?? null,
         address: place.address ?? null,
@@ -178,112 +185,25 @@ export default function ListAllScreen() {
   }, [getCategoryLabel]);
 
   const fetchStores = useCallback(async (coords: { latitude: number; longitude: number }) => {
+    if (hasCachedMapResultsRef.current) {
+      setIsStoresLoading(false);
+      return;
+    }
+
     setIsStoresLoading(true);
     setStoresError(null);
 
     try {
-      const selectedCategoryLabels = (selectedFilters.length === 0
-        ? CATEGORY_OPTIONS.filter((label) => label !== '전체')
-        : selectedFilters.filter((label) => label !== '전체')) as CategoryLabel[];
-
-      const requestedCategories: CategoryLabel[] = selectedCategoryLabels.length > 0
-        ? selectedCategoryLabels
-        : CATEGORY_OPTIONS.filter((label) => label !== '전체') as CategoryLabel[];
-
-      const categoryResults = await Promise.all(
-        requestedCategories
-          .map((label) => CATEGORY_CODES[label])
-          .filter((code): code is string => Boolean(code))
-          .map(async (categoryGroupCode) => {
-            const response = await mobileSearchApi.category({
-              categoryGroupCode,
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-              radiusMeters: DEFAULT_RADIUS_METERS,
-              page: 1,
-              size: 20,
-              sort: 'distance',
-            });
-
-            return response.documents.map((document) => ({
-              document,
-              sourceLabel: requestedCategories.find((label) => CATEGORY_CODES[label] === categoryGroupCode) ?? '전체',
-            }));
-          })
+      const nearbyResponse = await storesApi.nearby(
+        coords.latitude,
+        coords.longitude,
+        DEFAULT_RADIUS_METERS,
+        30,
       );
-
-      const documents = categoryResults.flat().filter((item) => item.document.id);
-      const uniqueDocuments = Array.from(
-        new Map(documents.map((item) => [item.document.id, item])).values()
-      );
-
-      if (uniqueDocuments.length > 0) {
-        const lookupResponse = await mobileSearchApi.lookup({
-          items: uniqueDocuments.map((item) => ({
-            externalPlaceId: item.document.id,
-            name: item.document.place_name,
-            address: item.document.road_address_name ?? item.document.address_name ?? '',
-            latitude: Number(item.document.y),
-            longitude: Number(item.document.x),
-            categoryName: item.document.category_name,
-          })),
-        });
-
-        const mergedStores = uniqueDocuments.map((item) => {
-          const resolvedStore = lookupResponse.stores.find((store) => store.externalPlaceId === item.document.id);
-
-          return {
-            ...(resolvedStore ?? {}),
-            storeId: (resolvedStore?.storeId ?? Number(item.document.id.replace(/\D/g, ''))) || 0,
-            externalSource: resolvedStore?.externalSource ?? 'kakao',
-            externalPlaceId: item.document.id,
-            name: resolvedStore?.name ?? item.document.place_name,
-            categoryName: resolvedStore?.categoryName ?? item.document.category_name ?? null,
-            address: resolvedStore?.address ?? item.document.address_name ?? null,
-            roadAddress: resolvedStore?.roadAddress ?? item.document.road_address_name ?? null,
-            jibunAddress: resolvedStore?.jibunAddress ?? null,
-            phone: resolvedStore?.phone ?? item.document.phone ?? null,
-            latitude: resolvedStore?.latitude ?? Number(item.document.y),
-            longitude: resolvedStore?.longitude ?? Number(item.document.x),
-            businessStatus: resolvedStore?.businessStatus ?? null,
-            liveBusinessStatus: resolvedStore?.liveBusinessStatus ?? null,
-            liveStatusSource: resolvedStore?.liveStatusSource ?? null,
-            verified: resolvedStore?.verified ?? false,
-            verifiedAt: resolvedStore?.verifiedAt ?? null,
-            ownerNotice: resolvedStore?.ownerNotice ?? null,
-            openTime: resolvedStore?.openTime ?? null,
-            closeTime: resolvedStore?.closeTime ?? null,
-            breakStart: resolvedStore?.breakStart ?? null,
-            breakEnd: resolvedStore?.breakEnd ?? null,
-            rating: resolvedStore?.rating ?? null,
-            reviewAverageRating: resolvedStore?.reviewAverageRating ?? null,
-            reviewCount: resolvedStore?.reviewCount ?? 0,
-            favoriteCount: resolvedStore?.favoriteCount ?? 0,
-            imageUrls: resolvedStore?.imageUrls ?? [],
-            operationalState: resolvedStore?.operationalState ?? null,
-            closureRequestStatus: resolvedStore?.closureRequestStatus ?? null,
-            menuEligible: resolvedStore?.menuEligible ?? false,
-            menuEditable: resolvedStore?.menuEditable ?? false,
-            menuEligibilityReason: resolvedStore?.menuEligibilityReason ?? null,
-            distance: item.document.distance,
-            sourceLabel: item.sourceLabel,
-          } as ListStoreItem;
-        });
-
-        setStores(mergedStores);
-        return;
-      }
-
-      const nearbyResponse = await mobileSearchApi.nearbyStores({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        radiusMeters: DEFAULT_RADIUS_METERS,
-        limit: 30,
-      });
 
       setStores(nearbyResponse.stores.map((store) => ({
         ...store,
-        sourceLabel: '주변 매장',
+        sourceLabel: store.externalSource === 'kakao' ? '주변 장소' : '주변 매장',
       } as ListStoreItem)));
     } catch (error) {
       setStores([]);
@@ -294,9 +214,14 @@ export default function ListAllScreen() {
     } finally {
       setIsStoresLoading(false);
     }
-  }, [selectedFilters]);
+  }, []);
 
   const loadCurrentLocation = useCallback(async () => {
+    if (hasCachedMapResultsRef.current) {
+      setIsStoresLoading(false);
+      return;
+    }
+
     setIsStoresLoading(true);
     setStoresError(null);
 
@@ -348,6 +273,7 @@ export default function ListAllScreen() {
 
   useEffect(() => {
     if (!currentCoords) return;
+    if (hasCachedMapResultsRef.current) return;
 
     void fetchStores(currentCoords);
   }, [currentCoords, fetchStores]);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   ScrollView,
   Image,
   Platform,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { authApi, favoritesApi, myMapApi, tokenStore, type MeResponse } from '@/services/api';
+import type { MyMapResponse } from '@/services/api/myMap';
 
 function ShortcutCard({
   title,
@@ -102,6 +105,58 @@ function PeopleMapCard({
 
 export default function MainHomeScreen() {
   const router = useRouter();
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [myMap, setMyMap] = useState<MyMapResponse | null>(null);
+  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHomeData = async () => {
+      const token = await tokenStore.getAccessToken();
+      if (!token) return;
+
+      try {
+        const [meResponse, myMapResponse, favoritesResponse] = await Promise.all([
+          authApi.me(),
+          myMapApi.get(),
+          favoritesApi.listStores(),
+        ]);
+
+        if (!active) return;
+
+        setMe(meResponse);
+        setMyMap(myMapResponse);
+        setFavoriteCount(favoritesResponse.content.length);
+      } catch {
+        if (!active) return;
+        setMe(null);
+        setMyMap(null);
+        setFavoriteCount(0);
+      }
+    };
+
+    void loadHomeData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const displayName = me?.displayName ?? me?.nickname ?? null;
+  const savedPlacesCount = me?.favorites.stores.length ?? favoriteCount;
+  const myMapCount = myMap?.stores.length ?? 0;
+  const submitHomeSearch = () => {
+    const trimmedQuery = searchQuery.trim();
+
+    if (!trimmedQuery) {
+      router.push('/map');
+      return;
+    }
+
+    router.push(`/map?query=${encodeURIComponent(trimmedQuery)}`);
+  };
 
   return (
     <View style={styles.container}>
@@ -113,7 +168,9 @@ export default function MainHomeScreen() {
                 <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
                 <View style={styles.brandCopy}>
                   <Text style={styles.brandTitle}>Toggle</Text>
-                  <Text style={styles.brandSubtitle}>로그인한 상태로 더 빠르게 둘러봐요</Text>
+                  <Text style={styles.brandSubtitle}>
+                    {displayName ? `${displayName}님, 로그인한 상태로 더 빠르게 둘러봐요` : '로그인한 상태로 더 빠르게 둘러봐요'}
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/my')} activeOpacity={0.85}>
@@ -128,13 +185,22 @@ export default function MainHomeScreen() {
               <Text style={styles.heroSubtitle}>내 주변과 저장한 장소를 한 번에 확인해요</Text>
             </View>
 
-            <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/map')} activeOpacity={0.9}>
+            <View style={styles.searchBar}>
               <Ionicons name="search" size={22} color="#0ea5a4" />
-              <Text style={styles.searchText}>카페, 음식점, 장소 검색</Text>
-              <View style={styles.searchSubmitButton}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="카페, 음식점, 장소 검색"
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={submitHomeSearch}
+                returnKeyType="search"
+                blurOnSubmit={false}
+              />
+              <TouchableOpacity style={styles.searchSubmitButton} onPress={submitHomeSearch} activeOpacity={0.85}>
                 <Ionicons name="arrow-forward" size={18} color="#0ea5a4" />
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.shortcutGrid}>
@@ -154,14 +220,14 @@ export default function MainHomeScreen() {
             />
             <ShortcutCard
               title="저장한 장소"
-              subtitle="내가 찜한 곳을 모아봐요"
+              subtitle={`내가 찜한 곳 ${savedPlacesCount}개`}
               icon="heart-outline"
               onPress={() => router.push('/saved')}
               accentStyle={styles.shortcutC}
             />
             <ShortcutCard
               title="내 지도"
-              subtitle="나만의 장소를 관리해요"
+              subtitle={`나만의 지도 ${myMapCount}개`}
               icon="bookmark-outline"
               onPress={() => router.push('/my')}
               accentStyle={styles.shortcutD}
@@ -348,12 +414,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
-  searchText: {
+  searchInput: {
     flex: 1,
     marginHorizontal: 12,
-    color: '#94a3b8',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: '600',
+    paddingVertical: 0,
   },
   searchSubmitButton: {
     width: 36,

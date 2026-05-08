@@ -1,7 +1,9 @@
+import { Platform } from 'react-native';
 import { tokenStore } from './tokenStore';
 import type { ApiResponse } from './types';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8080';
+const DEFAULT_API_BASE_URL =
+  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
 export class ApiClientError extends Error {
   status: number;

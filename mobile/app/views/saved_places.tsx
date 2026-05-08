@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { tokenStore } from '@/services/api';
+import { favoritesApi, tokenStore, type FavoriteStoreListItemResponse } from '@/services/api';
 
 type SavedPlace = {
   id: string;
@@ -63,6 +63,17 @@ const MAP_COLLECTIONS: MapCollection[] = [
   { id: 'map-2', name: '카페 코스 지도', count: 8 },
   { id: 'map-3', name: '데이트 코스 지도', count: 5 },
 ];
+
+const PLACE_ACCENTS = ['#e8f6f7', '#fff3d8', '#eaf7ff', '#f2fbfa'];
+
+const mapFavoriteToSavedPlace = (place: FavoriteStoreListItemResponse, index: number): SavedPlace => ({
+  id: String(place.storeId),
+  title: place.name,
+  category: place.categoryName ?? '카테고리 정보 없음',
+  address: place.roadAddress ?? place.address ?? place.jibunAddress ?? '주소 정보 없음',
+  note: place.ownerNotice ?? '찜한 장소예요.',
+  accent: PLACE_ACCENTS[index % PLACE_ACCENTS.length],
+});
 
 function SavedSuggestionCard({
   title,
@@ -167,10 +178,11 @@ export default function SavedPlacesScreen() {
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [activePlaceId, setActivePlaceId] = useState<string | null>(null);
   const [assignedMapByPlaceId, setAssignedMapByPlaceId] = useState<Record<string, string>>({});
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(SAVED_PLACES);
 
   const activePlace = useMemo(
-    () => SAVED_PLACES.find((item) => item.id === activePlaceId) ?? null,
-    [activePlaceId]
+    () => savedPlaces.find((item) => item.id === activePlaceId) ?? null,
+    [activePlaceId, savedPlaces]
   );
 
   useEffect(() => {
@@ -180,6 +192,25 @@ export default function SavedPlacesScreen() {
       const token = await tokenStore.getAccessToken();
       if (!active) return;
       setIsLoggedIn(Boolean(token));
+
+      if (!token) {
+        setSavedPlaces(SAVED_PLACES);
+        return;
+      }
+
+      try {
+        const favorites = await favoritesApi.listStores();
+        if (!active) return;
+
+        if (favorites.content.length > 0) {
+          setSavedPlaces(favorites.content.map(mapFavoriteToSavedPlace));
+        } else {
+          setSavedPlaces(SAVED_PLACES);
+        }
+      } catch {
+        if (!active) return;
+        setSavedPlaces(SAVED_PLACES);
+      }
     };
 
     void loadAuth();
@@ -260,11 +291,11 @@ export default function SavedPlacesScreen() {
                     <Ionicons name="heart" size={18} color="#0ea5a4" />
                     <Text style={styles.sectionTitle}>저장한 장소</Text>
                   </View>
-                  <Text style={styles.sectionMore}>{SAVED_PLACES.length}개</Text>
+                  <Text style={styles.sectionMore}>{savedPlaces.length}개</Text>
                 </View>
 
                 <View style={styles.savedList}>
-                  {SAVED_PLACES.map((place) => (
+                  {savedPlaces.map((place) => (
                     <SavedPlaceCard
                       key={place.id}
                       place={place}

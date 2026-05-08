@@ -1,8 +1,15 @@
 export { ApiClientError, apiClient } from './client';
 export { authApi } from './auth';
+export { adminApi } from './admin';
+export { filesApi } from './files';
 export { favoritesApi } from './favorites';
 export { mobileSearchApi } from './mobileSearch';
+export { ownerApi } from './owner';
+export { publicInstitutionsApi } from './publicInstitutions';
 export { myMapApi } from './myMap';
+export { storeMenusApi } from './storeMenus';
+export { storeReviewsApi } from './storeReviews';
 export { publicMapsApi } from './publicMaps';
+export { storesApi } from './stores';
 export { tokenStore } from './tokenStore';
 export type * from './types';

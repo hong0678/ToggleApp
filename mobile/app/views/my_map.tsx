@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { tokenStore } from '@/services/api';
+import { authApi, myMapApi, tokenStore } from '@/services/api';
 
 function StatCard({
   label,
@@ -85,6 +85,9 @@ export default function MyMapScreen() {
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [storeCount, setStoreCount] = useState(0);
+  const [publicCount, setPublicCount] = useState(0);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +96,31 @@ export default function MyMapScreen() {
       const token = await tokenStore.getAccessToken();
       if (!active) return;
       setIsLoggedIn(Boolean(token));
+
+      if (!token) {
+        setStoreCount(0);
+        setPublicCount(0);
+        setDisplayName(null);
+        return;
+      }
+
+      try {
+        const [meResponse, myMapResponse] = await Promise.all([
+          authApi.me(),
+          myMapApi.get(),
+        ]);
+
+        if (!active) return;
+
+        setDisplayName(meResponse.displayName ?? meResponse.nickname ?? null);
+        setStoreCount(myMapResponse.stores.length);
+        setPublicCount(myMapResponse.publics.length);
+      } catch {
+        if (!active) return;
+        setStoreCount(0);
+        setPublicCount(0);
+        setDisplayName(null);
+      }
     };
 
     void loadAuth();
@@ -126,7 +154,11 @@ export default function MyMapScreen() {
                 <Text style={styles.heroTitle}>
                   <Text style={styles.heroAccent}>나만의 </Text>지도
                 </Text>
-                <Text style={styles.heroSubtitle}>저장한 장소와 공개 지도를 손쉽게 정리해보세요</Text>
+                <Text style={styles.heroSubtitle}>
+                  {displayName
+                    ? `${displayName}님, 저장한 장소와 공개 지도를 손쉽게 정리해보세요`
+                    : '저장한 장소와 공개 지도를 손쉽게 정리해보세요'}
+                </Text>
               </View>
             </View>
 
@@ -138,8 +170,8 @@ export default function MyMapScreen() {
             ) : (
               <>
                 <View style={styles.statRow}>
-                  <StatCard label="저장한 장소" value="0" icon="bookmark-outline" />
-                  <StatCard label="공개 지도" value="0" icon="globe-outline" />
+                  <StatCard label="저장한 장소" value={String(storeCount)} icon="bookmark-outline" />
+                  <StatCard label="공개 지도" value={String(publicCount)} icon="globe-outline" />
                   <StatCard label="최근 저장" value="0" icon="time-outline" />
                 </View>
 
@@ -174,7 +206,7 @@ export default function MyMapScreen() {
                   </View>
                   <View style={styles.mapFooter}>
                     <View>
-                      <Text style={styles.mapFooterTitle}>나만의 지도 0개</Text>
+                      <Text style={styles.mapFooterTitle}>나만의 지도 {storeCount}개</Text>
                       <Text style={styles.mapFooterSub}>좋아하는 장소를 모아보세요</Text>
                     </View>
                     <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
