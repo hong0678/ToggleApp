@@ -121,7 +121,7 @@ export default function OwnerRegisterStatusScreen() {
     <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>신청 현황</Text>

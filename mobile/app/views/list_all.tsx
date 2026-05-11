@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   View,
@@ -10,9 +10,10 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { storesApi, type StoreLookupItemResponse } from '@/services/api';
+import { ApiClientError, favoritesApi, myMapApi, storesApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { mapCache } from '@/services/mapCache';
 
@@ -47,12 +48,16 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 };
 const DEFAULT_RADIUS_METERS = 2000;
 
+const isConflictError = (error: unknown) => error instanceof ApiClientError && error.status === 409;
+const isNotFoundError = (error: unknown) => error instanceof ApiClientError && error.status === 404;
+
 type ListStoreItem = StoreLookupItemResponse & {
   distance?: string;
   sourceLabel?: string;
 };
 
 export default function ListAllScreen() {
+  const router = useRouter();
   const pathname = usePathname();
   const showInternalTabBar = pathname !== '/list';
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
@@ -62,7 +67,11 @@ export default function ListAllScreen() {
   const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [stores, setStores] = useState<ListStoreItem[]>([]);
   const [isStoresLoading, setIsStoresLoading] = useState(false);
+  const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
   const [storesError, setStoresError] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [favoritedExternalPlaceIds, setFavoritedExternalPlaceIds] = useState<string[]>([]);
+  const [favoriteStoreIdByExternalPlaceId, setFavoriteStoreIdByExternalPlaceId] = useState<Record<string, number>>({});
   const hasCachedMapResultsRef = React.useRef(false);
 
   const filters = CATEGORY_OPTIONS;
@@ -125,8 +134,9 @@ export default function ListAllScreen() {
       }
 
       hasCachedMapResultsRef.current = true;
+      const searchContext = mapCache.getNearbySearchContext();
 
-      setStores(places.map((place, index) => ({
+      const baseStores = places.map((place, index) => ({
         storeId: Number(place.id.replace(/\D/g, '')) || index + 1,
         externalSource: 'kakao',
         externalPlaceId: place.id,
@@ -136,8 +146,8 @@ export default function ListAllScreen() {
         roadAddress: place.address ?? null,
         jibunAddress: null,
         phone: place.phone ?? null,
-        latitude: 0,
-        longitude: 0,
+        latitude: place.latitude ?? 0,
+        longitude: place.longitude ?? 0,
         businessStatus: null,
         liveBusinessStatus: null,
         liveStatusSource: null,
@@ -160,7 +170,38 @@ export default function ListAllScreen() {
         menuEligibilityReason: null,
         distance: place.distance ?? '',
         sourceLabel: place.category ?? '지도',
-      })));
+      })) as ListStoreItem[];
+
+      setStores(baseStores);
+      if (searchContext.categoryLabel && searchContext.categoryLabel !== '전체') {
+        setSelectedFilters([searchContext.categoryLabel]);
+      }
+
+      void (async () => {
+        try {
+          const lookup = await storesApi.lookup({
+            externalSource: 'KAKAO',
+            externalPlaceIds: places.map((place) => place.id),
+          });
+
+          if (lookup.stores.length === 0) {
+            return;
+          }
+
+          const detailsByExternalPlaceId = lookup.stores.reduce<Record<string, ListStoreItem>>((acc, store) => {
+            acc[store.externalPlaceId] = {
+              ...store,
+              distance: places.find((place) => place.id === store.externalPlaceId)?.distance ?? '',
+              sourceLabel: '우리 서비스 매장',
+            } as ListStoreItem;
+            return acc;
+          }, {});
+
+          setStores((current) => current.map((store) => detailsByExternalPlaceId[store.externalPlaceId] ?? store));
+        } catch {
+          // Best-effort enrichment for cached map results.
+        }
+      })();
     } catch {
       // Cached map results are best-effort only.
     }
@@ -185,28 +226,18 @@ export default function ListAllScreen() {
   }, [getCategoryLabel]);
 
   const fetchStores = useCallback(async (coords: { latitude: number; longitude: number }) => {
-    if (hasCachedMapResultsRef.current) {
-      setIsStoresLoading(false);
-      return;
-    }
-
     setIsStoresLoading(true);
     setStoresError(null);
 
     try {
-      const nearbyResponse = await storesApi.nearby(
-        coords.latitude,
-        coords.longitude,
-        DEFAULT_RADIUS_METERS,
-        30,
-      );
+      const nearbyResponse = await storesApi.nearby(coords.latitude, coords.longitude, DEFAULT_RADIUS_METERS, 30);
 
       setStores(nearbyResponse.stores.map((store) => ({
         ...store,
         sourceLabel: store.externalSource === 'kakao' ? '주변 장소' : '주변 매장',
       } as ListStoreItem)));
     } catch (error) {
-      setStores([]);
+      setStores((current) => (current.length > 0 ? current : []));
       setStoresError(error instanceof Error ? error.message : '매장 정보를 불러오지 못했어요.');
       if (error instanceof Error) {
         Alert.alert('리스트 불러오기 실패', error.message);
@@ -216,67 +247,116 @@ export default function ListAllScreen() {
     }
   }, []);
 
-  const loadCurrentLocation = useCallback(async () => {
-    if (hasCachedMapResultsRef.current) {
-      setIsStoresLoading(false);
-      return;
+  const loadCurrentLocation = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) {
+      hasCachedMapResultsRef.current = false;
+      mapCache.clearNearbyPlaces();
+      setIsRefreshingLocation(true);
     }
 
-    setIsStoresLoading(true);
     setStoresError(null);
 
     try {
+      if (currentCoords) {
+        void fetchStores(currentCoords);
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        setStores([]);
+        if (!currentCoords) {
+          setStores([]);
+        }
         setStoresError('위치 권한이 필요해요.');
-        setIsStoresLoading(false);
         return;
       }
 
       const hasServices = await Location.hasServicesEnabledAsync();
 
       if (!hasServices) {
-        setStores([]);
+        if (!currentCoords) {
+          setStores([]);
+        }
         setStoresError('위치 서비스를 켜야 주변 매장을 볼 수 있어요.');
-        setIsStoresLoading(false);
         return;
+      }
+
+      const lastKnownLocation = currentCoords ? null : await Location.getLastKnownPositionAsync();
+
+      if (lastKnownLocation) {
+        const quickCoords = {
+          latitude: lastKnownLocation.coords.latitude,
+          longitude: lastKnownLocation.coords.longitude,
+        };
+        setCurrentCoords(quickCoords);
+        void fetchStores(quickCoords);
       }
 
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
-      }).catch(() => Location.getLastKnownPositionAsync());
+      }).catch(() => null);
 
       if (!location) {
-        setStores([]);
-        setStoresError('현재 위치를 가져오지 못했어요.');
-        setIsStoresLoading(false);
+        if (!currentCoords && !lastKnownLocation) {
+          setStores([]);
+          setStoresError('현재 위치를 가져오지 못했어요.');
+        }
         return;
       }
 
-      setCurrentCoords({
+      const freshCoords = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-      });
+      };
+
+      setCurrentCoords(freshCoords);
+      if (!currentCoords || freshCoords.latitude !== currentCoords.latitude || freshCoords.longitude !== currentCoords.longitude) {
+        void fetchStores(freshCoords);
+      }
     } catch {
-      setStores([]);
+      if (!currentCoords) {
+        setStores([]);
+      }
       setStoresError('현재 위치를 가져오지 못했어요.');
-      setIsStoresLoading(false);
+    } finally {
+      setIsRefreshingLocation(false);
+    }
+  }, [currentCoords, fetchStores]);
+
+  const loadFavoriteState = useCallback(async () => {
+    const token = await tokenStore.getAccessToken();
+    const loggedIn = Boolean(token);
+
+    setIsLoggedIn(loggedIn);
+
+    if (!loggedIn) {
+      setFavoritedExternalPlaceIds([]);
+      setFavoriteStoreIdByExternalPlaceId({});
+      return;
+    }
+
+    try {
+      const favorites = await favoritesApi.listStores();
+      setFavoritedExternalPlaceIds(favorites.content.map((item) => item.externalPlaceId));
+      setFavoriteStoreIdByExternalPlaceId(
+        favorites.content.reduce<Record<string, number>>((acc, item) => {
+          acc[item.externalPlaceId] = item.storeId;
+          return acc;
+        }, {})
+      );
+    } catch {
+      setFavoritedExternalPlaceIds([]);
+      setFavoriteStoreIdByExternalPlaceId({});
     }
   }, []);
 
-  useEffect(() => {
-    loadCachedMapAroundStores();
-    void loadCurrentLocation();
-  }, [loadCachedMapAroundStores, loadCurrentLocation]);
-
-  useEffect(() => {
-    if (!currentCoords) return;
-    if (hasCachedMapResultsRef.current) return;
-
-    void fetchStores(currentCoords);
-  }, [currentCoords, fetchStores]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadFavoriteState();
+      loadCachedMapAroundStores();
+      void loadCurrentLocation();
+    }, [loadCachedMapAroundStores, loadCurrentLocation, loadFavoriteState])
+  );
 
   const displayedStores = useMemo(() => {
     const filtered = stores.filter((store) => {
@@ -314,15 +394,34 @@ export default function ListAllScreen() {
     if (liveStatus === 'CLOSED') return '영업종료';
     if (liveStatus === 'TEMP_CLOSED') return '임시휴무';
     if (liveStatus === 'EARLY_CLOSED') return '조기마감';
+    if (store.verified) return store.operationalState ?? '우리 서비스 매장';
 
     return '상태정보 없음';
   }, []);
 
   const getStatusSourceLabel = useCallback((store: ListStoreItem) => {
+    if (store.verified) return '우리 서비스 매장';
     if (store.liveStatusSource === 'OWNER_POS') return '사장님 반영 업데이트';
     if (store.liveStatusSource === 'SYSTEM') return '시스템 반영 업데이트';
     if (store.liveStatusSource === 'ADMIN') return '관리자 반영 업데이트';
     return '서버 반영 업데이트';
+  }, []);
+
+  const isServiceStore = useCallback((store: ListStoreItem) => {
+    return Boolean(
+      store.verified
+      || store.liveBusinessStatus
+      || store.businessStatus
+      || store.operationalState
+      || store.ownerNotice
+      || store.openTime
+      || store.closeTime
+      || store.breakStart
+      || store.breakEnd
+      || store.menuEligible
+      || store.menuEditable
+      || (store.imageUrls?.length ?? 0) > 0
+    );
   }, []);
 
   const getRatingLabel = useCallback((store: ListStoreItem) => {
@@ -330,6 +429,89 @@ export default function ListAllScreen() {
     if (rating === null || rating === undefined) return '—';
     return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
   }, []);
+
+  const handleFavoritePress = useCallback(async (store: ListStoreItem) => {
+    if (!isLoggedIn) {
+      Alert.alert(
+        '로그인이 필요해요',
+        '찜은 로그인 후 사용할 수 있어요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '로그인 페이지로 이동', onPress: () => router.push('/views/user_login') },
+        ]
+      );
+      return;
+    }
+
+    const externalPlaceId = store.externalPlaceId;
+    const isFavorited = favoritedExternalPlaceIds.includes(externalPlaceId);
+
+    try {
+      if (isFavorited) {
+        const storeId = favoriteStoreIdByExternalPlaceId[externalPlaceId] ?? store.storeId;
+
+        try {
+          await favoritesApi.removeStore(storeId);
+        } catch (error) {
+          if (!isNotFoundError(error)) {
+            throw error;
+          }
+        }
+
+        try {
+          await myMapApi.removeStore(storeId);
+        } catch (error) {
+          if (!isNotFoundError(error)) {
+            throw error;
+          }
+        }
+
+        setFavoritedExternalPlaceIds((current) => current.filter((id) => id !== externalPlaceId));
+        setFavoriteStoreIdByExternalPlaceId((current) => {
+          const next = { ...current };
+          delete next[externalPlaceId];
+          return next;
+        });
+        return;
+      }
+
+      const resolvedStoreId = store.externalSource === 'kakao'
+        ? (await storesApi.resolve({
+            externalSource: 'KAKAO',
+            externalPlaceId: store.externalPlaceId,
+            name: store.name,
+            address: store.roadAddress ?? store.address ?? null,
+            latitude: store.latitude ?? 0,
+            longitude: store.longitude ?? 0,
+            categoryName: store.categoryName,
+          })).storeId
+        : store.storeId;
+
+      try {
+        await favoritesApi.addStore(resolvedStoreId);
+      } catch (error) {
+        if (!isConflictError(error)) {
+          throw error;
+        }
+      }
+
+      try {
+        await myMapApi.addStore(resolvedStoreId);
+      } catch (error) {
+        if (!isConflictError(error)) {
+          throw error;
+        }
+      }
+
+      setFavoritedExternalPlaceIds((current) => (current.includes(externalPlaceId) ? current : [...current, externalPlaceId]));
+      setFavoriteStoreIdByExternalPlaceId((current) => ({
+        ...current,
+        [externalPlaceId]: resolvedStoreId,
+      }));
+    } catch {
+      Alert.alert('찜 실패', '장소를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  }, [favoriteStoreIdByExternalPlaceId, favoritedExternalPlaceIds, isLoggedIn, router]);
 
   return (
     <>
@@ -393,7 +575,8 @@ export default function ListAllScreen() {
         <View style={styles.listInfoBar}>
           <Text style={styles.totalCountText}>총 <Text style={{color: '#0ea5a4', fontWeight: 'bold'}}>{displayedStores.length}</Text>건</Text>
           <View style={styles.listInfoRight}>
-            <TouchableOpacity style={styles.locationSearchBtn} onPress={loadCurrentLocation} activeOpacity={0.85}>
+            {isRefreshingLocation ? <Text style={styles.refreshingText}>갱신 중</Text> : null}
+            <TouchableOpacity style={styles.locationSearchBtn} onPress={() => void loadCurrentLocation(true)} activeOpacity={0.85}>
               <MaterialIcons name="my-location" size={14} color="#0ea5a4" style={{marginRight: 4}} />
               <Text style={styles.locationSearchText}>현위치 검색</Text>
             </TouchableOpacity>
@@ -449,7 +632,7 @@ export default function ListAllScreen() {
 
         {/* List Content */}
         <ScrollView style={styles.listContainer} contentContainerStyle={{paddingBottom: 100}} showsVerticalScrollIndicator={false}>
-          {isStoresLoading ? (
+          {isStoresLoading && stores.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateTitle}>주변 매장 불러오는 중</Text>
               <Text style={styles.emptyStateText}>현재 위치 기준으로 카테고리별 매장을 모으고 있어요.</Text>
@@ -461,13 +644,17 @@ export default function ListAllScreen() {
             </View>
           ) : (
             displayedStores.map((store) => (
-              <View key={`${store.externalSource}-${store.externalPlaceId}`} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.storeName}>{store.name}</Text>
-                  <TouchableOpacity>
-                    <Ionicons name="heart-outline" size={24} color="#fff" />
-                  </TouchableOpacity>
-                </View>
+                <View key={`${store.externalSource}-${store.externalPlaceId}`} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.storeName}>{store.name}</Text>
+                    <TouchableOpacity onPress={() => handleFavoritePress(store)} activeOpacity={0.8}>
+                      <Ionicons
+                        name={favoritedExternalPlaceIds.includes(store.externalPlaceId) ? 'heart' : 'heart-outline'}
+                        size={24}
+                        color={favoritedExternalPlaceIds.includes(store.externalPlaceId) ? '#ff4d74' : '#fff'}
+                      />
+                    </TouchableOpacity>
+                  </View>
 
                 <View style={styles.categoryBadge}>
                   <Text style={styles.categoryText}>{getCategoryLabel(store)}</Text>
@@ -502,9 +689,47 @@ export default function ListAllScreen() {
                   </View>
                   <View style={styles.footerItem}>
                     <Ionicons name="heart" size={14} color="#f44336" />
-                    <Text style={styles.footerText}>{store.favoriteCount}</Text>
+                    <Text style={styles.footerText}>찜 {store.favoriteCount}</Text>
                   </View>
                 </View>
+                {isServiceStore(store) ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.detailButton}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/views/store_detail',
+                          params: {
+                            storeId: String(store.storeId),
+                            storeName: store.name,
+                            storePhone: store.phone ?? '',
+                          },
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.detailButtonText}>상세 보기</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.reviewButton}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/views/store_reviews',
+                          params: {
+                            storeId: String(store.storeId),
+                            storeName: store.name,
+                            storePhone: store.phone ?? '',
+                          },
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.reviewButtonText}>리뷰 보기</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+                    </TouchableOpacity>
+                  </>
+                ) : null}
               </View>
             ))
           )}
@@ -722,6 +947,12 @@ const styles = StyleSheet.create({
   listInfoRight: {
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'center',
+  },
+  refreshingText: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
   },
   locationSearchBtn: {
     flexDirection: 'row',
@@ -929,6 +1160,42 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#e6eef1',
     marginVertical: 14,
+  },
+  reviewButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    backgroundColor: '#eefafa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  reviewButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  detailButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cfe0ff',
+    backgroundColor: '#f4f8ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  detailButtonText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '800',
   },
   cardFooter: {
     flexDirection: 'row',

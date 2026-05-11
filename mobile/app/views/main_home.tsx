@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { authApi, favoritesApi, myMapApi, tokenStore, type MeResponse } from '@/services/api';
 import type { MyMapResponse } from '@/services/api/myMap';
 
@@ -36,6 +37,33 @@ function ShortcutCard({
       <View style={styles.shortcutTextWrap}>
         <Text style={styles.shortcutTitle} numberOfLines={1}>{title}</Text>
         <Text style={styles.shortcutSubtitle} numberOfLines={2}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+    </TouchableOpacity>
+  );
+}
+
+function ActionCard({
+  title,
+  subtitle,
+  icon,
+  onPress,
+  accentStyle,
+}: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  accentStyle?: object;
+}) {
+  return (
+    <TouchableOpacity style={[styles.actionCard, accentStyle]} onPress={onPress} activeOpacity={0.9}>
+      <View style={styles.actionIconWrap}>
+        <Ionicons name={icon} size={22} color="#0ea5a4" />
+      </View>
+      <View style={styles.actionTextWrap}>
+        <Text style={styles.actionTitle} numberOfLines={1}>{title}</Text>
+        <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
     </TouchableOpacity>
@@ -110,39 +138,37 @@ export default function MainHomeScreen() {
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    let active = true;
+  const loadHomeData = useCallback(async () => {
+    const token = await tokenStore.getAccessToken();
+    if (!token) {
+      setMe(null);
+      setMyMap(null);
+      setFavoriteCount(0);
+      return;
+    }
 
-    const loadHomeData = async () => {
-      const token = await tokenStore.getAccessToken();
-      if (!token) return;
+    try {
+      const [meResponse, myMapResponse, favoritesResponse] = await Promise.all([
+        authApi.me(),
+        myMapApi.get(),
+        favoritesApi.listStores(),
+      ]);
 
-      try {
-        const [meResponse, myMapResponse, favoritesResponse] = await Promise.all([
-          authApi.me(),
-          myMapApi.get(),
-          favoritesApi.listStores(),
-        ]);
-
-        if (!active) return;
-
-        setMe(meResponse);
-        setMyMap(myMapResponse);
-        setFavoriteCount(favoritesResponse.content.length);
-      } catch {
-        if (!active) return;
-        setMe(null);
-        setMyMap(null);
-        setFavoriteCount(0);
-      }
-    };
-
-    void loadHomeData();
-
-    return () => {
-      active = false;
-    };
+      setMe(meResponse);
+      setMyMap(myMapResponse);
+      setFavoriteCount(favoritesResponse.content.length);
+    } catch {
+      setMe(null);
+      setMyMap(null);
+      setFavoriteCount(0);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadHomeData();
+    }, [loadHomeData])
+  );
 
   const displayName = me?.displayName ?? me?.nickname ?? null;
   const savedPlacesCount = me?.favorites.stores.length ?? favoriteCount;
@@ -233,6 +259,16 @@ export default function MainHomeScreen() {
               accentStyle={styles.shortcutD}
             />
           </View>
+
+          {me?.role === 'OWNER' ? (
+            <ActionCard
+              title="점주 페이지"
+              subtitle="매장 관리와 운영 상태를 바로 확인해요"
+              icon="storefront-outline"
+              onPress={() => router.push('/views/owner_dashboard')}
+              accentStyle={styles.ownerAction}
+            />
+          ) : null}
 
           <View style={styles.mapCard}>
             <View style={styles.mapChip}>
@@ -449,6 +485,7 @@ const styles = StyleSheet.create({
   shortcutB: { backgroundColor: '#fff3e4', borderColor: '#f8d5a6' },
   shortcutC: { backgroundColor: '#f2fbfa', borderColor: '#dbeff0' },
   shortcutD: { backgroundColor: '#f7fbff', borderColor: '#dbeff0' },
+  ownerAction: { marginTop: 4, marginBottom: 14 },
   shortcutIconWrap: {
     width: 36,
     height: 36,
@@ -472,6 +509,41 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     color: '#64748b',
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e6fbfa',
+  },
+  actionTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  actionTitle: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  actionSubtitle: {
+    marginTop: 4,
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 16,
   },
   mapCard: {
     marginTop: 18,

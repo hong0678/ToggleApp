@@ -10,14 +10,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { ownerApi, storeMenusApi, tokenStore } from '@/services/api';
+import { filesApi, ownerApi, storeMenusApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 import type { StoreMenuItem } from '@/services/api/storeMenus';
 
 type MenuDraft = {
+  id: string;
   name: string;
   price: string;
   description: string;
@@ -26,14 +28,25 @@ type MenuDraft = {
   available: boolean;
 };
 
-const EMPTY_DRAFT: MenuDraft = {
+const createEmptyDraft = (): MenuDraft => ({
+  id: `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   name: '',
   price: '',
   description: '',
   imageUrl: '',
   representative: false,
   available: true,
-};
+});
+
+const buildDraftFromMenu = (item: StoreMenuItem, index: number): MenuDraft => ({
+  id: item.menuId != null ? `menu-${item.menuId}` : `menu-${index}-${item.displayOrder}`,
+  name: item.name,
+  price: String(item.price),
+  description: item.description ?? '',
+  imageUrl: item.imageUrl ?? '',
+  representative: item.representative,
+  available: item.available,
+});
 
 function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
   return (
@@ -77,16 +90,18 @@ function MenuRow({
   draft,
   onChange,
   onRemove,
+  onUploadImage,
 }: {
   draft: MenuDraft;
   onChange: (next: MenuDraft) => void;
   onRemove: () => void;
+  onUploadImage: () => void;
 }) {
   return (
     <View style={styles.menuRow}>
       <View style={styles.menuRowTop}>
         <TextInput
-          style={styles.menuInput}
+          style={[styles.menuInput, styles.menuNameInput]}
           value={draft.name}
           onChangeText={(name) => onChange({ ...draft, name })}
           placeholder="메뉴명"
@@ -105,9 +120,10 @@ function MenuRow({
         style={styles.menuDescription}
         value={draft.description}
         onChangeText={(description) => onChange({ ...draft, description })}
-        placeholder="설명"
+        placeholder="설명 (길게 적어도 돼요)"
         placeholderTextColor="#94a3b8"
         multiline
+        numberOfLines={3}
       />
       <View style={styles.menuFlagsRow}>
         <TouchableOpacity
@@ -135,12 +151,17 @@ function MenuRow({
         placeholder="이미지 URL"
         placeholderTextColor="#94a3b8"
       />
+      <TouchableOpacity style={styles.uploadButton} onPress={onUploadImage} activeOpacity={0.9}>
+        <Ionicons name="image-outline" size={16} color="#0ea5a4" />
+        <Text style={styles.uploadButtonText}>이미지 파일 업로드</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 export default function OwnerMenuManageScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stores, setStores] = useState<OwnerLinkedStoreResponse[]>([]);
@@ -148,6 +169,7 @@ export default function OwnerMenuManageScreen() {
   const [menuItems, setMenuItems] = useState<StoreMenuItem[]>([]);
   const [drafts, setDrafts] = useState<MenuDraft[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
 
   useEffect(() => {
     let active = true;
@@ -166,31 +188,21 @@ export default function OwnerMenuManageScreen() {
         const response = await ownerApi.listStores();
         if (!active) return;
         setStores(response);
-        const first = response[0] ?? null;
+        const requestedId = requestedStoreId ? Number(requestedStoreId) : null;
+        const first = response.find((store) => store.storeId === requestedId) ?? response[0] ?? null;
         setSelectedStoreId(first?.storeId ?? null);
 
         if (first) {
           const menus = await storeMenusApi.getMyStoreMenus(first.storeId);
           if (!active) return;
           setMenuItems(menus.items);
-          setDrafts(
-            menus.items.length > 0
-              ? menus.items.map((item) => ({
-                  name: item.name,
-                  price: String(item.price),
-                  description: item.description ?? '',
-                  imageUrl: item.imageUrl ?? '',
-                  representative: item.representative,
-                  available: item.available,
-                }))
-              : [EMPTY_DRAFT]
-          );
+          setDrafts(menus.items.length > 0 ? menus.items.map((item, index) => buildDraftFromMenu(item, index)) : [createEmptyDraft()]);
         }
       } catch {
         if (!active) return;
         setStores([]);
         setMenuItems([]);
-        setDrafts([EMPTY_DRAFT]);
+        setDrafts([createEmptyDraft()]);
       } finally {
         if (!active) return;
         setIsLoading(false);
@@ -202,12 +214,16 @@ export default function OwnerMenuManageScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedStoreId]);
 
   const selectedStore = useMemo(
     () => stores.find((store) => store.storeId === selectedStoreId) ?? null,
     [selectedStoreId, stores]
   );
+
+  const handleAddDraft = () => {
+    setDrafts((current) => [...current, createEmptyDraft()]);
+  };
 
   const selectStore = async (storeId: number) => {
     const store = stores.find((item) => item.storeId === storeId);
@@ -218,21 +234,10 @@ export default function OwnerMenuManageScreen() {
       setIsLoading(true);
       const menus = await storeMenusApi.getMyStoreMenus(storeId);
       setMenuItems(menus.items);
-      setDrafts(
-        menus.items.length > 0
-          ? menus.items.map((item) => ({
-              name: item.name,
-              price: String(item.price),
-              description: item.description ?? '',
-              imageUrl: item.imageUrl ?? '',
-              representative: item.representative,
-              available: item.available,
-            }))
-          : [EMPTY_DRAFT]
-      );
+      setDrafts(menus.items.length > 0 ? menus.items.map((item, index) => buildDraftFromMenu(item, index)) : [createEmptyDraft()]);
     } catch {
       setMenuItems([]);
-      setDrafts([EMPTY_DRAFT]);
+      setDrafts([createEmptyDraft()]);
     } finally {
       setIsLoading(false);
     }
@@ -268,14 +273,7 @@ export default function OwnerMenuManageScreen() {
       });
       setMenuItems(response.items);
       setDrafts(
-        response.items.map((item) => ({
-          name: item.name,
-          price: String(item.price),
-          description: item.description ?? '',
-          imageUrl: item.imageUrl ?? '',
-          representative: item.representative,
-          available: item.available,
-        }))
+        response.items.map((item, index) => buildDraftFromMenu(item, index))
       );
       Alert.alert('저장 완료', '메뉴가 저장되었어요.');
     } catch (error) {
@@ -285,11 +283,44 @@ export default function OwnerMenuManageScreen() {
     }
   };
 
+  const handleUploadMenuImage = async (index: number) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      if (!file?.uri) {
+        Alert.alert('파일 선택 실패', '이미지 파일을 읽지 못했어요.');
+        return;
+      }
+
+      const response = await filesApi.uploadMenu({
+        uri: file.uri,
+        name: file.name ?? 'menu-image.jpg',
+        type: file.mimeType ?? 'image/jpeg',
+      });
+
+      setDrafts((current) => current.map((item, itemIndex) => (
+        itemIndex === index
+          ? { ...item, imageUrl: response.url }
+          : item
+      )));
+      Alert.alert('업로드 완료', '메뉴 이미지를 불러왔어요.');
+    } catch (error) {
+      Alert.alert('이미지 업로드 실패', error instanceof Error ? error.message : '메뉴 이미지 업로드에 실패했습니다.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -333,38 +364,27 @@ export default function OwnerMenuManageScreen() {
             <View style={styles.card}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>메뉴 목록</Text>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => setDrafts((current) => [...current, { ...EMPTY_DRAFT }])}
-                  activeOpacity={0.9}
-                >
-                  <Ionicons name="add" size={16} color="#0ea5a4" />
-                  <Text style={styles.addButtonText}>추가</Text>
-                </TouchableOpacity>
+                <View style={styles.sectionHeaderHint}>
+                  <Text style={styles.sectionHeaderHintText}>메뉴는 한번에 저장돼요</Text>
+                </View>
               </View>
               <Text style={styles.helperText}>메뉴명을 입력하고 가격을 적은 뒤 저장 버튼을 눌러주세요.</Text>
-
-              <View style={styles.menuList}>
-                {drafts.map((draft, index) => (
-                  <MenuRow
-                    key={`${index}-${draft.name}`}
-                    draft={draft}
-                    onChange={(next) =>
-                      setDrafts((current) => current.map((item, itemIndex) => (itemIndex === index ? next : item)))
-                    }
-                    onRemove={() => setDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                  />
-                ))}
-              </View>
 
               {menuItems.length > 0 ? (
                 <View style={styles.currentMenusBox}>
                   <Text style={styles.sectionTitle}>현재 저장된 메뉴</Text>
                   {menuItems.map((item) => (
                     <View key={String(item.menuId ?? `${item.name}-${item.displayOrder}`)} style={styles.currentMenuItem}>
-                      <Text style={styles.currentMenuTitle}>
-                        {item.name} {item.representative ? '· 대표' : ''}
-                      </Text>
+                      <View style={styles.currentMenuTopRow}>
+                        <Text style={styles.currentMenuTitle} numberOfLines={1} ellipsizeMode="tail">
+                          {item.name}
+                        </Text>
+                        {item.representative ? (
+                          <View style={styles.currentMenuBadge}>
+                            <Text style={styles.currentMenuBadgeText}>대표</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={styles.currentMenuSub}>
                         {item.price.toLocaleString()}원 · {item.available ? '판매중' : '판매중지'}
                       </Text>
@@ -372,6 +392,25 @@ export default function OwnerMenuManageScreen() {
                   ))}
                 </View>
               ) : null}
+
+              <View style={styles.menuList}>
+                {drafts.map((draft, index) => (
+                  <MenuRow
+                    key={draft.id}
+                    draft={draft}
+                    onChange={(next) =>
+                      setDrafts((current) => current.map((item, itemIndex) => (itemIndex === index ? next : item)))
+                    }
+                    onRemove={() => setDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    onUploadImage={() => void handleUploadMenuImage(index)}
+                  />
+                ))}
+              </View>
+
+              <TouchableOpacity style={styles.addMenuButton} onPress={handleAddDraft} activeOpacity={0.9} hitSlop={8}>
+                <Ionicons name="add" size={18} color="#0ea5a4" />
+                <Text style={styles.addMenuButtonText}>메뉴 추가</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.primaryButton} onPress={handleSave} activeOpacity={0.9} disabled={isSaving}>
                 {isSaving ? (
@@ -468,6 +507,15 @@ const styles = StyleSheet.create({
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '900', color: '#0f172a' },
   sectionSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  sectionHeaderHint: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  sectionHeaderHintText: { color: '#64748b', fontSize: 11, fontWeight: '700' },
   helperText: { fontSize: 13, color: '#64748b', lineHeight: 18, marginBottom: 12 },
   storeChips: { gap: 10, paddingRight: 4 },
   storeChip: {
@@ -486,18 +534,19 @@ const styles = StyleSheet.create({
   storeChipText: { color: '#334155', fontSize: 13, fontWeight: '700' },
   storeChipTextActive: { color: '#0ea5a4' },
   selectedStoreName: { marginTop: 12, fontSize: 18, fontWeight: '900', color: '#0f172a' },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
+  addMenuButton: {
+    minHeight: 52,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#bfeceb',
     backgroundColor: '#eefafa',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
   },
-  addButtonText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
+  addMenuButtonText: { color: '#0ea5a4', fontSize: 14, fontWeight: '900' },
   menuList: { gap: 12, marginTop: 8 },
   menuRow: {
     borderRadius: 18,
@@ -509,13 +558,18 @@ const styles = StyleSheet.create({
   menuRowTop: { flexDirection: 'row', gap: 10 },
   menuInput: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#dbe4ee',
     backgroundColor: '#fff',
     paddingHorizontal: 12,
+    paddingVertical: 10,
     color: '#0f172a',
+  },
+  menuNameInput: {
+    flex: 1.35,
+    textAlignVertical: 'top',
   },
   priceInput: { flexBasis: 96, flexGrow: 0 },
   menuDescription: {
@@ -565,6 +619,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: '#0f172a',
   },
+  uploadButton: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    backgroundColor: '#eefafa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  uploadButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   currentMenusBox: {
     marginTop: 14,
     borderRadius: 18,
@@ -581,7 +653,17 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 10,
   },
-  currentMenuTitle: { color: '#0f172a', fontSize: 14, fontWeight: '800' },
+  currentMenuTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  currentMenuTitle: { color: '#0f172a', fontSize: 14, fontWeight: '800', flexShrink: 1 },
+  currentMenuBadge: {
+    borderRadius: 999,
+    backgroundColor: '#eefafa',
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  currentMenuBadgeText: { color: '#0ea5a4', fontSize: 10, fontWeight: '900' },
   currentMenuSub: { color: '#64748b', fontSize: 12, marginTop: 4 },
   primaryButton: {
     marginTop: 14,

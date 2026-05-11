@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { favoritesApi, tokenStore, type FavoriteStoreListItemResponse } from '@/services/api';
+import { ApiClientError, favoritesApi, myMapApi, tokenStore, type FavoriteStoreListItemResponse } from '@/services/api';
+
+const isConflictError = (error: unknown) => error instanceof ApiClientError && error.status === 409;
 
 type SavedPlace = {
   id: string;
@@ -30,33 +33,6 @@ type MapCollection = {
   name: string;
   count: number;
 };
-
-const SAVED_PLACES: SavedPlace[] = [
-  {
-    id: 'saved-1',
-    title: '맘스터치 성결대점',
-    category: '햄버거',
-    address: '경기 안양시 만안구 성결대학로 38',
-    note: '혼밥하기 좋고 접근성이 좋아요',
-    accent: '#e8f6f7',
-  },
-  {
-    id: 'saved-2',
-    title: '포즈커피 학생회관점',
-    category: '카페',
-    address: '경기 안양시 만안구 성결대학로 53',
-    note: '조용히 작업하기 좋은 공간이에요',
-    accent: '#fff3d8',
-  },
-  {
-    id: 'saved-3',
-    title: '성문고등학교',
-    category: '학교',
-    address: '경기 안양시 만안구 성결대학로 64번길 11',
-    note: '자주 지나가는 길이라 저장해두었어요',
-    accent: '#eaf7ff',
-  },
-];
 
 const MAP_COLLECTIONS: MapCollection[] = [
   { id: 'map-1', name: '내 주변 지도', count: 12 },
@@ -178,47 +154,36 @@ export default function SavedPlacesScreen() {
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [activePlaceId, setActivePlaceId] = useState<string | null>(null);
   const [assignedMapByPlaceId, setAssignedMapByPlaceId] = useState<Record<string, string>>({});
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(SAVED_PLACES);
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
 
   const activePlace = useMemo(
     () => savedPlaces.find((item) => item.id === activePlaceId) ?? null,
     [activePlaceId, savedPlaces]
   );
 
-  useEffect(() => {
-    let active = true;
+  const loadSavedPlaces = useCallback(async () => {
+    const token = await tokenStore.getAccessToken();
+    const loggedIn = Boolean(token);
+    setIsLoggedIn(loggedIn);
 
-    const loadAuth = async () => {
-      const token = await tokenStore.getAccessToken();
-      if (!active) return;
-      setIsLoggedIn(Boolean(token));
+    if (!loggedIn) {
+      setSavedPlaces([]);
+      return;
+    }
 
-      if (!token) {
-        setSavedPlaces(SAVED_PLACES);
-        return;
-      }
-
-      try {
-        const favorites = await favoritesApi.listStores();
-        if (!active) return;
-
-        if (favorites.content.length > 0) {
-          setSavedPlaces(favorites.content.map(mapFavoriteToSavedPlace));
-        } else {
-          setSavedPlaces(SAVED_PLACES);
-        }
-      } catch {
-        if (!active) return;
-        setSavedPlaces(SAVED_PLACES);
-      }
-    };
-
-    void loadAuth();
-
-    return () => {
-      active = false;
-    };
+    try {
+      const favorites = await favoritesApi.listStores();
+      setSavedPlaces(favorites.content.map(mapFavoriteToSavedPlace));
+    } catch {
+      setSavedPlaces([]);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadSavedPlaces();
+    }, [loadSavedPlaces])
+  );
 
   const openMapPicker = (placeId: string) => {
     setActivePlaceId(placeId);
@@ -231,6 +196,18 @@ export default function SavedPlacesScreen() {
       ...current,
       [activePlaceId]: mapId,
     }));
+
+    if (isLoggedIn) {
+      const placeId = Number(activePlaceId);
+      if (!Number.isNaN(placeId)) {
+        void myMapApi.addStore(placeId).catch((error) => {
+          if (!isConflictError(error)) {
+            throw error;
+          }
+        });
+      }
+    }
+
     setIsMapPickerOpen(false);
   };
 
@@ -294,15 +271,22 @@ export default function SavedPlacesScreen() {
                   <Text style={styles.sectionMore}>{savedPlaces.length}개</Text>
                 </View>
 
-                <View style={styles.savedList}>
-                  {savedPlaces.map((place) => (
-                    <SavedPlaceCard
-                      key={place.id}
-                      place={place}
-                      onAddToMap={() => openMapPicker(place.id)}
-                    />
-                  ))}
-                </View>
+                {savedPlaces.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateTitle}>저장한 장소가 없어요</Text>
+                    <Text style={styles.emptyStateText}>지도에서 찜한 장소가 여기에 쌓여요.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.savedList}>
+                    {savedPlaces.map((place) => (
+                      <SavedPlaceCard
+                        key={place.id}
+                        place={place}
+                        onAddToMap={() => openMapPicker(place.id)}
+                      />
+                    ))}
+                  </View>
+                )}
               </>
             )}
           </ScrollView>
@@ -576,6 +560,27 @@ const styles = StyleSheet.create({
   },
   savedList: {
     gap: 12,
+  },
+  emptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e6eef1',
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    alignItems: 'center',
+  },
+  emptyStateTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  emptyStateText: {
+    marginTop: 6,
+    color: '#64748b',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   placeCard: {
     backgroundColor: '#fff',

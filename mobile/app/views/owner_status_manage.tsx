@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
@@ -48,9 +48,11 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
 function StoreCard({
   store,
   onChangeStatus,
+  onUnlink,
 }: {
   store: OwnerLinkedStoreResponse;
   onChangeStatus: (storeId: number, status: StatusOption) => Promise<void>;
+  onUnlink: (storeId: number) => Promise<void>;
 }) {
   const [comment, setComment] = useState(store.ownerNotice ?? '');
 
@@ -108,7 +110,14 @@ function StoreCard({
           activeOpacity={0.9}
           onPress={async () => {
             try {
-              await ownerApi.updateStoreProfile(store.storeId, { ownerNotice: comment.trim() });
+              await ownerApi.updateStoreProfile(store.storeId, {
+                ownerNotice: comment.trim(),
+                openTime: store.openTime ?? '',
+                closeTime: store.closeTime ?? '',
+                breakStart: store.breakStart ?? '',
+                breakEnd: store.breakEnd ?? '',
+                imageUrls: store.imageUrls,
+              });
               Alert.alert('저장 완료', '안내 문구를 저장했어요.');
             } catch (error) {
               Alert.alert('실패', error instanceof Error ? error.message : '안내 문구 저장에 실패했습니다.');
@@ -118,15 +127,42 @@ function StoreCard({
           <Text style={styles.noticeButtonText}>안내 문구 저장</Text>
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity
+        style={styles.unlinkButton}
+        activeOpacity={0.9}
+        onPress={() => {
+          Alert.alert('연결 해제', `${store.storeName}과의 점주 연결을 해제할까요?`, [
+            { text: '취소', style: 'cancel' },
+            {
+              text: '해제',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await onUnlink(store.storeId);
+                  Alert.alert('연결 해제', '점주 연결을 해제했어요.');
+                } catch (error) {
+                  Alert.alert('실패', error instanceof Error ? error.message : '연결 해제에 실패했습니다.');
+                }
+              },
+            },
+          ]);
+        }}
+      >
+        <Ionicons name="unlink-outline" size={16} color="#ef4444" />
+        <Text style={styles.unlinkButtonText}>연결 해제</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 export default function OwnerStatusManageScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stores, setStores] = useState<OwnerLinkedStoreResponse[]>([]);
+  const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
 
   useEffect(() => {
     let active = true;
@@ -145,7 +181,12 @@ export default function OwnerStatusManageScreen() {
       try {
         const response = await ownerApi.listStores();
         if (!active) return;
-        setStores(response);
+        const requestedId = requestedStoreId ? Number(requestedStoreId) : null;
+        const orderedStores =
+          requestedId && response.some((store) => store.storeId === requestedId)
+            ? [...response.filter((store) => store.storeId === requestedId), ...response.filter((store) => store.storeId !== requestedId)]
+            : response;
+        setStores(orderedStores);
       } catch {
         if (!active) return;
         setStores([]);
@@ -160,10 +201,16 @@ export default function OwnerStatusManageScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedStoreId]);
 
   const changeStatus = async (storeId: number, status: StatusOption) => {
     await ownerApi.updateStoreStatus(storeId, { status });
+    const response = await ownerApi.listStores();
+    setStores(response);
+  };
+
+  const unlinkStore = async (storeId: number) => {
+    await ownerApi.unlinkStore(storeId);
     const response = await ownerApi.listStores();
     setStores(response);
   };
@@ -172,7 +219,7 @@ export default function OwnerStatusManageScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -197,7 +244,7 @@ export default function OwnerStatusManageScreen() {
         ) : (
           <View style={styles.list}>
             {stores.map((store) => (
-              <StoreCard key={store.storeId} store={store} onChangeStatus={changeStatus} />
+              <StoreCard key={store.storeId} store={store} onChangeStatus={changeStatus} onUnlink={unlinkStore} />
             ))}
           </View>
         )}
@@ -341,4 +388,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   noticeButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  unlinkButton: {
+    marginTop: 12,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff7f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  unlinkButtonText: { color: '#ef4444', fontSize: 14, fontWeight: '800' },
 });

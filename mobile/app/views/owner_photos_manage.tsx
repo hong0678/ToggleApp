@@ -2,19 +2,27 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { ownerApi, tokenStore } from '@/services/api';
+import { filesApi, ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
+
+const resolveAssetUrl = (url: string) => {
+  if (/^https?:\/\//i.test(url)) return url;
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
+  return `${baseUrl}${url}`;
+};
 
 function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
   return (
@@ -36,24 +44,29 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   );
 }
 
-function PhotoPreview({ uri }: { uri: string }) {
+function PhotoPreview({ uri, onRemove }: { uri: string; onRemove: () => void }) {
   return (
-    <View style={styles.previewItem}>
-      <Text style={styles.previewText} numberOfLines={1}>
-        {uri}
-      </Text>
+    <View style={styles.photoCard}>
+      <Image source={{ uri: resolveAssetUrl(uri) }} style={styles.photoImage} />
+      <TouchableOpacity style={styles.photoRemoveButton} onPress={onRemove} activeOpacity={0.9}>
+        <Ionicons name="close" size={14} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
 
 export default function OwnerPhotosManageScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stores, setStores] = useState<OwnerLinkedStoreResponse[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
-  const [imageUrls, setImageUrls] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
+  const photoCardWidth = Math.max(240, screenWidth - 76);
 
   useEffect(() => {
     let active = true;
@@ -73,9 +86,10 @@ export default function OwnerPhotosManageScreen() {
         if (!active) return;
 
         setStores(response);
-        const first = response[0] ?? null;
+        const requestedId = requestedStoreId ? Number(requestedStoreId) : null;
+        const first = response.find((store) => store.storeId === requestedId) ?? response[0] ?? null;
         setSelectedStoreId(first?.storeId ?? null);
-        setImageUrls((first?.imageUrls ?? []).join('\n'));
+        setPhotoUrls(first?.imageUrls ?? []);
       } catch {
         if (!active) return;
         setStores([]);
@@ -90,7 +104,7 @@ export default function OwnerPhotosManageScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedStoreId]);
 
   const selectedStore = useMemo(
     () => stores.find((store) => store.storeId === selectedStoreId) ?? null,
@@ -102,7 +116,7 @@ export default function OwnerPhotosManageScreen() {
     if (!store) return;
 
     setSelectedStoreId(storeId);
-    setImageUrls(store.imageUrls.join('\n'));
+    setPhotoUrls(store.imageUrls);
   };
 
   const handleSave = async () => {
@@ -111,14 +125,16 @@ export default function OwnerPhotosManageScreen() {
       return;
     }
 
-    const urls = imageUrls
-      .split('\n')
-      .map((item) => item.trim())
-      .filter(Boolean);
-
     try {
       setIsSaving(true);
-      await ownerApi.updateStoreProfile(selectedStore.storeId, { imageUrls: urls });
+      await ownerApi.updateStoreProfile(selectedStore.storeId, {
+        ownerNotice: selectedStore.ownerNotice ?? '',
+        openTime: selectedStore.openTime ?? '',
+        closeTime: selectedStore.closeTime ?? '',
+        breakStart: selectedStore.breakStart ?? '',
+        breakEnd: selectedStore.breakEnd ?? '',
+        imageUrls: photoUrls,
+      });
       const response = await ownerApi.listStores();
       setStores(response);
       Alert.alert('저장 완료', '매장 사진 정보가 저장되었어요.');
@@ -129,11 +145,49 @@ export default function OwnerPhotosManageScreen() {
     }
   };
 
+  const handleUploadStorePhoto = async () => {
+    if (!selectedStore) {
+      Alert.alert('매장 선택', '먼저 매장을 선택해주세요.');
+      return;
+    }
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      if (!file?.uri) {
+        Alert.alert('파일 선택 실패', '이미지 파일을 읽지 못했어요.');
+        return;
+      }
+
+      const response = await filesApi.uploadStore({
+        uri: file.uri,
+        name: file.name ?? 'store-photo.jpg',
+        type: file.mimeType ?? 'image/jpeg',
+      });
+
+      setPhotoUrls((current) => (current.includes(response.url) ? current : [...current, response.url]));
+      Alert.alert('업로드 완료', '매장 사진을 추가했어요. 저장 버튼을 눌러 반영해 주세요.');
+    } catch (error) {
+      Alert.alert('사진 업로드 실패', error instanceof Error ? error.message : '매장 사진 업로드에 실패했습니다.');
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotoUrls((current) => current.filter((_, photoIndex) => photoIndex !== index));
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -177,25 +231,34 @@ export default function OwnerPhotosManageScreen() {
                 })}
               </View>
 
-              <Text style={styles.sectionSubTitle}>현재 등록된 사진 URL</Text>
-              <View style={styles.previewList}>
-                {(selectedStore?.imageUrls.length ? selectedStore.imageUrls : ['등록된 사진이 없습니다.']).map((uri: string) => (
-                  <PhotoPreview key={uri} uri={uri} />
-                ))}
-              </View>
-            </View>
+              <Text style={styles.sectionSubTitle}>현재 등록된 사진</Text>
+              <Text style={styles.helperText}>여러 장을 등록하고, 필요 없는 사진은 지운 뒤 저장할 수 있어요.</Text>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                decelerationRate="fast"
+                snapToInterval={photoCardWidth + 12}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoPager}
+              >
+                {photoUrls.length === 0 ? (
+                  <View style={[styles.emptyPhotoCard, { width: photoCardWidth }]}>
+                    <Ionicons name="image-outline" size={20} color="#94a3b8" />
+                    <Text style={styles.emptyPhotoText}>등록된 사진이 없습니다.</Text>
+                  </View>
+                ) : (
+                  photoUrls.map((uri, index) => (
+                    <View key={`${uri}-${index}`} style={{ width: photoCardWidth, marginRight: 12 }}>
+                      <PhotoPreview uri={uri} onRemove={() => handleRemovePhoto(index)} />
+                    </View>
+                  ))
+                )}
+              </ScrollView>
 
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>새 사진 URL 입력</Text>
-              <Text style={styles.helperText}>이미지 업로드 연결 전에는 URL 목록을 줄바꿈으로 입력할 수 있어요.</Text>
-              <TextInput
-                style={styles.textArea}
-                value={imageUrls}
-                onChangeText={setImageUrls}
-                multiline
-                placeholder="https://..."
-                placeholderTextColor="#94a3b8"
-              />
+              <TouchableOpacity style={styles.uploadButton} onPress={() => void handleUploadStorePhoto()} activeOpacity={0.9}>
+                <Ionicons name="image-outline" size={16} color="#0ea5a4" />
+                <Text style={styles.uploadButtonText}>사진 추가</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.primaryButton} onPress={handleSave} activeOpacity={0.9} disabled={isSaving}>
                 {isSaving ? (
                   <ActivityIndicator color="#fff" />
@@ -306,26 +369,57 @@ const styles = StyleSheet.create({
   },
   storeChipText: { color: '#334155', fontSize: 13, fontWeight: '700' },
   storeChipTextActive: { color: '#0ea5a4' },
-  previewList: { gap: 8 },
-  previewItem: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  photoPager: {
+    paddingVertical: 4,
   },
-  previewText: { color: '#334155', fontSize: 12 },
-  textArea: {
-    minHeight: 120,
-    borderRadius: 14,
+  photoCard: {
+    height: 220,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#eefafa',
+    borderWidth: 1,
+    borderColor: '#c7eff0',
+  },
+  photoImage: { width: '100%', height: '100%' },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyPhotoCard: {
+    minHeight: 220,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#dbe4ee',
     backgroundColor: '#f8fafc',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#0f172a',
-    textAlignVertical: 'top',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emptyPhotoText: { color: '#64748b', fontSize: 13, fontWeight: '700' },
+  uploadButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    backgroundColor: '#eefafa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  uploadButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
   },
   primaryButton: {
     marginTop: 12,

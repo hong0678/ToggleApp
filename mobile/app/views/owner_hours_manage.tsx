@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
@@ -116,12 +116,14 @@ function Field({
 
 export default function OwnerHoursManageScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stores, setStores] = useState<OwnerLinkedStoreResponse[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
 
   useEffect(() => {
     let active = true;
@@ -140,7 +142,8 @@ export default function OwnerHoursManageScreen() {
         const response = await ownerApi.listStores();
         if (!active) return;
         setStores(response);
-        const first = response[0] ?? null;
+        const requestedId = requestedStoreId ? Number(requestedStoreId) : null;
+        const first = response.find((store) => store.storeId === requestedId) ?? response[0] ?? null;
         setSelectedStoreId(first?.storeId ?? null);
         setForm({
           ownerNotice: first?.ownerNotice ?? '',
@@ -163,7 +166,7 @@ export default function OwnerHoursManageScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedStoreId]);
 
   const selectedStore = useMemo(
     () => stores.find((store) => store.storeId === selectedStoreId) ?? null,
@@ -202,6 +205,7 @@ export default function OwnerHoursManageScreen() {
         closeTime: form.closeTime.trim(),
         breakStart: form.breakStart.trim(),
         breakEnd: form.breakEnd.trim(),
+        imageUrls: selectedStore.imageUrls,
       });
       const refreshed = await ownerApi.listStores();
       setStores(refreshed);
@@ -217,7 +221,7 @@ export default function OwnerHoursManageScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -260,7 +264,7 @@ export default function OwnerHoursManageScreen() {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>
-                    <Text style={styles.primaryButtonText}>저장하기</Text>
+                    <Text style={styles.primaryButtonText}>수정하기</Text>
                     <Ionicons name="chevron-forward" size={18} color="#fff" />
                   </>
                 )}

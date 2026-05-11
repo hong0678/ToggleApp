@@ -6,7 +6,6 @@ export type StoredAuthTokens = {
 };
 
 let tokens: StoredAuthTokens | null = null;
-let isMockSession = false;
 
 export const tokenStore = {
   async getTokens() {
@@ -19,23 +18,16 @@ export const tokenStore = {
 
   async setTokens(nextTokens: StoredAuthTokens) {
     tokens = nextTokens;
-    isMockSession = false;
   },
 
-  async setAuthResponse(auth: AuthTokenResponse, options?: { mock?: boolean }) {
+  async setAuthResponse(auth: AuthTokenResponse) {
     tokens = {
       accessToken: auth.accessToken,
       refreshToken: auth.refreshToken,
     };
-    isMockSession = !!options?.mock;
-  },
-
-  async isMock() {
-    return isMockSession;
   },
 
   async clear() {
     tokens = null;
-    isMockSession = false;
   },
 };

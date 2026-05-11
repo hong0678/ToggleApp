@@ -19,8 +19,7 @@ export type ManualBusinessVerificationRequest = {
 };
 
 export type OwnerApplicationApproveRequest = {
-  approved: boolean;
-  note?: string;
+  adminConfirmed: boolean;
 };
 
 export type StoreClosureRequestResponse = {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { authApi, myMapApi, tokenStore } from '@/services/api';
+import { authApi, myMapApi, storesApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
 
 function StatCard({
   label,
@@ -60,6 +61,73 @@ function ActionCard({
   );
 }
 
+function SavedStoreCard({
+  place,
+  onPressDetail,
+  onPressReviews,
+}: {
+  place: StoreLookupItemResponse;
+  onPressDetail: () => void;
+  onPressReviews: () => void;
+}) {
+  const isServiceStore = Boolean(
+    place.verified
+    || place.liveBusinessStatus
+    || place.businessStatus
+    || place.operationalState
+    || place.ownerNotice
+    || place.openTime
+    || place.closeTime
+    || place.breakStart
+    || place.breakEnd
+    || place.menuEligible
+    || place.menuEditable
+    || (place.imageUrls?.length ?? 0) > 0
+  );
+
+  return (
+    <View style={styles.savedStoreCard}>
+      <View style={styles.savedStoreTopRow}>
+        <View style={styles.savedStoreBadge}>
+          <Ionicons name="bookmark-outline" size={14} color="#0ea5a4" />
+          <Text style={styles.savedStoreBadgeText}>{place.categoryName ?? '저장한 장소'}</Text>
+        </View>
+        <Text style={styles.savedStoreCountText}>찜 {place.favoriteCount}</Text>
+      </View>
+      <Text style={styles.savedStoreName}>{place.name}</Text>
+      <Text style={styles.savedStoreAddress}>
+        {place.roadAddress ?? place.address ?? place.jibunAddress ?? '주소 정보 없음'}
+      </Text>
+      <View style={styles.savedStoreMetaRow}>
+        <View style={styles.savedStoreMetaItem}>
+          <Ionicons name="heart" size={12} color="#ff4d74" />
+          <Text style={styles.savedStoreMetaText}>{place.reviewCount}개 리뷰</Text>
+        </View>
+        <View style={styles.savedStoreMetaItem}>
+          <Ionicons name="location-outline" size={12} color="#94a3b8" />
+          <Text style={styles.savedStoreMetaText}>
+            {place.liveBusinessStatus ?? place.businessStatus ?? (isServiceStore ? place.operationalState ?? '우리 서비스 매장' : '상태 정보 없음')}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.savedStoreActionRow}>
+        {isServiceStore ? (
+          <TouchableOpacity style={styles.savedStoreDetailButton} onPress={onPressDetail} activeOpacity={0.9}>
+            <Text style={styles.savedStoreDetailButtonText}>상세 보기</Text>
+            <Ionicons name="chevron-forward" size={14} color="#2563eb" />
+          </TouchableOpacity>
+        ) : null}
+        {isServiceStore ? (
+          <TouchableOpacity style={styles.savedStoreActionButton} onPress={onPressReviews} activeOpacity={0.9}>
+            <Text style={styles.savedStoreActionButtonText}>리뷰 보기</Text>
+            <Ionicons name="chevron-forward" size={14} color="#0ea5a4" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
   return (
     <View style={styles.gateCard}>
@@ -85,50 +153,87 @@ export default function MyMapScreen() {
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [accountRole, setAccountRole] = useState<'USER' | 'OWNER' | 'ADMIN' | null>(null);
   const [storeCount, setStoreCount] = useState(0);
   const [publicCount, setPublicCount] = useState(0);
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [savedStores, setSavedStores] = useState<StoreLookupItemResponse[]>([]);
 
-  useEffect(() => {
-    let active = true;
+  const loadMyMapState = useCallback(async () => {
+    const token = await tokenStore.getAccessToken();
+    const loggedIn = Boolean(token);
+    setIsLoggedIn(loggedIn);
 
-    const loadAuth = async () => {
-      const token = await tokenStore.getAccessToken();
-      if (!active) return;
-      setIsLoggedIn(Boolean(token));
+    if (!loggedIn) {
+      setStoreCount(0);
+      setPublicCount(0);
+      setDisplayName(null);
+      setAccountRole(null);
+      setSavedStores([]);
+      return;
+    }
 
-      if (!token) {
-        setStoreCount(0);
-        setPublicCount(0);
-        setDisplayName(null);
+    try {
+      const [meResponse, myMapResponse] = await Promise.all([
+        authApi.me(),
+        myMapApi.get(),
+      ]);
+
+      if (meResponse.role === 'ADMIN') {
+        router.replace('/views/admin_owner_applications');
         return;
       }
 
-      try {
-        const [meResponse, myMapResponse] = await Promise.all([
-          authApi.me(),
-          myMapApi.get(),
-        ]);
+      setAccountRole(meResponse.role ?? null);
+      setDisplayName(meResponse.displayName ?? meResponse.nickname ?? null);
+      setStoreCount(myMapResponse.stores.length);
+      setPublicCount(myMapResponse.publics.length);
 
-        if (!active) return;
-
-        setDisplayName(meResponse.displayName ?? meResponse.nickname ?? null);
-        setStoreCount(myMapResponse.stores.length);
-        setPublicCount(myMapResponse.publics.length);
-      } catch {
-        if (!active) return;
-        setStoreCount(0);
-        setPublicCount(0);
-        setDisplayName(null);
+      if (myMapResponse.stores.length > 0) {
+        try {
+          const storeResponse = await storesApi.listByIds(myMapResponse.stores);
+          setSavedStores(storeResponse.stores);
+        } catch {
+          setSavedStores([]);
+        }
+      } else {
+        setSavedStores([]);
       }
-    };
+    } catch {
+      setStoreCount(0);
+      setPublicCount(0);
+      setDisplayName(null);
+      setAccountRole(null);
+      setSavedStores([]);
+    }
+  }, [router]);
 
-    void loadAuth();
+  const handleAccountButtonPress = useCallback(async () => {
+    if (!isLoggedIn) {
+      router.push('/views/user_login');
+      return;
+    }
 
-    return () => {
-      active = false;
-    };
-  }, []);
+    try {
+      await authApi.logout();
+    } catch {
+      await tokenStore.clear();
+    } finally {
+      setIsLoggedIn(false);
+      setAccountRole(null);
+      setDisplayName(null);
+      setStoreCount(0);
+      setPublicCount(0);
+      setSavedStores([]);
+      router.replace('/views/user_login');
+    }
+  }, [isLoggedIn, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadMyMapState();
+    }, [loadMyMapState])
+  );
 
   return (
     <>
@@ -145,8 +250,9 @@ export default function MyMapScreen() {
                     <Text style={styles.brandSubtitle}>내 지도와 공개 정보를 한 번에 관리해요</Text>
                   </View>
                 </View>
-                <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/views/user_login')} activeOpacity={0.85}>
-                  <Ionicons name="person-outline" size={18} color="#0ea5a4" />
+                <TouchableOpacity style={styles.profileButton} onPress={() => void handleAccountButtonPress()} activeOpacity={0.85}>
+                  <Ionicons name={isLoggedIn ? 'log-out-outline' : 'log-in-outline'} size={16} color="#0ea5a4" />
+                  <Text style={styles.profileButtonText}>{isLoggedIn ? '로그아웃' : '로그인'}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -228,6 +334,69 @@ export default function MyMapScreen() {
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
                 </TouchableOpacity>
+
+                {accountRole === 'OWNER' ? (
+                  <TouchableOpacity
+                    style={styles.ownerQuickAction}
+                    activeOpacity={0.9}
+                    onPress={() => router.push('/views/owner_dashboard')}
+                  >
+                    <View style={styles.mapQuickActionLeft}>
+                      <View style={styles.mapQuickActionIcon}>
+                        <Ionicons name="storefront-outline" size={18} color="#0ea5a4" />
+                      </View>
+                      <View style={styles.mapQuickActionTextWrap}>
+                        <Text style={styles.mapQuickActionTitle}>점주 페이지</Text>
+                        <Text style={styles.mapQuickActionSubtitle}>매장 관리 화면으로 바로 이동해요</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+                  </TouchableOpacity>
+                ) : null}
+
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionHeaderLeft}>
+                    <Ionicons name="heart" size={18} color="#0ea5a4" />
+                    <Text style={styles.sectionTitle}>저장한 장소</Text>
+                  </View>
+                  <Text style={styles.sectionMore}>{savedStores.length}개</Text>
+                </View>
+
+                {savedStores.length === 0 ? (
+                  <View style={styles.emptySavedCard}>
+                    <Text style={styles.emptySavedTitle}>저장한 장소가 아직 없어요</Text>
+                    <Text style={styles.emptySavedText}>지도에서 찜한 장소가 여기에 차곡차곡 보여요.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.savedStoreList}>
+                    {savedStores.map((place) => (
+                      <SavedStoreCard
+                        key={place.storeId}
+                        place={place}
+                        onPressDetail={() =>
+                          router.push({
+                            pathname: '/views/store_detail',
+                            params: {
+                              storeId: String(place.storeId),
+                              storeName: place.name,
+                              storePhone: place.phone ?? '',
+                            },
+                          })
+                        }
+                        onPressReviews={() =>
+                          router.push({
+                            pathname: '/views/store_reviews',
+                            params: {
+                              storeId: String(place.storeId),
+                              storeName: place.name,
+                              storePhone: place.phone ?? '',
+                            },
+                          })
+                        }
+                      />
+                    ))}
+                  </View>
+                )}
 
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeaderLeft}>
@@ -321,13 +490,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   profileButton: {
-    width: 40,
-    height: 40,
+    minHeight: 40,
     borderRadius: 20,
     backgroundColor: '#e6fbfa',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    gap: 6,
   },
+  profileButtonText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
   heroCopy: {
     alignItems: 'flex-start',
   },
@@ -533,6 +705,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  ownerQuickAction: {
+    marginTop: 12,
+    backgroundColor: '#f3fdfd',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   mapQuickActionLeft: {
     flex: 1,
     flexDirection: 'row',
@@ -562,6 +747,127 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 12,
     lineHeight: 17,
+  },
+  savedStoreList: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  savedStoreCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    padding: 14,
+  },
+  savedStoreTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  savedStoreBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#e6fbfa',
+  },
+  savedStoreBadgeText: {
+    color: '#0ea5a4',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  savedStoreCountText: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  savedStoreName: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  savedStoreAddress: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  savedStoreMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 10,
+  },
+  savedStoreMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  savedStoreMetaText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  savedStoreActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  savedStoreDetailButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cfe0ff',
+    backgroundColor: '#f4f8ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  savedStoreDetailButtonText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  savedStoreActionButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    backgroundColor: '#eefafa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  savedStoreActionButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  emptySavedCard: {
+    backgroundColor: '#f8fbfc',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    padding: 16,
+  },
+  emptySavedTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  emptySavedText: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
   },
   actionCard: {
     backgroundColor: '#fff',

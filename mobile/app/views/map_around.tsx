@@ -15,13 +15,13 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { tokenStore } from '@/services/api';
+import { ApiClientError, favoritesApi, myMapApi, storesApi, tokenStore } from '@/services/api';
 import { mapCache } from '@/services/mapCache';
+import type { StoreLookupItemResponse } from '@/services/api/types';
 
 const { height: windowHeight } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
@@ -40,6 +40,8 @@ type KakaoPlacePreview = {
   address: string;
   distance?: string;
   phone?: string;
+  latitude: number;
+  longitude: number;
 };
 
 const CATEGORY_OPTIONS: CategoryOption[] = [
@@ -62,6 +64,9 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
+const isConflictError = (error: unknown) => error instanceof ApiClientError && error.status === 409;
+const isNotFoundError = (error: unknown) => error instanceof ApiClientError && error.status === 404;
+
 export default function MapAroundScreen() {
   const router = useRouter();
   const pathname = usePathname();
@@ -82,6 +87,7 @@ export default function MapAroundScreen() {
     longitude: number;
   } | null>(null);
   const [activeFilter, setActiveFilter] = useState('전체');
+  const [selectedCategoryLabel, setSelectedCategoryLabel] = useState('전체');
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [isSheetExpanded, setIsSheetExpanded] = useState(true);
   const [isMapSortOpen, setIsMapSortOpen] = useState(false);
@@ -96,6 +102,9 @@ export default function MapAroundScreen() {
   } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [favoritedPlaceIds, setFavoritedPlaceIds] = useState<string[]>([]);
+  const [favoriteStoreIdByExternalPlaceId, setFavoriteStoreIdByExternalPlaceId] = useState<Record<string, number>>({});
+  const [registeredStoreIdsByExternalPlaceId, setRegisteredStoreIdsByExternalPlaceId] = useState<Record<string, number>>({});
+  const [registeredStoreDetailsByExternalPlaceId, setRegisteredStoreDetailsByExternalPlaceId] = useState<Record<string, StoreLookupItemResponse>>({});
 
   const categories = CATEGORY_OPTIONS;
   const mapSortOptions = [
@@ -152,22 +161,39 @@ export default function MapAroundScreen() {
 
   const submitMapSearch = useCallback(() => {
     const trimmedQuery = mapSearchQuery.trim();
+    const currentCategoryLabel = selectedCategoryLabel === '전체' ? null : selectedCategoryLabel;
 
     if (!trimmedQuery) {
       setActiveFilter('전체');
+      mapCache.setNearbySearchContext({
+        query: null,
+        categoryLabel: currentCategoryLabel,
+        categoryCode: null,
+      });
       searchPlacesByCategory({ label: '전체', code: null });
       return;
     }
 
     setActiveFilter(trimmedQuery);
+    mapCache.setNearbySearchContext({
+      query: trimmedQuery,
+      categoryLabel: currentCategoryLabel,
+      categoryCode: null,
+    });
     searchPlacesByKeyword(trimmedQuery);
-  }, [mapSearchQuery, searchPlacesByCategory, searchPlacesByKeyword]);
+  }, [mapSearchQuery, searchPlacesByCategory, searchPlacesByKeyword, selectedCategoryLabel]);
 
   const selectCategory = useCallback((category: CategoryOption) => {
     setActiveFilter(category.label);
+    setSelectedCategoryLabel(category.label);
+    mapCache.setNearbySearchContext({
+      query: mapSearchQuery.trim() || null,
+      categoryLabel: category.label === '전체' ? null : category.label,
+      categoryCode: category.code,
+    });
     setIsCategoryMenuOpen(false);
     searchPlacesByCategory(category);
-  }, [searchPlacesByCategory]);
+  }, [mapSearchQuery, searchPlacesByCategory]);
 
   const setSheetHeight = useCallback((nextHeight: number, animated = true) => {
     const clampedHeight = clamp(nextHeight, MIN_SHEET_HEIGHT, maxSheetHeight);
@@ -283,13 +309,37 @@ export default function MapAroundScreen() {
     useCallback(() => {
       let active = true;
 
-      const loadAuthState = async () => {
+      const loadAuthAndFavoritesState = async () => {
         const accessToken = await tokenStore.getAccessToken();
         if (!active) return;
-        setIsLoggedIn(Boolean(accessToken));
+        const loggedIn = Boolean(accessToken);
+        setIsLoggedIn(loggedIn);
+
+        if (!loggedIn) {
+          setFavoritedPlaceIds([]);
+          setFavoriteStoreIdByExternalPlaceId({});
+          return;
+        }
+
+        try {
+          const favorites = await favoritesApi.listStores();
+          if (!active) return;
+
+          setFavoritedPlaceIds(favorites.content.map((item) => item.externalPlaceId));
+          setFavoriteStoreIdByExternalPlaceId(
+            favorites.content.reduce<Record<string, number>>((acc, item) => {
+              acc[item.externalPlaceId] = item.storeId;
+              return acc;
+            }, {})
+          );
+        } catch {
+          if (!active) return;
+          setFavoritedPlaceIds([]);
+          setFavoriteStoreIdByExternalPlaceId({});
+        }
       };
 
-      void loadAuthState();
+      void loadAuthAndFavoritesState();
 
       return () => {
         active = false;
@@ -301,6 +351,12 @@ export default function MapAroundScreen() {
     if (!initialSearchQuery || !isMapReady) return;
 
     setMapSearchQuery(initialSearchQuery);
+    setSelectedCategoryLabel('전체');
+    mapCache.setNearbySearchContext({
+      query: initialSearchQuery,
+      categoryLabel: null,
+      categoryCode: null,
+    });
     searchPlacesByKeyword(initialSearchQuery);
   }, [initialSearchQuery, isMapReady, searchPlacesByKeyword]);
 
@@ -310,6 +366,15 @@ export default function MapAroundScreen() {
       setIsMapSortOpen(false);
       setSelectedMapSorts([]);
       setActiveFilter(initialSearchQuery || '전체');
+      if (!initialSearchQuery) {
+        const context = mapCache.getNearbySearchContext();
+        if (context.categoryLabel) {
+          setSelectedCategoryLabel(context.categoryLabel);
+          setActiveFilter(context.categoryLabel);
+        } else {
+          setSelectedCategoryLabel('전체');
+        }
+      }
       setIsSheetExpanded(true);
       setSheetHeight(defaultSheetHeight, false);
       requestAnimationFrame(() => {
@@ -326,6 +391,11 @@ export default function MapAroundScreen() {
         const places = Array.isArray(message.places) ? message.places : [];
         setNearbyPlaces(places);
         mapCache.setNearbyPlaces(places);
+        mapCache.setNearbySearchContext({
+          query: mapSearchQuery.trim() || null,
+          categoryLabel: selectedCategoryLabel === '전체' ? null : selectedCategoryLabel,
+          categoryCode: null,
+        });
         setIsPlacesLoading(false);
 
         try {
@@ -333,6 +403,35 @@ export default function MapAroundScreen() {
         } catch {
           // Ignore storage failures; the map result itself is still shown.
         }
+
+        void (async () => {
+          try {
+            const lookup = await storesApi.lookup({
+              externalSource: 'KAKAO',
+              externalPlaceIds: places.map((place: KakaoPlacePreview) => place.id),
+            });
+
+            const nextRegisteredStoreIds = lookup.stores.reduce<Record<string, number>>((acc, store) => {
+              acc[store.externalPlaceId] = store.storeId;
+              return acc;
+            }, {});
+
+            setRegisteredStoreIdsByExternalPlaceId(nextRegisteredStoreIds);
+            webViewRef.current?.injectJavaScript(`
+              window.setRegisteredStoreIds(${JSON.stringify(nextRegisteredStoreIds)});
+              true;
+            `);
+
+            const detailsByExternalPlaceId = lookup.stores.reduce<Record<string, StoreLookupItemResponse>>((acc, store) => {
+              acc[store.externalPlaceId] = store;
+              return acc;
+            }, {});
+            setRegisteredStoreDetailsByExternalPlaceId(detailsByExternalPlaceId);
+          } catch {
+            setRegisteredStoreIdsByExternalPlaceId({});
+            setRegisteredStoreDetailsByExternalPlaceId({});
+          }
+        })();
       }
 
       if (message.type === 'places-loading') {
@@ -342,10 +441,28 @@ export default function MapAroundScreen() {
       if (message.type === 'map-ready') {
         setIsMapReady(true);
       }
+
+      if (message.type === 'place-click') {
+        const placeId = String(message.placeId ?? '');
+        const storeId = Number(message.storeId ?? registeredStoreIdsByExternalPlaceId[placeId] ?? 0);
+
+        if (storeId) {
+          router.push({
+            pathname: '/views/store_detail',
+            params: {
+              storeId: String(storeId),
+              storeName: String(message.placeName ?? ''),
+            },
+          });
+          return;
+        }
+
+        Alert.alert('매장 상세', '아직 우리 서비스에 등록되지 않은 장소예요.');
+      }
     } catch {
       // Ignore non-JSON messages from the map WebView.
     }
-  }, []);
+  }, [registeredStoreIdsByExternalPlaceId, router, mapSearchQuery, selectedCategoryLabel]);
 
   const searchCurrentMapArea = useCallback(() => {
     setIsPlacesLoading(true);
@@ -355,7 +472,7 @@ export default function MapAroundScreen() {
     `);
   }, []);
 
-  const handleFavoritePress = useCallback(async (placeId: string) => {
+  const handleFavoritePress = useCallback(async (place: KakaoPlacePreview) => {
     if (!isLoggedIn) {
       Alert.alert(
         '로그인이 필요해요',
@@ -368,12 +485,79 @@ export default function MapAroundScreen() {
       return;
     }
 
-    setFavoritedPlaceIds((current) => (
-      current.includes(placeId)
-        ? current.filter((id) => id !== placeId)
-        : [...current, placeId]
-    ));
-  }, [isLoggedIn, router]);
+    const isFavorited = favoritedPlaceIds.includes(place.id);
+
+    try {
+      if (isFavorited) {
+        const storeId = favoriteStoreIdByExternalPlaceId[place.id];
+
+        if (!storeId) {
+          Alert.alert('찜 취소 실패', '저장된 매장 정보를 찾지 못했어요.');
+          return;
+        }
+
+        try {
+          await favoritesApi.removeStore(storeId);
+        } catch (error) {
+          if (!isNotFoundError(error)) {
+            throw error;
+          }
+        }
+
+        try {
+          await myMapApi.removeStore(storeId);
+        } catch (error) {
+          if (!isNotFoundError(error)) {
+            throw error;
+          }
+        }
+
+        setFavoritedPlaceIds((current) => current.filter((id) => id !== place.id));
+        setFavoriteStoreIdByExternalPlaceId((current) => {
+          const next = { ...current };
+          delete next[place.id];
+          return next;
+        });
+        return;
+      }
+
+      const resolvedStoreId =
+        favoriteStoreIdByExternalPlaceId[place.id] ??
+        registeredStoreIdsByExternalPlaceId[place.id];
+
+      if (!resolvedStoreId) {
+        Alert.alert(
+          '찜할 수 없어요',
+          '아직 백엔드에 등록되지 않은 장소예요. 등록된 매장만 찜할 수 있어요.'
+        );
+        return;
+      }
+
+      try {
+        await favoritesApi.addStore(resolvedStoreId);
+      } catch (error) {
+        if (!isConflictError(error)) {
+          throw error;
+        }
+      }
+
+      try {
+        await myMapApi.addStore(resolvedStoreId);
+      } catch (error) {
+        if (!isConflictError(error)) {
+          throw error;
+        }
+      }
+
+      setFavoritedPlaceIds((current) => (current.includes(place.id) ? current : [...current, place.id]));
+      setFavoriteStoreIdByExternalPlaceId((current) => ({
+        ...current,
+        [place.id]: resolvedStoreId,
+      }));
+    } catch {
+      Alert.alert('찜 실패', '장소를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  }, [favoriteStoreIdByExternalPlaceId, favoritedPlaceIds, isLoggedIn, registeredStoreIdsByExternalPlaceId, router]);
 
   const kakaoMapHtml = `
     <!DOCTYPE html>
@@ -415,6 +599,8 @@ export default function MapAroundScreen() {
           var activeCategoryLabel = '전체';
           var activeCategoryCode = null;
           var activeKeywordQuery = pendingKeywordQuery;
+          var registeredStoreIds = {};
+          var lastRenderedPlaces = [];
           var defaultCategoryCodes = ['FD6', 'CE7', 'CS2', 'MT1', 'PM9', 'HP8', 'PO3', 'CT1', 'SC4', 'SW8', 'PK6'];
 
           function postToApp(payload) {
@@ -430,6 +616,27 @@ export default function MapAroundScreen() {
             placeMarkers = [];
           }
 
+          function createMarkerImage(isRegistered) {
+            var color = isRegistered ? '#ff4d74' : '#0ea5a4';
+            var svg = [
+              '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">',
+              '<path d="M17 44s12-14.2 12-24.1C29 11.7 23.6 6 17 6S5 11.7 5 19.9C5 29.8 17 44 17 44Z" fill="',
+              color,
+              '"/>',
+              '<circle cx="17" cy="19" r="6.6" fill="#ffffff"/>',
+              '<circle cx="17" cy="19" r="3.4" fill="',
+              color,
+              '"/>',
+              '</svg>',
+            ].join('');
+
+            return new kakao.maps.MarkerImage(
+              'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+              new kakao.maps.Size(34, 46),
+              { offset: new kakao.maps.Point(17, 42) }
+            );
+          }
+
           function normalizePlace(place) {
             return {
               id: place.id,
@@ -437,7 +644,9 @@ export default function MapAroundScreen() {
               category: place.category_group_name || place.category_name || activeCategoryLabel,
               address: place.road_address_name || place.address_name || '',
               distance: place.distance || '',
-              phone: place.phone || ''
+              phone: place.phone || '',
+              latitude: Number(place.y),
+              longitude: Number(place.x)
             };
           }
 
@@ -466,6 +675,7 @@ export default function MapAroundScreen() {
 
           function renderPlaces(places, shouldFitMap) {
             clearPlaceMarkers();
+            lastRenderedPlaces = Array.isArray(places) ? places.slice() : [];
 
             var bounds = new kakao.maps.LatLngBounds();
             var limitedPlaces = sortPlacesByDistance(dedupePlaces(places)).slice(0, 15);
@@ -476,7 +686,17 @@ export default function MapAroundScreen() {
               var marker = new kakao.maps.Marker({
                 map: map,
                 position: position,
-                title: place.place_name
+                title: place.place_name,
+                image: createMarkerImage(Boolean(registeredStoreIds[place.id]))
+              });
+
+              kakao.maps.event.addListener(marker, 'click', function() {
+                postToApp({
+                  type: 'place-click',
+                  placeId: place.id,
+                  placeName: place.place_name,
+                  storeId: registeredStoreIds[place.id] || null
+                });
               });
 
               placeMarkers.push(marker);
@@ -492,6 +712,14 @@ export default function MapAroundScreen() {
               places: limitedPlaces.map(normalizePlace)
             });
           }
+
+          window.setRegisteredStoreIds = function(nextRegisteredStoreIds) {
+            registeredStoreIds = nextRegisteredStoreIds || {};
+
+            if (lastRenderedPlaces.length > 0) {
+              renderPlaces(lastRenderedPlaces, false);
+            }
+          };
 
           function runCategorySearch(categoryCode, options) {
             return new Promise(function(resolve) {
@@ -831,7 +1059,13 @@ export default function MapAroundScreen() {
             <View style={styles.headerLeft}>
               <Text style={styles.bottomSheetTitle}>주변 추천 장소</Text>
             </View>
-            <Text style={styles.viewAllText}>{isSheetExpanded ? '접기' : '펼치기'}</Text>
+            <View style={styles.bottomSheetHeaderRight}>
+              <TouchableOpacity style={styles.listViewButton} onPress={() => router.push('/list')} activeOpacity={0.85}>
+                <Ionicons name="list-outline" size={14} color="#0ea5a4" />
+                <Text style={styles.listViewButtonText}>리스트</Text>
+              </TouchableOpacity>
+              <Text style={styles.viewAllText}>{isSheetExpanded ? '접기' : '펼치기'}</Text>
+            </View>
           </TouchableOpacity>
 
           {isSheetExpanded ? (
@@ -899,7 +1133,7 @@ export default function MapAroundScreen() {
                 <View style={styles.storeCard} key={place.id}>
                   <View style={styles.cardHeader}>
                     <Text style={styles.storeName}>{place.name}</Text>
-                    <TouchableOpacity onPress={() => handleFavoritePress(place.id)} activeOpacity={0.8}>
+                    <TouchableOpacity onPress={() => handleFavoritePress(place)} activeOpacity={0.8}>
                       <Ionicons
                         name={favoritedPlaceIds.includes(place.id) ? 'heart' : 'heart-outline'}
                         size={24}
@@ -907,19 +1141,40 @@ export default function MapAroundScreen() {
                       />
                     </TouchableOpacity>
                   </View>
-                  
+
+                  <Text style={styles.favoriteCountText}>
+                    찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
+                    {registeredStoreDetailsByExternalPlaceId[place.id] ? ' · 저장된 매장' : ' · 미등록 장소'}
+                  </Text>
+
                   <View style={styles.categoryBadge}>
                     <Text style={styles.categoryText}>{place.category || activeFilter}</Text>
                   </View>
 
-                  <View style={styles.statusRow}>
-                    <View style={styles.unknownStatusBadge}>
-                      <Text style={styles.unknownStatusText}>상태정보 없음</Text>
+                  {registeredStoreDetailsByExternalPlaceId[place.id] ? (
+                    <View style={styles.statusRow}>
+                      <View style={styles.statusBadge}>
+                        <Text style={styles.statusText}>
+                          {registeredStoreDetailsByExternalPlaceId[place.id].liveBusinessStatus
+                            ?? registeredStoreDetailsByExternalPlaceId[place.id].businessStatus
+                            ?? registeredStoreDetailsByExternalPlaceId[place.id].operationalState
+                            ?? '우리 서비스 매장'}
+                        </Text>
+                      </View>
+                      <Text style={styles.statusUpdateText}>
+                        {registeredStoreDetailsByExternalPlaceId[place.id].operationalState ?? '우리 서비스 매장'}
+                      </Text>
                     </View>
-                    <Text style={styles.statusUpdateText}>
-                      {place.distance ? `${place.distance}m · 미등록 장소` : '미등록 장소'}
-                    </Text>
-                  </View>
+                  ) : (
+                    <View style={styles.statusRow}>
+                      <View style={styles.unknownStatusBadge}>
+                        <Text style={styles.unknownStatusText}>상태정보 없음</Text>
+                      </View>
+                      <Text style={styles.statusUpdateText}>
+                        {place.distance ? `${place.distance}m · 미등록 장소` : '미등록 장소'}
+                      </Text>
+                    </View>
+                  )}
 
                   <View style={styles.infoRow}>
                     <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.6)" />
@@ -927,8 +1182,75 @@ export default function MapAroundScreen() {
                   </View>
                   <View style={styles.infoRow}>
                     <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.6)" />
-                    <Text style={styles.infoText}>{place.phone || '전화번호 정보 없음'}</Text>
+                    <Text style={styles.infoText}>
+                      {registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '전화번호 정보 없음'}
+                    </Text>
                   </View>
+
+                  <View style={styles.cardFooterDivider} />
+
+                  <View style={styles.cardFooter}>
+                    <View style={styles.footerItem}>
+                      <Ionicons name="star" size={14} color="#ffb300" />
+                      <Text style={styles.footerText}>
+                        {registeredStoreDetailsByExternalPlaceId[place.id]?.reviewAverageRating
+                          ?? registeredStoreDetailsByExternalPlaceId[place.id]?.rating
+                          ?? '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.footerItem}>
+                      <Ionicons name="chatbubble-outline" size={14} color="#8f9bb3" />
+                      <Text style={styles.footerText}>
+                        리뷰 {registeredStoreDetailsByExternalPlaceId[place.id]?.reviewCount ?? 0}개
+                      </Text>
+                    </View>
+                    <View style={styles.footerItem}>
+                      <Ionicons name="heart" size={14} color="#f44336" />
+                      <Text style={styles.footerText}>
+                        찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {registeredStoreIdsByExternalPlaceId[place.id] ? (
+                    <TouchableOpacity
+                      style={styles.detailButton}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/views/store_detail',
+                          params: {
+                            storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
+                            storeName: place.name,
+                            storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
+                          },
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.detailButtonText}>상세 보기</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {registeredStoreIdsByExternalPlaceId[place.id] ? (
+                    <TouchableOpacity
+                      style={styles.reviewButton}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/views/store_reviews',
+                          params: {
+                            storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
+                            storeName: place.name,
+                            storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
+                          },
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.reviewButtonText}>리뷰 보기</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ))
             )}
@@ -1075,7 +1397,20 @@ const styles = StyleSheet.create({
   handleBar: { width: 40, height: 4, backgroundColor: '#d7e8ea', borderRadius: 2 },
   bottomSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  bottomSheetHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   bottomSheetTitle: { fontSize: 18, fontWeight: 'bold', color: '#0f172a', marginRight: 12 },
+  listViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#e6fbfa',
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+  },
+  listViewButtonText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
   openOnlyBadge: { borderWidth: 1, borderColor: '#d8eceb', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   openOnlyText: { color: '#64748b', fontSize: 12 },
   viewAllText: { color: '#0ea5a4', fontSize: 14 },
@@ -1202,6 +1537,7 @@ const styles = StyleSheet.create({
   storeCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e6eef1', marginBottom: 10, shadowColor: '#0f172a', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   storeName: { fontSize: 17, fontWeight: 'bold', color: '#0f172a' },
+  favoriteCountText: { color: '#0ea5a4', fontSize: 12, fontWeight: '700', marginBottom: 10 },
   categoryBadge: { backgroundColor: '#eefbfb', alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7, marginBottom: 12 },
   categoryText: { color: '#0ea5a4', fontSize: 12 },
   
@@ -1214,6 +1550,46 @@ const styles = StyleSheet.create({
   
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   infoText: { color: '#64748b', fontSize: 14, marginLeft: 8 },
+  cardFooterDivider: { height: 1, backgroundColor: '#e6eef1', marginVertical: 14 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
+  footerItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  footerText: { color: '#0f172a', fontSize: 13, fontWeight: '500' },
+  reviewButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    backgroundColor: '#eefafa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  reviewButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  detailButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cfe0ff',
+    backgroundColor: '#f4f8ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  detailButtonText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '800',
+  },
 
   bottomTabBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,

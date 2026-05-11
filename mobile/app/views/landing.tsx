@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ScrollView, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { tokenStore } from '@/services/api';
@@ -38,6 +38,7 @@ function PlaceCard({
 
 export default function LandingScreen() {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handlePeopleMapPress = async () => {
     const accessToken = await tokenStore.getAccessToken();
@@ -57,6 +58,17 @@ export default function LandingScreen() {
     }
 
     router.push('/views/my_map');
+  };
+
+  const submitLandingSearch = () => {
+    const trimmedQuery = searchQuery.trim();
+
+    if (!trimmedQuery) {
+      router.push('/map');
+      return;
+    }
+
+    router.push(`/map?query=${encodeURIComponent(trimmedQuery)}`);
   };
 
   return (
@@ -79,11 +91,22 @@ export default function LandingScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/views/map_search')} activeOpacity={0.9}>
+            <View style={styles.searchBar}>
               <Ionicons name="search" size={22} color="#0ea5a4" />
-              <Text style={styles.searchPlaceholder}>카페, 음식점, 장소 검색</Text>
-              <Ionicons name="options-outline" size={22} color="#0ea5a4" />
-            </TouchableOpacity>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="카페, 음식점, 장소 검색"
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={submitLandingSearch}
+                returnKeyType="search"
+                blurOnSubmit={false}
+              />
+              <TouchableOpacity onPress={submitLandingSearch} activeOpacity={0.85}>
+                <Ionicons name="arrow-forward" size={18} color="#0ea5a4" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.quickRow}>
@@ -303,7 +326,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
-  searchPlaceholder: {
+  searchInput: {
     flex: 1,
     marginHorizontal: 12,
     color: '#9ca3af',

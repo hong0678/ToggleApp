@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -24,9 +25,7 @@ type FieldKey =
   | 'businessOpenDate'
   | 'businessAddress'
   | 'businessPhone'
-  | 'licenseUri'
-  | 'licenseName'
-  | 'licenseType';
+;
 
 type FormState = Record<FieldKey, string>;
 
@@ -37,9 +36,12 @@ const INITIAL_FORM: FormState = {
   businessOpenDate: '',
   businessAddress: '',
   businessPhone: '',
-  licenseUri: '',
-  licenseName: 'business-license.jpg',
-  licenseType: 'image/jpeg',
+};
+
+type BusinessLicenseFile = {
+  uri: string;
+  name: string;
+  type: string;
 };
 
 function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
@@ -69,6 +71,8 @@ function InputRow({
   placeholder,
   icon,
   keyboardType,
+  required = false,
+  helperText,
 }: {
   label: string;
   value: string;
@@ -76,10 +80,15 @@ function InputRow({
   placeholder: string;
   icon: keyof typeof Ionicons.glyphMap;
   keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad' | 'number-pad';
+  required?: boolean;
+  helperText?: string;
 }) {
   return (
     <View style={styles.fieldBlock}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldLabel}>
+        {label}
+        {required ? <Text style={styles.requiredMark}> *필수</Text> : null}
+      </Text>
       <View style={styles.inputContainer}>
         <Ionicons name={icon} size={18} color="#0ea5a4" style={styles.inputIcon} />
         <TextInput
@@ -92,6 +101,7 @@ function InputRow({
           autoCapitalize="none"
         />
       </View>
+      {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
     </View>
   );
 }
@@ -100,7 +110,12 @@ export default function OwnerStoreRegisterScreen() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [licenseFile, setLicenseFile] = useState<BusinessLicenseFile | null>(null);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+
+  const businessNumberDigits = useMemo(() => form.businessNumber.replace(/[^0-9]/g, ''), [form.businessNumber]);
+  const businessPhoneDigits = useMemo(() => form.businessPhone.replace(/[^0-9]/g, ''), [form.businessPhone]);
+  const isBusinessOpenDateValid = useMemo(() => /^\d{4}-\d{2}-\d{2}$/.test(form.businessOpenDate.trim()), [form.businessOpenDate]);
 
   useEffect(() => {
     let active = true;
@@ -121,46 +136,138 @@ export default function OwnerStoreRegisterScreen() {
   const isFormValid = useMemo(() => {
     return (
       form.storeName.trim().length >= 2 &&
-      form.businessNumber.trim().length >= 6 &&
+      businessNumberDigits.length === 10 &&
       form.representativeName.trim().length >= 2 &&
-      form.businessOpenDate.trim().length >= 8 &&
+      isBusinessOpenDateValid &&
       form.businessAddress.trim().length >= 5 &&
-      form.businessPhone.trim().length >= 8 &&
-      form.licenseUri.trim().length > 0
+      businessPhoneDigits.length >= 9 &&
+      licenseFile !== null
     );
-  }, [form]);
+  }, [businessNumberDigits.length, businessPhoneDigits.length, form, isBusinessOpenDateValid, licenseFile]);
 
   const updateField = (key: FieldKey, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const pickBusinessLicenseFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        multiple: false,
+        copyToCacheDirectory: true,
+        base64: false,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        console.log('[owner_store_register] business license picker canceled');
+        return;
+      }
+
+      const asset = result.assets[0];
+      const inferredType = asset.mimeType ?? (asset.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+
+      const nextFile: BusinessLicenseFile = {
+        uri: asset.uri,
+        name: asset.name || 'business-license.jpg',
+        type: inferredType,
+      };
+
+      console.log('[owner_store_register] business license file selected', {
+        uri: nextFile.uri,
+        name: nextFile.name,
+        type: nextFile.type,
+      });
+
+      setLicenseFile(nextFile);
+    } catch (error) {
+      console.log('[owner_store_register] business license picker error', error);
+      Alert.alert('파일 선택 실패', error instanceof Error ? error.message : '사업자등록증 파일을 선택하지 못했어요.');
+    }
+  };
+
   const handleSubmit = async () => {
     if (!isFormValid) {
+      if (businessNumberDigits.length !== 10) {
+        Alert.alert('입력 확인', '사업자등록번호는 숫자 10자리여야 해요. 하이픈은 있어도 됩니다.');
+        return;
+      }
+
+      if (!isBusinessOpenDateValid) {
+        Alert.alert('입력 확인', '개업일은 YYYY-MM-DD 형식으로 입력해 주세요.');
+        return;
+      }
+
+      if (businessPhoneDigits.length < 9) {
+        Alert.alert('입력 확인', '대표 전화번호를 다시 확인해 주세요.');
+        return;
+      }
+
       Alert.alert('입력 확인', '필수 항목을 모두 채워주세요.');
+      return;
+    }
+
+    if (!licenseFile) {
+      Alert.alert('입력 확인', '사업자등록증 파일을 선택해주세요.');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      await ownerApi.createApplication(
-        {
-          storeName: form.storeName.trim(),
-          businessNumber: form.businessNumber.trim(),
-          representativeName: form.representativeName.trim(),
-          businessOpenDate: form.businessOpenDate.trim(),
-          businessAddress: form.businessAddress.trim(),
-          businessPhone: form.businessPhone.trim(),
-        },
-        {
-          uri: form.licenseUri.trim(),
-          name: form.licenseName.trim() || 'business-license.jpg',
-          type: form.licenseType.trim() || 'image/jpeg',
-        }
+      const requestPayload = {
+        storeName: form.storeName.trim(),
+        businessNumber: form.businessNumber.trim(),
+        representativeName: form.representativeName.trim(),
+        businessOpenDate: form.businessOpenDate.trim(),
+        businessAddress: form.businessAddress.trim(),
+        businessPhone: form.businessPhone.trim(),
+      };
+
+      console.log('store application submit');
+      console.log('request payload', requestPayload);
+      console.log('selected file', {
+        uri: licenseFile.uri,
+        name: licenseFile.name,
+        type: licenseFile.type,
+      });
+
+      const applicationResponse = await ownerApi.createApplicationDetailed(
+        requestPayload,
+        licenseFile
       );
+
+      console.log('[owner_store_register] application submit response', {
+        status: applicationResponse.status,
+        success: applicationResponse.success,
+        data: applicationResponse.data,
+        errorMessage: applicationResponse.error?.message ?? null,
+      });
+
+      if (!applicationResponse.success) {
+        Alert.alert(
+          '매장 등록 신청 실패',
+          applicationResponse.error?.message ?? '매장 등록 신청이 처리되지 않았어요.'
+        );
+        return;
+      }
+
       Alert.alert('신청 완료', '매장 등록 신청이 접수되었습니다.');
       router.push('/views/owner_register_status');
     } catch (error) {
-      Alert.alert('신청 실패', error instanceof Error ? error.message : '매장 등록 신청 중 문제가 발생했습니다.');
+      console.log('[owner_store_register] submit failed', error);
+
+      if (error instanceof Error) {
+        const message = error.message || '매장 등록 신청 중 문제가 발생했습니다.';
+
+        if (message.includes('연결할 수 없습니다') || message.includes('같은 와이파이')) {
+          Alert.alert('네트워크 오류', message);
+          return;
+        }
+
+        Alert.alert('신청 실패', message);
+        return;
+      }
+
+      Alert.alert('신청 실패', '매장 등록 신청 중 문제가 발생했습니다.');
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +278,7 @@ export default function OwnerStoreRegisterScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+            <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
               <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
@@ -190,6 +297,7 @@ export default function OwnerStoreRegisterScreen() {
                 onChangeText={(value) => updateField('storeName', value)}
                 placeholder="예: Toggle 카페"
                 icon="storefront-outline"
+                required
               />
               <InputRow
                 label="사업자등록번호"
@@ -198,6 +306,8 @@ export default function OwnerStoreRegisterScreen() {
                 placeholder="예: 123-45-67890"
                 icon="card-outline"
                 keyboardType="numeric"
+                required
+                helperText="숫자 10자리로 입력해 주세요. 하이픈은 있어도 됩니다."
               />
               <InputRow
                 label="대표자명"
@@ -205,6 +315,7 @@ export default function OwnerStoreRegisterScreen() {
                 onChangeText={(value) => updateField('representativeName', value)}
                 placeholder="예: 홍길동"
                 icon="person-outline"
+                required
               />
               <InputRow
                 label="개업일"
@@ -212,6 +323,8 @@ export default function OwnerStoreRegisterScreen() {
                 onChangeText={(value) => updateField('businessOpenDate', value)}
                 placeholder="예: 2026-05-01"
                 icon="calendar-outline"
+                required
+                helperText="YYYY-MM-DD 형식으로 입력해 주세요."
               />
               <InputRow
                 label="사업장 주소"
@@ -219,6 +332,7 @@ export default function OwnerStoreRegisterScreen() {
                 onChangeText={(value) => updateField('businessAddress', value)}
                 placeholder="예: 경기 안양시 만안구 ..."
                 icon="location-outline"
+                required
               />
               <InputRow
                 label="대표 전화번호"
@@ -227,34 +341,41 @@ export default function OwnerStoreRegisterScreen() {
                 placeholder="예: 031-123-4567"
                 icon="call-outline"
                 keyboardType="phone-pad"
+                required
+                helperText="하이픈이 있어도 되고 없어도 돼요."
               />
 
-              <Text style={styles.sectionTitle}>사업자등록증 파일</Text>
-              <View style={styles.uploadBox}>
+              <Text style={styles.sectionTitle}>사업자등록증 파일 <Text style={styles.requiredMark}>*필수</Text></Text>
+              <TouchableOpacity style={styles.uploadBox} onPress={pickBusinessLicenseFile} activeOpacity={0.88}>
                 <MaterialCommunityIcons name="file-image-plus-outline" size={22} color="#0ea5a4" />
-                <Text style={styles.uploadText}>파일 URI를 입력해서 먼저 연결할 수 있어요.</Text>
-              </View>
-              <InputRow
-                label="파일 URI"
-                value={form.licenseUri}
-                onChangeText={(value) => updateField('licenseUri', value)}
-                placeholder="file:///..."
-                icon="link-outline"
-              />
-              <InputRow
-                label="파일 이름"
-                value={form.licenseName}
-                onChangeText={(value) => updateField('licenseName', value)}
-                placeholder="business-license.jpg"
-                icon="create-outline"
-              />
-              <InputRow
-                label="파일 타입"
-                value={form.licenseType}
-                onChangeText={(value) => updateField('licenseType', value)}
-                placeholder="image/jpeg"
-                icon="pricetag-outline"
-              />
+                <View style={styles.uploadCopy}>
+                  <Text style={styles.uploadTitle}>
+                    {licenseFile ? '사업자등록증 파일이 선택됐어요' : '사업자등록증 파일 1개 선택'}
+                  </Text>
+                  <Text style={styles.uploadText}>
+                    {licenseFile
+                      ? `${licenseFile.name} · ${licenseFile.type}`
+                      : '이미지 또는 PDF 파일 하나만 고를 수 있어요.'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+              </TouchableOpacity>
+              {licenseFile ? (
+                <View style={styles.selectedFileCard}>
+                  <Ionicons name="document-text-outline" size={18} color="#0ea5a4" />
+                  <View style={styles.selectedFileTextWrap}>
+                    <Text style={styles.selectedFileName}>{licenseFile.name}</Text>
+                    <Text style={styles.selectedFileMeta}>{licenseFile.type}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setLicenseFile(null)}
+                    activeOpacity={0.8}
+                    style={styles.removeFileButton}
+                  >
+                    <Ionicons name="close" size={16} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               <TouchableOpacity
                 style={[styles.submitButton, !isFormValid || isSubmitting ? styles.submitButtonDisabled : null]}
@@ -336,6 +457,7 @@ const styles = StyleSheet.create({
   },
   fieldBlock: { marginBottom: 14 },
   fieldLabel: { color: '#0f172a', fontSize: 13, fontWeight: '800', marginBottom: 8 },
+  requiredMark: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -348,19 +470,47 @@ const styles = StyleSheet.create({
   },
   inputIcon: { marginRight: 10 },
   input: { flex: 1, color: '#0f172a', fontSize: 15 },
+  helperText: { marginTop: 6, color: '#64748b', fontSize: 12, lineHeight: 16 },
   sectionTitle: { marginTop: 4, marginBottom: 10, color: '#0f172a', fontSize: 14, fontWeight: '800' },
   uploadBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 15,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#dbeff0',
     backgroundColor: '#eefafa',
     marginBottom: 14,
   },
+  uploadCopy: { flex: 1 },
+  uploadTitle: { color: '#0f172a', fontSize: 14, fontWeight: '800', marginBottom: 4 },
   uploadText: { color: '#0f172a', fontSize: 13, flex: 1, lineHeight: 18 },
+  selectedFileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#dbe4ee',
+    marginTop: -2,
+    marginBottom: 14,
+  },
+  selectedFileTextWrap: { flex: 1 },
+  selectedFileName: { color: '#0f172a', fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  selectedFileMeta: { color: '#64748b', fontSize: 12 },
+  removeFileButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef2f7',
+  },
   submitButton: {
     marginTop: 6,
     height: 54,

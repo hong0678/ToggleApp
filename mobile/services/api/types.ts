@@ -91,6 +91,7 @@ export type KakaoPlaceSearchResponse = {
 };
 
 export type ResolveStoreRequest = {
+  externalSource: string;
   externalPlaceId: string;
   name: string;
   address?: string | null;
@@ -134,8 +135,8 @@ export type ResolveStoreResponse = {
 };
 
 export type StoreLookupRequest = {
-  ids?: number[];
-  keyword?: string;
+  externalSource: string;
+  externalPlaceIds: string[];
 };
 
 export type StoreLookupItemResponse = {

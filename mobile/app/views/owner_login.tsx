@@ -43,7 +43,18 @@ export default function OwnerLoginScreen() {
 
     try {
       setIsSubmitting(true);
-      await authApi.login(email.trim(), password);
+      const response = await authApi.login(email.trim(), password);
+
+      if (response.user.role === 'ADMIN') {
+        router.replace('/views/admin_owner_applications');
+        return;
+      }
+
+      if (response.user.role === 'USER') {
+        router.replace('/(tabs)');
+        return;
+      }
+
       router.replace('/views/owner_dashboard');
     } catch (error) {
       Alert.alert('로그인 실패', error instanceof Error ? error.message : '로그인 중 문제가 발생했습니다.');
@@ -55,7 +66,7 @@ export default function OwnerLoginScreen() {
   return (
     <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/')} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={28} color="#0ea5a4" />
         </TouchableOpacity>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>

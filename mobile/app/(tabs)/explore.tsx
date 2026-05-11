@@ -12,6 +12,31 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+function ActionCard({
+  title,
+  subtitle,
+  icon,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.9}>
+      <View style={styles.actionIconWrap}>
+        <Ionicons name={icon} size={22} color="#0ea5a4" />
+      </View>
+      <View style={styles.actionTextWrap}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        <Text style={styles.actionSubtitle}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+    </TouchableOpacity>
+  );
+}
+
 export default function ExploreScreen() {
   const router = useRouter();
 
@@ -121,6 +146,21 @@ export default function ExploreScreen() {
               <Text style={styles.listLike}>♡ 98</Text>
             </View>
           </View>
+
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="construct-outline" size={18} color="#0ea5a4" />
+              <Text style={styles.sectionTitle}>연결된 API</Text>
+            </View>
+            <Text style={styles.sectionMore}>테스트</Text>
+          </View>
+
+          <ActionCard
+            title="API 실험실"
+            subtitle="매장 resolve, 공공기관, 리뷰, 파일, 검색 API를 한 곳에서 확인해요"
+            icon="flask-outline"
+            onPress={() => router.push('/views/backend_api_hub' as never)}
+          />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -442,6 +482,40 @@ const styles = StyleSheet.create({
     color: '#0ea5a4',
     fontSize: 12,
     fontWeight: '800',
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#fff',
+  },
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e6fbfa',
+  },
+  actionTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  actionTitle: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  actionSubtitle: {
+    marginTop: 4,
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 16,
   },
   listDivider: {
     height: 1,

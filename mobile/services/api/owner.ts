@@ -131,26 +131,47 @@ export type StoreClosureRequestResponse = {
 
 export const ownerApi = {
   async createApplication(request: OwnerApplicationRequest, businessLicenseFile: { uri: string; name: string; type: string }) {
-    const formData = new FormData();
-    formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }) as unknown as Blob);
-    formData.append('businessLicenseFile', businessLicenseFile as unknown as Blob);
+    return ownerApi.createApplicationDetailed(request, businessLicenseFile).then((response) => {
+      if (!response.success) {
+        throw new Error(response.error?.message ?? '매장 등록 신청이 처리되지 않았어요.');
+      }
 
-    return apiClient.request<OwnerApplicationResponse>('/api/v1/owner/store-applications', {
+      return response.data as OwnerApplicationResponse;
+    });
+  },
+  async createApplicationDetailed(request: OwnerApplicationRequest, businessLicenseFile: { uri: string; name: string; type: string }) {
+    const formData = new FormData();
+    formData.append('request', JSON.stringify(request));
+    formData.append('businessLicenseFile', businessLicenseFile as any);
+
+    return apiClient.requestDetailed<OwnerApplicationResponse>('/api/v1/owner/store-applications', {
       method: 'POST',
       body: formData,
+      timeoutMs: 120000,
     });
   },
 
   async updateApplication(applicationId: number, request: OwnerApplicationUpdateRequest, businessLicenseFile?: { uri: string; name: string; type: string }) {
+    return ownerApi.updateApplicationDetailed(applicationId, request, businessLicenseFile).then((response) => {
+      if (!response.success) {
+        throw new Error(response.error?.message ?? '매장 등록 수정이 처리되지 않았어요.');
+      }
+
+      return response.data as OwnerApplicationResponse;
+    });
+  },
+
+  async updateApplicationDetailed(applicationId: number, request: OwnerApplicationUpdateRequest, businessLicenseFile?: { uri: string; name: string; type: string }) {
     const formData = new FormData();
-    formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }) as unknown as Blob);
+    formData.append('request', JSON.stringify(request));
     if (businessLicenseFile) {
-      formData.append('businessLicenseFile', businessLicenseFile as unknown as Blob);
+      formData.append('businessLicenseFile', businessLicenseFile as any);
     }
 
-    return apiClient.request<OwnerApplicationResponse>(`/api/v1/owner/store-applications/${applicationId}`, {
+    return apiClient.requestDetailed<OwnerApplicationResponse>(`/api/v1/owner/store-applications/${applicationId}`, {
       method: 'PATCH',
       body: formData,
+      timeoutMs: 120000,
     });
   },
 
@@ -173,6 +194,12 @@ export const ownerApi = {
     return apiClient.request<OwnerLinkedStoreResponse>(`/api/v1/owner/stores/${storeId}/profile`, {
       method: 'PUT',
       body: request,
+    });
+  },
+
+  async unlinkStore(storeId: number) {
+    return apiClient.request<void>(`/api/v1/owner/stores/${storeId}/link`, {
+      method: 'DELETE',
     });
   },
 

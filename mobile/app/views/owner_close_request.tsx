@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
@@ -38,6 +38,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
 
 export default function OwnerCloseRequestScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stores, setStores] = useState<OwnerLinkedStoreResponse[]>([]);
@@ -46,6 +47,7 @@ export default function OwnerCloseRequestScreen() {
   const [effectiveAt, setEffectiveAt] = useState('');
   const [latestText, setLatestText] = useState('최근 요청을 아직 불러오지 못했어요.');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
 
   useEffect(() => {
     let active = true;
@@ -64,7 +66,8 @@ export default function OwnerCloseRequestScreen() {
         const response = await ownerApi.listStores();
         if (!active) return;
         setStores(response);
-        const first = response[0] ?? null;
+        const requestedId = requestedStoreId ? Number(requestedStoreId) : null;
+        const first = response.find((store) => store.storeId === requestedId) ?? response[0] ?? null;
         setSelectedStoreId(first?.storeId ?? null);
 
         if (first) {
@@ -94,7 +97,7 @@ export default function OwnerCloseRequestScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedStoreId]);
 
   const handleSubmit = async () => {
     if (!selectedStoreId) {
@@ -127,7 +130,7 @@ export default function OwnerCloseRequestScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
