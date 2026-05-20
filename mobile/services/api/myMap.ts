@@ -1,6 +1,12 @@
 import { apiClient } from './client';
 import type { MapProfile, MyMapPlaceResponse } from './types';
 
+type UploadFileInput = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
 export type MyMapResponse = {
   mapProfile: MapProfile;
   stores: number[];
@@ -23,6 +29,17 @@ export const myMapApi = {
     return apiClient.request<MapProfile>('/api/v1/my-map/profile', {
       method: 'PUT',
       body: request,
+    });
+  },
+
+  async updateProfileImage(mapId: number, file: UploadFileInput) {
+    const formData = new FormData();
+    formData.append('profileImage', file as any);
+
+    return apiClient.request<{ mapId: number; profileImageUrl: string | null }>(`/api/v1/maps/${mapId}/profile-image`, {
+      method: 'PATCH',
+      body: formData,
+      timeoutMs: 60000,
     });
   },
 

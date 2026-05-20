@@ -156,7 +156,7 @@ export default function OwnerDashboardScreen() {
     <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace('/')} style={styles.headerIconButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.push('/')} style={styles.headerIconButton} activeOpacity={0.8}>
             <Ionicons name="home-outline" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerBrand}>
@@ -175,7 +175,7 @@ export default function OwnerDashboardScreen() {
               <Text style={styles.loadingText}>점주 정보를 불러오는 중...</Text>
             </View>
           ) : !isLoggedIn ? (
-            <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+            <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
           ) : (
             <>
               <View style={styles.heroCard}>

@@ -3,6 +3,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  InteractionManager,
   PanResponder,
   StyleSheet,
   Text,
@@ -19,19 +20,17 @@ import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { ApiClientError, favoritesApi, myMapApi, storesApi, tokenStore } from '@/services/api';
+import { ApiClientError, favoritesApi, myMapApi, publicInstitutionsApi, storesApi, tokenStore, userMapsApi } from '@/services/api';
 import { mapCache } from '@/services/mapCache';
-import type { StoreLookupItemResponse } from '@/services/api/types';
+import { CATEGORY_KEYWORDS, CATEGORY_OPTIONS, type CategoryOption } from '@/services/placeCategories';
+import type { PublicInstitutionLookupItemResponse, StoreLookupItemResponse } from '@/services/api/types';
 
 const { height: windowHeight } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
 const BOTTOM_NAV_HEIGHT = 78;
 const NEARBY_PLACES_CACHE_KEY = 'toggle.nearbyPlaces';
-
-type CategoryOption = {
-  label: string;
-  code: string | null;
-};
+const DEFAULT_MAP_SEARCH_RADIUS_METERS = 1000;
+const NEARBY_PLACE_LIMIT_OPTIONS = [10, 20, 30, 40, 50];
 
 type KakaoPlacePreview = {
   id: string;
@@ -44,21 +43,129 @@ type KakaoPlacePreview = {
   longitude: number;
 };
 
-const CATEGORY_OPTIONS: CategoryOption[] = [
-  { label: '전체', code: null },
-  { label: '음식점', code: 'FD6' },
-  { label: '카페', code: 'CE7' },
-  { label: '편의점', code: 'CS2' },
-  { label: '대형마트', code: 'MT1' },
-  { label: '약국', code: 'PM9' },
-  { label: '병원', code: 'HP8' },
-  { label: '기타', code: null },
-  { label: '공공기관', code: 'PO3' },
-  { label: '문화시설', code: 'CT1' },
-  { label: '학교', code: 'SC4' },
-  { label: '지하철역', code: 'SW8' },
-  { label: '주차장', code: 'PK6' },
-];
+const getStorePlaceId = (store: StoreLookupItemResponse) => {
+  return store.externalPlaceId || `STORE_${store.storeId}`;
+};
+
+const normalizeRegisteredStoreAsPlace = (store: StoreLookupItemResponse): KakaoPlacePreview => ({
+  id: getStorePlaceId(store),
+  name: store.name,
+  category: store.categoryName ?? '등록 매장',
+  address: store.roadAddress || store.address || store.jibunAddress || '',
+  phone: store.phone ?? '',
+  latitude: store.latitude,
+  longitude: store.longitude,
+});
+
+const normalizePublicInstitutionAsPlace = (publicInstitution: PublicInstitutionLookupItemResponse): KakaoPlacePreview | null => {
+  if (typeof publicInstitution.latitude !== 'number' || typeof publicInstitution.longitude !== 'number') {
+    return null;
+  }
+
+  return {
+    id: `PUBLIC_${publicInstitution.id}`,
+    name: publicInstitution.name ?? '공공 장소',
+    category: '공공기관',
+    address: publicInstitution.address ?? '',
+    latitude: publicInstitution.latitude,
+    longitude: publicInstitution.longitude,
+  };
+};
+
+const toKakaoRenderablePlace = (place: KakaoPlacePreview) => ({
+  id: place.id,
+  place_name: place.name,
+  category_name: place.category,
+  category_group_name: place.category,
+  road_address_name: place.address,
+  address_name: place.address,
+  phone: place.phone ?? '',
+  distance: place.distance ?? '',
+  y: String(place.latitude),
+  x: String(place.longitude),
+});
+
+const mergePlacePreviews = (places: KakaoPlacePreview[], registeredPlaces: KakaoPlacePreview[]) => {
+  const seen = new Set<string>();
+  const merged: KakaoPlacePreview[] = [];
+
+  [...places, ...registeredPlaces].forEach((place) => {
+    const key = place.id || `${place.name}-${place.latitude}-${place.longitude}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(place);
+  });
+
+  return merged;
+};
+
+const normalizeSearchText = (value: string | null | undefined) => {
+  return (value ?? '').toLowerCase().replace(/\s+/g, '');
+};
+
+const formatSearchRadiusLabel = (radiusMeters: number) => {
+  if (radiusMeters < 1000) {
+    return `${radiusMeters}m`;
+  }
+
+  const kilometers = radiusMeters / 1000;
+  return Number.isInteger(kilometers) ? `${kilometers}km` : `${kilometers.toFixed(1)}km`;
+};
+
+const storeMatchesKeyword = (store: StoreLookupItemResponse, query: string | null) => {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  return [
+    store.name,
+    store.categoryName,
+    store.address,
+    store.roadAddress,
+    store.jibunAddress,
+    store.phone,
+  ].some((value) => normalizeSearchText(value).includes(normalizedQuery));
+};
+
+const storeMatchesCategory = (store: StoreLookupItemResponse, categoryLabel: string | null) => {
+  if (!categoryLabel || categoryLabel === '전체') return true;
+
+  const haystack = normalizeSearchText([
+    store.categoryName,
+    store.name,
+    store.address,
+    store.roadAddress,
+    store.jibunAddress,
+  ].filter(Boolean).join(' '));
+  const keywords = CATEGORY_KEYWORDS[categoryLabel] ?? [categoryLabel];
+  const excludedKeywords = categoryLabel === '음식점'
+    ? ['카페', '커피', '디저트', '베이커리', 'cafe', 'coffee']
+    : [];
+
+  if (excludedKeywords.some((keyword) => haystack.includes(normalizeSearchText(keyword)))) {
+    return false;
+  }
+
+  return keywords.some((keyword) => {
+    const normalizedKeyword = normalizeSearchText(keyword);
+    return normalizedKeyword.length > 0 && haystack.includes(normalizedKeyword);
+  });
+};
+
+const filterRegisteredStoresForSearchContext = (
+  stores: StoreLookupItemResponse[],
+  context: {
+    query: string | null;
+    categoryLabel: string | null;
+  }
+) => {
+  return stores.filter((store) => {
+    if (context.query) {
+      return storeMatchesKeyword(store, context.query);
+    }
+
+    return storeMatchesCategory(store, context.categoryLabel);
+  });
+};
 
 const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
@@ -70,9 +177,13 @@ const isNotFoundError = (error: unknown) => error instanceof ApiClientError && e
 export default function MapAroundScreen() {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useLocalSearchParams<{ query?: string | string[] }>();
+  const params = useLocalSearchParams<{ query?: string | string[]; mapId?: string | string[]; mapTitle?: string | string[] }>();
   const searchParam = Array.isArray(params.query) ? params.query[0] : params.query;
+  const mapIdParam = Array.isArray(params.mapId) ? params.mapId[0] : params.mapId;
+  const scopedMapTitleParam = Array.isArray(params.mapTitle) ? params.mapTitle[0] : params.mapTitle;
   const initialSearchQuery = (searchParam ?? '').trim();
+  const scopedMapId = mapIdParam ? Number(mapIdParam) : null;
+  const isScopedMapMode = Boolean(scopedMapId);
   const showInternalTabBar = pathname !== '/map';
   const sheetBottomOffset = showInternalTabBar ? BOTTOM_NAV_HEIGHT : 0;
   const defaultSheetHeight = Math.min(windowHeight * 0.54, windowHeight - sheetBottomOffset - 12);
@@ -86,6 +197,7 @@ export default function MapAroundScreen() {
     latitude: number;
     longitude: number;
   } | null>(null);
+  const searchRadiusMetersRef = useRef(DEFAULT_MAP_SEARCH_RADIUS_METERS);
   const [activeFilter, setActiveFilter] = useState('전체');
   const [selectedCategoryLabel, setSelectedCategoryLabel] = useState('전체');
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
@@ -101,10 +213,13 @@ export default function MapAroundScreen() {
     longitude: number;
   } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [searchRadiusMeters, setSearchRadiusMeters] = useState(DEFAULT_MAP_SEARCH_RADIUS_METERS);
+  const [nearbyPlaceLimit, setNearbyPlaceLimit] = useState(10);
   const [favoritedPlaceIds, setFavoritedPlaceIds] = useState<string[]>([]);
   const [favoriteStoreIdByExternalPlaceId, setFavoriteStoreIdByExternalPlaceId] = useState<Record<string, number>>({});
   const [registeredStoreIdsByExternalPlaceId, setRegisteredStoreIdsByExternalPlaceId] = useState<Record<string, number>>({});
   const [registeredStoreDetailsByExternalPlaceId, setRegisteredStoreDetailsByExternalPlaceId] = useState<Record<string, StoreLookupItemResponse>>({});
+  const [scopedMapTitle, setScopedMapTitle] = useState(scopedMapTitleParam ?? '내 지도');
 
   const categories = CATEGORY_OPTIONS;
   const mapSortOptions = [
@@ -119,6 +234,11 @@ export default function MapAroundScreen() {
     : selectedMapSorts.length === 1
       ? selectedMapSorts[0]
       : `${selectedMapSorts[0]} 외 ${selectedMapSorts.length - 1}개`;
+  const searchRadiusLabel = formatSearchRadiusLabel(searchRadiusMeters);
+  const visibleNearbyPlaces = nearbyPlaces.slice(0, nearbyPlaceLimit);
+  const visibleNearbyPlaceCount = visibleNearbyPlaces.length;
+  const totalNearbyPlaceCount = nearbyPlaces.length;
+  const screenTitle = isScopedMapMode ? scopedMapTitle : '내 주변 장소';
 
   const toggleMapSort = useCallback((title: string) => {
     setSelectedMapSorts((current) => (
@@ -136,6 +256,175 @@ export default function MapAroundScreen() {
   const closeMapSortPanel = useCallback(() => {
     setIsMapSortOpen(false);
   }, []);
+
+  const scrollCardListToTop = useCallback(() => {
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        cardScrollRef.current?.scrollTo({ y: 0, animated: false });
+      });
+    });
+  }, []);
+
+  const refreshRegisteredStoreState = useCallback(async (
+    places: KakaoPlacePreview[],
+    knownStores: StoreLookupItemResponse[] = []
+  ) => {
+    if (places.length === 0 && knownStores.length === 0) {
+      setRegisteredStoreIdsByExternalPlaceId({});
+      setRegisteredStoreDetailsByExternalPlaceId({});
+      webViewRef.current?.injectJavaScript(`
+        window.setRegisteredStoreIds({});
+        true;
+      `);
+      return;
+    }
+
+    try {
+      const lookupPlaceIds = places
+        .map((place) => place.id)
+        .filter((placeId) => placeId && !placeId.startsWith('STORE_') && !placeId.startsWith('PUBLIC_'));
+      const lookup = lookupPlaceIds.length > 0
+        ? await storesApi.lookup({
+            externalSource: 'KAKAO',
+            externalPlaceIds: lookupPlaceIds,
+          })
+        : { stores: [] };
+      const storesById = [...lookup.stores, ...knownStores].reduce<Record<number, StoreLookupItemResponse>>((acc, store) => {
+        acc[store.storeId] = store;
+        return acc;
+      }, {});
+      const registeredStores = Object.values(storesById);
+
+      const nextRegisteredStoreIds = registeredStores.reduce<Record<string, number>>((acc, store) => {
+        acc[getStorePlaceId(store)] = store.storeId;
+        return acc;
+      }, {});
+
+      setRegisteredStoreIdsByExternalPlaceId(nextRegisteredStoreIds);
+      webViewRef.current?.injectJavaScript(`
+        window.setRegisteredStoreIds(${JSON.stringify(nextRegisteredStoreIds)});
+        true;
+      `);
+
+      const detailsByExternalPlaceId = registeredStores.reduce<Record<string, StoreLookupItemResponse>>((acc, store) => {
+        acc[getStorePlaceId(store)] = store;
+        return acc;
+      }, {});
+      setRegisteredStoreDetailsByExternalPlaceId(detailsByExternalPlaceId);
+    } catch {
+      setRegisteredStoreIdsByExternalPlaceId({});
+      setRegisteredStoreDetailsByExternalPlaceId({});
+    }
+  }, []);
+
+  const renderScopedMapPlaces = useCallback((places: KakaoPlacePreview[], knownStores: StoreLookupItemResponse[]) => {
+    setNearbyPlaces(places);
+    setNearbyPlaceLimit(Math.max(places.length, 10));
+    setIsPlacesLoading(false);
+    void refreshRegisteredStoreState(places, knownStores);
+
+    webViewRef.current?.injectJavaScript(`
+      if (window.renderPlacesFromApp) {
+        window.renderPlacesFromApp(
+          ${JSON.stringify(places.map(toKakaoRenderablePlace))},
+          ${JSON.stringify(scopedMapTitle || '내 지도')},
+          null,
+          true
+        );
+      }
+      true;
+    `);
+  }, [refreshRegisteredStoreState, scopedMapTitle]);
+
+  const loadScopedMapPlaces = useCallback(async () => {
+    if (!scopedMapId || !isMapReady) return;
+
+    try {
+      setIsPlacesLoading(true);
+      const mapDetail = await userMapsApi.get(scopedMapId);
+      setScopedMapTitle(mapDetail.map.title || scopedMapTitleParam || '내 지도');
+
+      const [storeResponse, publicResponse] = await Promise.all([
+        mapDetail.stores.length > 0
+          ? storesApi.listByIds(mapDetail.stores)
+          : Promise.resolve({ stores: [] } as { stores: StoreLookupItemResponse[] }),
+        mapDetail.publicInstitutions.length > 0
+          ? publicInstitutionsApi.getByIds(mapDetail.publicInstitutions)
+          : Promise.resolve({ institutions: [] } as { institutions: PublicInstitutionLookupItemResponse[] }),
+      ]);
+
+      const storePlaces = (storeResponse.stores ?? []).map(normalizeRegisteredStoreAsPlace);
+      const publicPlaces = (publicResponse.institutions ?? [])
+        .map(normalizePublicInstitutionAsPlace)
+        .filter((place): place is KakaoPlacePreview => Boolean(place));
+
+      renderScopedMapPlaces([...storePlaces, ...publicPlaces], storeResponse.stores ?? []);
+    } catch (error) {
+      setNearbyPlaces([]);
+      setIsPlacesLoading(false);
+      Alert.alert('내 지도', error instanceof Error ? error.message : '지도에 담긴 장소를 불러오지 못했어요.');
+    }
+  }, [isMapReady, renderScopedMapPlaces, scopedMapId, scopedMapTitleParam]);
+
+  const applyNearbyPlaces = useCallback((
+    places: KakaoPlacePreview[],
+    context: {
+      query: string | null;
+      categoryLabel: string | null;
+      categoryCode: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    }
+  ) => {
+    const enrichAndApplyPlaces = async () => {
+      let mergedPlaces = places;
+      let nearbyRegisteredStores: StoreLookupItemResponse[] = [];
+      const latitude = context.latitude;
+      const longitude = context.longitude;
+
+      if (typeof latitude === 'number' && typeof longitude === 'number') {
+        try {
+          const nearbyStoreResponse = await storesApi.nearby(latitude, longitude, searchRadiusMetersRef.current, 50);
+          nearbyRegisteredStores = filterRegisteredStoresForSearchContext(nearbyStoreResponse.stores, {
+            query: context.query,
+            categoryLabel: context.categoryLabel,
+          });
+          mergedPlaces = mergePlacePreviews(
+            places,
+            nearbyRegisteredStores.map(normalizeRegisteredStoreAsPlace)
+          );
+        } catch {
+          nearbyRegisteredStores = [];
+        }
+      }
+
+      setNearbyPlaces(mergedPlaces);
+      mapCache.setNearbyPlaces(mergedPlaces);
+      mapCache.setNearbySearchContext(context);
+      setIsPlacesLoading(false);
+
+      try {
+        globalThis.localStorage?.setItem(NEARBY_PLACES_CACHE_KEY, JSON.stringify(mergedPlaces));
+      } catch {
+        // Ignore storage failures; the map result itself is still shown.
+      }
+
+      webViewRef.current?.injectJavaScript(`
+        if (window.renderPlacesFromApp) {
+          window.renderPlacesFromApp(
+            ${JSON.stringify(mergedPlaces.map(toKakaoRenderablePlace))},
+            ${JSON.stringify(context.categoryLabel ?? '전체')},
+            ${JSON.stringify(context.categoryCode)}
+          );
+        }
+        true;
+      `);
+
+      void refreshRegisteredStoreState(mergedPlaces, nearbyRegisteredStores);
+    };
+
+    void enrichAndApplyPlaces();
+  }, [refreshRegisteredStoreState]);
 
   const searchPlacesByCategory = useCallback((category: CategoryOption) => {
     setIsPlacesLoading(true);
@@ -159,6 +448,31 @@ export default function MapAroundScreen() {
     `);
   }, []);
 
+  const selectNearbyPlaceLimit = useCallback((limit: number) => {
+    setNearbyPlaceLimit(limit);
+    webViewRef.current?.injectJavaScript(`
+      if (window.setVisiblePlacesLimit) {
+        window.setVisiblePlacesLimit(${limit});
+      }
+      true;
+    `);
+  }, []);
+
+  useEffect(() => {
+    if (!isMapReady) return;
+
+    webViewRef.current?.injectJavaScript(`
+      if (window.setVisiblePlacesLimit) {
+        window.setVisiblePlacesLimit(${nearbyPlaceLimit});
+      }
+      true;
+    `);
+  }, [isMapReady, nearbyPlaceLimit]);
+
+  useEffect(() => {
+    scrollCardListToTop();
+  }, [nearbyPlaces, nearbyPlaceLimit, isSheetExpanded, scrollCardListToTop]);
+
   const submitMapSearch = useCallback(() => {
     const trimmedQuery = mapSearchQuery.trim();
     const currentCategoryLabel = selectedCategoryLabel === '전체' ? null : selectedCategoryLabel;
@@ -169,6 +483,8 @@ export default function MapAroundScreen() {
         query: null,
         categoryLabel: currentCategoryLabel,
         categoryCode: null,
+        latitude: currentCoordsRef.current?.latitude ?? currentCoords?.latitude ?? null,
+        longitude: currentCoordsRef.current?.longitude ?? currentCoords?.longitude ?? null,
       });
       searchPlacesByCategory({ label: '전체', code: null });
       return;
@@ -179,21 +495,32 @@ export default function MapAroundScreen() {
       query: trimmedQuery,
       categoryLabel: currentCategoryLabel,
       categoryCode: null,
+      latitude: currentCoordsRef.current?.latitude ?? currentCoords?.latitude ?? null,
+      longitude: currentCoordsRef.current?.longitude ?? currentCoords?.longitude ?? null,
     });
     searchPlacesByKeyword(trimmedQuery);
-  }, [mapSearchQuery, searchPlacesByCategory, searchPlacesByKeyword, selectedCategoryLabel]);
+  }, [
+    currentCoords?.latitude,
+    currentCoords?.longitude,
+    mapSearchQuery,
+    searchPlacesByCategory,
+    searchPlacesByKeyword,
+    selectedCategoryLabel,
+  ]);
 
   const selectCategory = useCallback((category: CategoryOption) => {
     setActiveFilter(category.label);
     setSelectedCategoryLabel(category.label);
     mapCache.setNearbySearchContext({
-      query: mapSearchQuery.trim() || null,
+      query: null,
       categoryLabel: category.label === '전체' ? null : category.label,
       categoryCode: category.code,
+      latitude: currentCoordsRef.current?.latitude ?? currentCoords?.latitude ?? null,
+      longitude: currentCoordsRef.current?.longitude ?? currentCoords?.longitude ?? null,
     });
     setIsCategoryMenuOpen(false);
     searchPlacesByCategory(category);
-  }, [mapSearchQuery, searchPlacesByCategory]);
+  }, [currentCoords?.latitude, currentCoords?.longitude, searchPlacesByCategory]);
 
   const setSheetHeight = useCallback((nextHeight: number, animated = true) => {
     const clampedHeight = clamp(nextHeight, MIN_SHEET_HEIGHT, maxSheetHeight);
@@ -212,12 +539,15 @@ export default function MapAroundScreen() {
         damping: 22,
         stiffness: 180,
         mass: 0.8,
-      }).start();
+      }).start(() => {
+        scrollCardListToTop();
+      });
       return;
     }
 
     sheetHeight.setValue(clampedHeight);
-  }, [maxSheetHeight, sheetHeight]);
+    scrollCardListToTop();
+  }, [maxSheetHeight, scrollCardListToTop, sheetHeight]);
 
   const sheetPanResponder = useRef(
     PanResponder.create({
@@ -302,8 +632,14 @@ export default function MapAroundScreen() {
   }, [moveMapToLocation]);
 
   useEffect(() => {
+    if (isScopedMapMode) return;
     moveToCurrentLocation(false);
-  }, [moveToCurrentLocation]);
+  }, [isScopedMapMode, moveToCurrentLocation]);
+
+  useEffect(() => {
+    if (!isScopedMapMode) return;
+    void loadScopedMapPlaces();
+  }, [isScopedMapMode, loadScopedMapPlaces]);
 
   useFocusEffect(
     useCallback(() => {
@@ -348,6 +684,7 @@ export default function MapAroundScreen() {
   );
 
   useEffect(() => {
+    if (isScopedMapMode) return;
     if (!initialSearchQuery || !isMapReady) return;
 
     setMapSearchQuery(initialSearchQuery);
@@ -356,17 +693,26 @@ export default function MapAroundScreen() {
       query: initialSearchQuery,
       categoryLabel: null,
       categoryCode: null,
+      latitude: currentCoordsRef.current?.latitude ?? currentCoords?.latitude ?? null,
+      longitude: currentCoordsRef.current?.longitude ?? currentCoords?.longitude ?? null,
     });
     searchPlacesByKeyword(initialSearchQuery);
-  }, [initialSearchQuery, isMapReady, searchPlacesByKeyword]);
+  }, [
+    currentCoords?.latitude,
+    currentCoords?.longitude,
+    initialSearchQuery,
+    isScopedMapMode,
+    isMapReady,
+    searchPlacesByKeyword,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
       setIsCategoryMenuOpen(false);
       setIsMapSortOpen(false);
       setSelectedMapSorts([]);
-      setActiveFilter(initialSearchQuery || '전체');
-      if (!initialSearchQuery) {
+      setActiveFilter(isScopedMapMode ? '내 지도' : initialSearchQuery || '전체');
+      if (!initialSearchQuery && !isScopedMapMode) {
         const context = mapCache.getNearbySearchContext();
         if (context.categoryLabel) {
           setSelectedCategoryLabel(context.categoryLabel);
@@ -380,7 +726,7 @@ export default function MapAroundScreen() {
       requestAnimationFrame(() => {
         cardScrollRef.current?.scrollTo({ y: 0, animated: false });
       });
-    }, [defaultSheetHeight, initialSearchQuery, setSheetHeight])
+    }, [defaultSheetHeight, initialSearchQuery, isScopedMapMode, setSheetHeight])
   );
 
   const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
@@ -389,53 +735,50 @@ export default function MapAroundScreen() {
 
       if (message.type === 'places') {
         const places = Array.isArray(message.places) ? message.places : [];
-        setNearbyPlaces(places);
-        mapCache.setNearbyPlaces(places);
-        mapCache.setNearbySearchContext({
-          query: mapSearchQuery.trim() || null,
-          categoryLabel: selectedCategoryLabel === '전체' ? null : selectedCategoryLabel,
-          categoryCode: null,
-        });
-        setIsPlacesLoading(false);
-
-        try {
-          globalThis.localStorage?.setItem(NEARBY_PLACES_CACHE_KEY, JSON.stringify(places));
-        } catch {
-          // Ignore storage failures; the map result itself is still shown.
+        const context = mapCache.getNearbySearchContext();
+        const nextSearchRadiusMeters = typeof message.searchRadiusMeters === 'number'
+          ? message.searchRadiusMeters
+          : null;
+        const searchCenter = message.searchCenter && typeof message.searchCenter === 'object'
+          ? message.searchCenter
+          : null;
+        const latitude = typeof searchCenter?.latitude === 'number'
+          ? searchCenter.latitude
+          : currentCoordsRef.current?.latitude ?? currentCoords?.latitude ?? null;
+        const longitude = typeof searchCenter?.longitude === 'number'
+          ? searchCenter.longitude
+          : currentCoordsRef.current?.longitude ?? currentCoords?.longitude ?? null;
+        if (nextSearchRadiusMeters) {
+          searchRadiusMetersRef.current = nextSearchRadiusMeters;
+          setSearchRadiusMeters(nextSearchRadiusMeters);
         }
-
-        void (async () => {
-          try {
-            const lookup = await storesApi.lookup({
-              externalSource: 'KAKAO',
-              externalPlaceIds: places.map((place: KakaoPlacePreview) => place.id),
-            });
-
-            const nextRegisteredStoreIds = lookup.stores.reduce<Record<string, number>>((acc, store) => {
-              acc[store.externalPlaceId] = store.storeId;
-              return acc;
-            }, {});
-
-            setRegisteredStoreIdsByExternalPlaceId(nextRegisteredStoreIds);
-            webViewRef.current?.injectJavaScript(`
-              window.setRegisteredStoreIds(${JSON.stringify(nextRegisteredStoreIds)});
-              true;
-            `);
-
-            const detailsByExternalPlaceId = lookup.stores.reduce<Record<string, StoreLookupItemResponse>>((acc, store) => {
-              acc[store.externalPlaceId] = store;
-              return acc;
-            }, {});
-            setRegisteredStoreDetailsByExternalPlaceId(detailsByExternalPlaceId);
-          } catch {
-            setRegisteredStoreIdsByExternalPlaceId({});
-            setRegisteredStoreDetailsByExternalPlaceId({});
-          }
-        })();
+        applyNearbyPlaces(places, {
+          query: typeof message.query === 'string' && message.query.trim()
+            ? message.query.trim()
+            : null,
+          categoryLabel: typeof message.categoryLabel === 'string' && message.categoryLabel !== '전체'
+            ? message.categoryLabel
+            : null,
+          categoryCode: typeof message.categoryCode === 'string' && message.categoryCode
+            ? message.categoryCode
+            : context.categoryCode,
+          latitude,
+          longitude,
+        });
       }
 
       if (message.type === 'places-loading') {
         setIsPlacesLoading(true);
+      }
+
+      if (message.type === 'viewport-changed') {
+        const nextSearchRadiusMeters = typeof message.searchRadiusMeters === 'number'
+          ? message.searchRadiusMeters
+          : null;
+        if (nextSearchRadiusMeters) {
+          searchRadiusMetersRef.current = nextSearchRadiusMeters;
+          setSearchRadiusMeters(nextSearchRadiusMeters);
+        }
       }
 
       if (message.type === 'map-ready') {
@@ -462,7 +805,13 @@ export default function MapAroundScreen() {
     } catch {
       // Ignore non-JSON messages from the map WebView.
     }
-  }, [registeredStoreIdsByExternalPlaceId, router, mapSearchQuery, selectedCategoryLabel]);
+  }, [
+    applyNearbyPlaces,
+    currentCoords?.latitude,
+    currentCoords?.longitude,
+    registeredStoreIdsByExternalPlaceId,
+    router,
+  ]);
 
   const searchCurrentMapArea = useCallback(() => {
     setIsPlacesLoading(true);
@@ -479,7 +828,7 @@ export default function MapAroundScreen() {
         '찜은 로그인 후 사용할 수 있어요.',
         [
           { text: '취소', style: 'cancel' },
-          { text: '로그인 페이지로 이동', onPress: () => router.push('/views/user_login') },
+          { text: '로그인 페이지로 이동', onPress: () => router.replace('/views/user_login') },
         ]
       );
       return;
@@ -592,15 +941,19 @@ export default function MapAroundScreen() {
 
           var map = null;
           var currentMarker = null;
+          var searchRadiusCircle = null;
           var placeMarkers = [];
           var placesService = null;
           var pendingCurrentLocation = null;
-          var pendingKeywordQuery = window.__togglePendingKeywordQuery || ${JSON.stringify(initialSearchQuery)};
+          var isScopedMapMode = ${JSON.stringify(isScopedMapMode)};
+          var pendingKeywordQuery = isScopedMapMode ? '' : window.__togglePendingKeywordQuery || ${JSON.stringify(initialSearchQuery)};
           var activeCategoryLabel = '전체';
           var activeCategoryCode = null;
           var activeKeywordQuery = pendingKeywordQuery;
           var registeredStoreIds = {};
           var lastRenderedPlaces = [];
+          var searchRadiusMeters = ${DEFAULT_MAP_SEARCH_RADIUS_METERS};
+          var visiblePlacesLimit = 10;
           var defaultCategoryCodes = ['FD6', 'CE7', 'CS2', 'MT1', 'PM9', 'HP8', 'PO3', 'CT1', 'SC4', 'SW8', 'PK6'];
 
           function postToApp(payload) {
@@ -635,6 +988,77 @@ export default function MapAroundScreen() {
               new kakao.maps.Size(34, 46),
               { offset: new kakao.maps.Point(17, 42) }
             );
+          }
+
+          function drawSearchRadiusCircle(center) {
+            if (!map || !window.kakao || !center) return;
+
+            if (searchRadiusCircle) {
+              searchRadiusCircle.setMap(null);
+            }
+
+            searchRadiusCircle = new kakao.maps.Circle({
+              center: center,
+              radius: searchRadiusMeters,
+              strokeWeight: 2,
+              strokeColor: '#0ea5a4',
+              strokeOpacity: 0.7,
+              strokeStyle: 'solid',
+              fillColor: '#0ea5a4',
+              fillOpacity: 0.11
+            });
+
+            searchRadiusCircle.setMap(map);
+          }
+
+          function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
+            var earthRadiusMeters = 6371000;
+            var toRadians = Math.PI / 180;
+            var dLat = (lat2 - lat1) * toRadians;
+            var dLng = (lng2 - lng1) * toRadians;
+            var sinLat = Math.sin(dLat / 2);
+            var sinLng = Math.sin(dLng / 2);
+            var a = sinLat * sinLat +
+              Math.cos(lat1 * toRadians) * Math.cos(lat2 * toRadians) *
+              sinLng * sinLng;
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return earthRadiusMeters * c;
+          }
+
+          function clampRadiusMeters(value) {
+            return Math.max(100, Math.min(1000, Math.round(value)));
+          }
+
+          function syncSearchRadiusFromMap() {
+            if (!map || !window.kakao) return searchRadiusMeters;
+
+            var bounds = map.getBounds();
+            if (!bounds) return searchRadiusMeters;
+
+            var center = map.getCenter();
+            var southWest = bounds.getSouthWest();
+            var northEast = bounds.getNorthEast();
+            var northEdge = new kakao.maps.LatLng(northEast.getLat(), center.getLng());
+            var southEdge = new kakao.maps.LatLng(southWest.getLat(), center.getLng());
+            var eastEdge = new kakao.maps.LatLng(center.getLat(), northEast.getLng());
+            var westEdge = new kakao.maps.LatLng(center.getLat(), southWest.getLng());
+            var maxDistance = Math.min(
+              calculateDistanceMeters(center.getLat(), center.getLng(), northEdge.getLat(), northEdge.getLng()),
+              calculateDistanceMeters(center.getLat(), center.getLng(), southEdge.getLat(), southEdge.getLng()),
+              calculateDistanceMeters(center.getLat(), center.getLng(), eastEdge.getLat(), eastEdge.getLng()),
+              calculateDistanceMeters(center.getLat(), center.getLng(), westEdge.getLat(), westEdge.getLng())
+            );
+            searchRadiusMeters = clampRadiusMeters(maxDistance);
+            drawSearchRadiusCircle(center);
+            postToApp({
+              type: 'viewport-changed',
+              searchRadiusMeters: searchRadiusMeters,
+              searchCenter: {
+                latitude: center.getLat(),
+                longitude: center.getLng()
+              }
+            });
+            return searchRadiusMeters;
           }
 
           function normalizePlace(place) {
@@ -673,17 +1097,17 @@ export default function MapAroundScreen() {
             });
           }
 
-          function renderPlaces(places, shouldFitMap) {
+          function renderPlaces(places, shouldFitMap, shouldPostPlaces) {
             clearPlaceMarkers();
             lastRenderedPlaces = Array.isArray(places) ? places.slice() : [];
 
             var bounds = new kakao.maps.LatLngBounds();
-            var limitedPlaces = sortPlacesByDistance(dedupePlaces(places)).slice(0, 15);
+            var limitedPlaces = sortPlacesByDistance(dedupePlaces(places)).slice(0, visiblePlacesLimit);
 
             for (var i = 0; i < limitedPlaces.length; i += 1) {
-              var place = limitedPlaces[i];
+              let place = limitedPlaces[i];
               var position = new kakao.maps.LatLng(Number(place.y), Number(place.x));
-              var marker = new kakao.maps.Marker({
+              let marker = new kakao.maps.Marker({
                 map: map,
                 position: position,
                 title: place.place_name,
@@ -707,17 +1131,48 @@ export default function MapAroundScreen() {
               map.setBounds(bounds);
             }
 
-            postToApp({
-              type: 'places',
-              places: limitedPlaces.map(normalizePlace)
-            });
+            if (shouldPostPlaces !== false) {
+              var searchCenter = map.getCenter();
+              postToApp({
+                type: 'places',
+                places: limitedPlaces.map(normalizePlace),
+                query: activeKeywordQuery || null,
+                categoryLabel: activeKeywordQuery ? null : activeCategoryLabel,
+                categoryCode: activeKeywordQuery ? null : activeCategoryCode,
+                searchCenter: {
+                  latitude: searchCenter.getLat(),
+                  longitude: searchCenter.getLng()
+                }
+              });
+            }
           }
+
+          window.renderPlacesFromApp = function(places, label, categoryCode, shouldFitMap) {
+            activeCategoryLabel = label || activeCategoryLabel || '전체';
+            activeCategoryCode = categoryCode || null;
+            activeKeywordQuery = '';
+            pendingKeywordQuery = '';
+
+            if (!map || !window.kakao || !Array.isArray(places)) return;
+
+            renderPlaces(places, shouldFitMap === true, false);
+          };
+
+          window.setVisiblePlacesLimit = function(nextLimit) {
+            var normalizedLimit = Number(nextLimit);
+            if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return;
+
+            visiblePlacesLimit = normalizedLimit;
+            if (lastRenderedPlaces.length > 0) {
+              renderPlaces(lastRenderedPlaces, false, false);
+            }
+          };
 
           window.setRegisteredStoreIds = function(nextRegisteredStoreIds) {
             registeredStoreIds = nextRegisteredStoreIds || {};
 
             if (lastRenderedPlaces.length > 0) {
-              renderPlaces(lastRenderedPlaces, false);
+              renderPlaces(lastRenderedPlaces, false, false);
             }
           };
 
@@ -749,10 +1204,11 @@ export default function MapAroundScreen() {
 
           function createSearchOptions() {
             var center = map.getCenter();
+            syncSearchRadiusFromMap();
             return {
               location: new kakao.maps.LatLng(center.getLat(), center.getLng()),
               sort: kakao.maps.services.SortBy.DISTANCE,
-              radius: 2000,
+              radius: searchRadiusMeters,
               size: 15
             };
           }
@@ -853,6 +1309,7 @@ export default function MapAroundScreen() {
             var currentPosition = new kakao.maps.LatLng(lat, lng);
             map.setLevel(4);
             map.setCenter(currentPosition);
+            syncSearchRadiusFromMap();
 
             if (currentMarker) {
               currentMarker.setMap(null);
@@ -894,8 +1351,14 @@ export default function MapAroundScreen() {
                 map.setDraggable(true);
                 map.setZoomable(true);
                 placesService = new kakao.maps.services.Places();
+                kakao.maps.event.addListener(map, 'idle', function() {
+                  syncSearchRadiusFromMap();
+                });
+                syncSearchRadiusFromMap();
 
-                if (pendingCurrentLocation) {
+                if (isScopedMapMode) {
+                  clearPlaceMarkers();
+                } else if (pendingCurrentLocation) {
                   window.moveToCurrentLocation(pendingCurrentLocation.lat, pendingCurrentLocation.lng);
                 } else if (pendingKeywordQuery) {
                   window.searchPlacesByKeyword(pendingKeywordQuery);
@@ -924,7 +1387,7 @@ export default function MapAroundScreen() {
 
       {/* 1. Kakao Map WebView: uncovered map space must receive drag and pinch touches directly. */}
       <View style={styles.mapPlaceholder} pointerEvents="auto">
-        <WebView 
+          <WebView
           ref={webViewRef}
           originWhitelist={['*']}
           source={{ html: kakaoMapHtml, baseUrl: 'https://localhost' }}
@@ -936,7 +1399,13 @@ export default function MapAroundScreen() {
           bounces={false}
           onMessage={handleWebViewMessage}
           onLoadEnd={() => {
-            if (currentCoords) {
+            webViewRef.current?.injectJavaScript(`
+              if (window.setVisiblePlacesLimit) {
+                window.setVisiblePlacesLimit(${nearbyPlaceLimit});
+              }
+              true;
+            `);
+            if (!isScopedMapMode && currentCoords) {
               moveMapToLocation(currentCoords.latitude, currentCoords.longitude);
             }
           }}
@@ -945,71 +1414,88 @@ export default function MapAroundScreen() {
 
       {/* 2. Top UI Overlays: parent containers pass empty-area touches down to the WebView map. */}
       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
-        {/* Search Bar */}
-        <View style={styles.searchContainer} pointerEvents="box-none">
-          <TouchableOpacity onPress={() => setIsCategoryMenuOpen(true)} style={styles.menuButton}>
-            <Ionicons name="menu" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.searchInputBox}>
-            <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
-            <TextInput
-              style={styles.searchTextInput}
-              value={mapSearchQuery}
-              onChangeText={setMapSearchQuery}
-              onSubmitEditing={submitMapSearch}
-              placeholder="장소, 버스, 지하철, 주소 검색"
-              placeholderTextColor="#94a3b8"
-              returnKeyType="search"
-            />
+        {isScopedMapMode ? (
+          <View style={styles.scopedHeader} pointerEvents="auto">
+            <TouchableOpacity style={styles.scopedBackButton} onPress={() => router.back()} activeOpacity={0.9}>
+              <Ionicons name="chevron-back" size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <View style={styles.scopedHeaderTextWrap}>
+              <Text style={styles.scopedHeaderTitle} numberOfLines={1}>{screenTitle}</Text>
+              <Text style={styles.scopedHeaderSubtitle}>이 지도에 저장한 장소만 표시 중</Text>
+            </View>
+            <TouchableOpacity style={styles.scopedRefreshButton} onPress={() => void loadScopedMapPlaces()} activeOpacity={0.9}>
+              <Ionicons name="refresh" size={20} color="#0ea5a4" />
+            </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Filter Pills */}
-        <View style={styles.filterWrapper} pointerEvents="box-none">
-          <ScrollView
-            pointerEvents="auto"
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled={true}
-            directionalLockEnabled={true}
-            alwaysBounceHorizontal={false}
-            scrollEventThrottle={16}
-            style={styles.filterScrollView}
-            contentContainerStyle={styles.filterScroll}
-          >
-            {categories.map((filter, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.filterPill,
-                  activeFilter === filter.label ? styles.filterPillActive : null
-                ]}
-                onPress={() => selectCategory(filter)}
-              >
-                <Text style={[
-                  styles.filterText,
-                  activeFilter === filter.label ? styles.filterTextActive : null
-                ]}>{filter.label}</Text>
+        ) : (
+          <>
+            {/* Search Bar */}
+            <View style={styles.searchContainer} pointerEvents="box-none">
+              <TouchableOpacity onPress={() => setIsCategoryMenuOpen(true)} style={styles.menuButton}>
+                <Ionicons name="menu" size={24} color="#fff" />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+              <View style={styles.searchInputBox}>
+                <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  style={styles.searchTextInput}
+                  value={mapSearchQuery}
+                  onChangeText={setMapSearchQuery}
+                  onSubmitEditing={submitMapSearch}
+                  placeholder="장소, 버스, 지하철, 주소 검색"
+                  placeholderTextColor="#94a3b8"
+                  returnKeyType="search"
+                />
+              </View>
+            </View>
 
-        {/* Search This Area Button */}
-        <View style={styles.searchThisAreaContainer} pointerEvents="box-none">
-          <TouchableOpacity style={styles.searchThisAreaButton} onPress={searchCurrentMapArea}>
-            <Ionicons name="reload" size={16} color="#fff" style={{marginRight: 6}} />
-            <Text style={styles.searchThisAreaText}>현 지도에서 검색</Text>
-          </TouchableOpacity>
-        </View>
+            {/* Filter Pills */}
+            <View style={styles.filterWrapper} pointerEvents="box-none">
+              <ScrollView
+                pointerEvents="auto"
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                directionalLockEnabled={true}
+                alwaysBounceHorizontal={false}
+                scrollEventThrottle={16}
+                style={styles.filterScrollView}
+                contentContainerStyle={styles.filterScroll}
+              >
+                {categories.map((filter, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.filterPill,
+                      activeFilter === filter.label ? styles.filterPillActive : null
+                    ]}
+                    onPress={() => selectCategory(filter)}
+                  >
+                    <Text style={[
+                      styles.filterText,
+                      activeFilter === filter.label ? styles.filterTextActive : null
+                    ]}>{filter.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
-        {/* GPS Button */}
-        <TouchableOpacity style={styles.gpsButton} onPress={() => moveToCurrentLocation(true, true)}>
-          <MaterialIcons name="my-location" size={24} color="#fff" />
-        </TouchableOpacity>
+            {/* Search This Area Button */}
+            <View style={styles.searchThisAreaContainer} pointerEvents="box-none">
+              <TouchableOpacity style={styles.searchThisAreaButton} onPress={searchCurrentMapArea}>
+                <Ionicons name="reload" size={16} color="#0ea5a4" style={{marginRight: 6}} />
+                <Text style={styles.searchThisAreaText}>현 지도 범위 · 반경 {searchRadiusLabel}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* GPS Button */}
+            <TouchableOpacity style={styles.gpsButton} onPress={() => moveToCurrentLocation(true, true)}>
+              <MaterialIcons name="my-location" size={24} color="#fff" />
+            </TouchableOpacity>
+          </>
+        )}
       </SafeAreaView>
 
-      {isCategoryMenuOpen ? (
+      {isCategoryMenuOpen && !isScopedMapMode ? (
         <View style={styles.categoryOverlay}>
           <TouchableOpacity
             style={styles.categoryBackdrop}
@@ -1057,206 +1543,254 @@ export default function MapAroundScreen() {
             }}
           >
             <View style={styles.headerLeft}>
-              <Text style={styles.bottomSheetTitle}>주변 추천 장소</Text>
+              <Text style={styles.bottomSheetTitle}>{isScopedMapMode ? '지도에 저장한 장소' : '주변 추천 장소'}</Text>
             </View>
             <View style={styles.bottomSheetHeaderRight}>
-              <TouchableOpacity style={styles.listViewButton} onPress={() => router.push('/list')} activeOpacity={0.85}>
-                <Ionicons name="list-outline" size={14} color="#0ea5a4" />
-                <Text style={styles.listViewButtonText}>리스트</Text>
+              <TouchableOpacity style={styles.listViewButton} onPress={() => router.push(isScopedMapMode ? '/list' : '/list')} activeOpacity={0.85}>
+                <Ionicons name="map-outline" size={14} color="#0ea5a4" />
+                <Text style={styles.listViewButtonText}>마이지도</Text>
               </TouchableOpacity>
               <Text style={styles.viewAllText}>{isSheetExpanded ? '접기' : '펼치기'}</Text>
             </View>
           </TouchableOpacity>
 
-          {isSheetExpanded ? (
-            <>
-            <TouchableOpacity
-              style={styles.mapSortButton}
-              activeOpacity={0.85}
-              onPress={() => setIsMapSortOpen((previous) => !previous)}
-            >
-              <View style={styles.mapSortButtonTextWrap}>
-                <Text style={styles.mapSortButtonText}>정렬 기준</Text>
-                <Text style={styles.mapSortValue}>{mapSortButtonLabel}</Text>
-              </View>
-              <Ionicons name={isMapSortOpen ? 'chevron-up' : 'chevron-down'} size={22} color="#fff" />
-            </TouchableOpacity>
+	          {isSheetExpanded ? (
+	            <ScrollView
+	              ref={cardScrollRef}
+	              showsVerticalScrollIndicator={false}
+	              bounces={false}
+	              alwaysBounceVertical={false}
+	              overScrollMode="never"
+	              style={styles.sheetBodyScroll}
+	              contentContainerStyle={styles.sheetBodyScrollContent}
+	              onContentSizeChange={scrollCardListToTop}
+	            >
+	              {!isScopedMapMode ? (
+	              <TouchableOpacity
+	                style={styles.mapSortButton}
+	                activeOpacity={0.85}
+	                onPress={() => setIsMapSortOpen((previous) => !previous)}
+	              >
+	                <View style={styles.mapSortButtonTextWrap}>
+	                  <Text style={styles.mapSortButtonText}>정렬 기준</Text>
+	                  <Text style={styles.mapSortValue}>{mapSortButtonLabel}</Text>
+	                </View>
+	                <Ionicons name={isMapSortOpen ? 'chevron-up' : 'chevron-down'} size={22} color="#fff" />
+	              </TouchableOpacity>
+	              ) : null}
 
-            {isMapSortOpen ? (
-              <View style={styles.mapSortPanel}>
-                <View style={styles.mapSortPanelHeader}>
-                  <Text style={styles.mapSortPanelTitle}>필터 선택</Text>
-                  <View style={styles.mapSortPanelActions}>
-                    <TouchableOpacity onPress={resetAndCloseMapSorts} activeOpacity={0.8}>
-                      <Text style={styles.mapSortClearText}>기본정렬</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={closeMapSortPanel} activeOpacity={0.85} style={styles.mapSortDoneButton}>
-                      <Text style={styles.mapSortDoneText}>완료</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                {mapSortOptions.map((option) => {
-                  const isActive = selectedMapSorts.includes(option.title);
+	              {isMapSortOpen && !isScopedMapMode ? (
+	                <View style={styles.mapSortPanel}>
+	                  <View style={styles.mapSortPanelHeader}>
+	                    <Text style={styles.mapSortPanelTitle}>필터 선택</Text>
+	                    <View style={styles.mapSortPanelActions}>
+	                      <TouchableOpacity onPress={resetAndCloseMapSorts} activeOpacity={0.8}>
+	                        <Text style={styles.mapSortClearText}>기본정렬</Text>
+	                      </TouchableOpacity>
+	                      <TouchableOpacity onPress={closeMapSortPanel} activeOpacity={0.85} style={styles.mapSortDoneButton}>
+	                        <Text style={styles.mapSortDoneText}>완료</Text>
+	                      </TouchableOpacity>
+	                    </View>
+	                  </View>
+	                  {mapSortOptions.map((option) => {
+	                    const isActive = selectedMapSorts.includes(option.title);
 
-                  return (
-                    <TouchableOpacity
-                      key={option.title}
-                      style={styles.mapSortOption}
-                      activeOpacity={0.85}
-                      onPress={() => toggleMapSort(option.title)}
-                    >
-                      <View>
-                        <Text style={styles.mapSortOptionTitle}>{option.title}</Text>
-                        <Text style={styles.mapSortOptionSubtitle}>{option.subtitle}</Text>
-                      </View>
-                      <View style={[styles.mapSortRadio, isActive ? styles.mapSortRadioActive : null]}>
-                        {isActive ? <Ionicons name="checkmark" size={18} color="#8cb4ff" /> : null}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : null}
+	                    return (
+	                      <TouchableOpacity
+	                        key={option.title}
+	                        style={styles.mapSortOption}
+	                        activeOpacity={0.85}
+	                        onPress={() => toggleMapSort(option.title)}
+	                      >
+	                        <View>
+	                          <Text style={styles.mapSortOptionTitle}>{option.title}</Text>
+	                          <Text style={styles.mapSortOptionSubtitle}>{option.subtitle}</Text>
+	                        </View>
+	                        <View style={[styles.mapSortRadio, isActive ? styles.mapSortRadioActive : null]}>
+	                          {isActive ? <Ionicons name="checkmark" size={18} color="#8cb4ff" /> : null}
+	                        </View>
+	                      </TouchableOpacity>
+	                    );
+	                  })}
+	                </View>
+	              ) : null}
 
-            <ScrollView
-              ref={cardScrollRef}
-              showsVerticalScrollIndicator={false}
-              style={styles.cardScroll}
-              contentContainerStyle={styles.cardScrollContent}
-            >
-            {isPlacesLoading ? (
-              <Text style={styles.emptyText}>장소를 불러오는 중...</Text>
-            ) : nearbyPlaces.length === 0 ? (
-              <Text style={styles.emptyText}>주변 장소가 없어요.</Text>
-            ) : (
-              nearbyPlaces.map((place) => (
-                <View style={styles.storeCard} key={place.id}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.storeName}>{place.name}</Text>
-                    <TouchableOpacity onPress={() => handleFavoritePress(place)} activeOpacity={0.8}>
-                      <Ionicons
-                        name={favoritedPlaceIds.includes(place.id) ? 'heart' : 'heart-outline'}
-                        size={24}
-                        color={favoritedPlaceIds.includes(place.id) ? '#ff4d74' : '#0ea5a4'}
-                      />
-                    </TouchableOpacity>
-                  </View>
+	              <View style={styles.nearbyPlaceMetaRow}>
+	                <Text style={styles.nearbyPlaceMetaText}>
+	                  {isScopedMapMode ? `저장된 장소 ${totalNearbyPlaceCount}개` : `장소 ${visibleNearbyPlaceCount}개 / 전체 ${totalNearbyPlaceCount}개`}
+	                </Text>
+	                {!isScopedMapMode ? <Text style={styles.nearbyPlaceMetaHint}>표시 개수</Text> : null}
+	              </View>
 
-                  <Text style={styles.favoriteCountText}>
-                    찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
-                    {registeredStoreDetailsByExternalPlaceId[place.id] ? ' · 저장된 매장' : ' · 미등록 장소'}
-                  </Text>
+	              {!isScopedMapMode ? (
+	              <ScrollView
+	                horizontal
+	                showsHorizontalScrollIndicator={false}
+	                contentContainerStyle={styles.nearbyPlaceLimitScroll}
+	              >
+	                {NEARBY_PLACE_LIMIT_OPTIONS.map((limit) => {
+	                  const isActive = nearbyPlaceLimit === limit;
 
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{place.category || activeFilter}</Text>
-                  </View>
+	                  return (
+	                    <TouchableOpacity
+	                      key={limit}
+	                      style={[styles.nearbyPlaceLimitChip, isActive ? styles.nearbyPlaceLimitChipActive : null]}
+	                      activeOpacity={0.85}
+	                      onPress={() => selectNearbyPlaceLimit(limit)}
+	                    >
+	                      <Text style={[styles.nearbyPlaceLimitText, isActive ? styles.nearbyPlaceLimitTextActive : null]}>
+	                        {limit}
+	                      </Text>
+	                    </TouchableOpacity>
+	                  );
+	                })}
+	              </ScrollView>
+	              ) : null}
 
-                  {registeredStoreDetailsByExternalPlaceId[place.id] ? (
-                    <View style={styles.statusRow}>
-                      <View style={styles.statusBadge}>
-                        <Text style={styles.statusText}>
-                          {registeredStoreDetailsByExternalPlaceId[place.id].liveBusinessStatus
-                            ?? registeredStoreDetailsByExternalPlaceId[place.id].businessStatus
-                            ?? registeredStoreDetailsByExternalPlaceId[place.id].operationalState
-                            ?? '우리 서비스 매장'}
-                        </Text>
-                      </View>
-                      <Text style={styles.statusUpdateText}>
-                        {registeredStoreDetailsByExternalPlaceId[place.id].operationalState ?? '우리 서비스 매장'}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.statusRow}>
-                      <View style={styles.unknownStatusBadge}>
-                        <Text style={styles.unknownStatusText}>상태정보 없음</Text>
-                      </View>
-                      <Text style={styles.statusUpdateText}>
-                        {place.distance ? `${place.distance}m · 미등록 장소` : '미등록 장소'}
-                      </Text>
-                    </View>
-                  )}
+	              <View style={styles.placeListWrap}>
+	                {isPlacesLoading ? (
+	                  <Text style={styles.emptyText}>장소를 불러오는 중...</Text>
+	                ) : nearbyPlaces.length === 0 ? (
+	                  <Text style={styles.emptyText}>{isScopedMapMode ? '이 지도에 저장된 장소가 없어요.' : '주변 장소가 없어요.'}</Text>
+	                ) : (
+	                  visibleNearbyPlaces.map((place) => (
+	                    <View style={styles.storeCard} key={place.id}>
+	                      <View style={styles.cardHeader}>
+	                        <Text style={styles.storeName}>{place.name}</Text>
+	                        {!isScopedMapMode ? (
+	                        <TouchableOpacity onPress={() => handleFavoritePress(place)} activeOpacity={0.8}>
+	                          <Ionicons
+	                            name={favoritedPlaceIds.includes(place.id) ? 'heart' : 'heart-outline'}
+	                            size={24}
+	                            color={favoritedPlaceIds.includes(place.id) ? '#ff4d74' : '#0ea5a4'}
+	                          />
+	                        </TouchableOpacity>
+	                        ) : null}
+	                      </View>
 
-                  <View style={styles.infoRow}>
-                    <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.6)" />
-                    <Text style={styles.infoText}>{place.address || '주소 정보 없음'}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.6)" />
-                    <Text style={styles.infoText}>
-                      {registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '전화번호 정보 없음'}
-                    </Text>
-                  </View>
+	                      {registeredStoreDetailsByExternalPlaceId[place.id] ? (
+	                        <Text style={styles.favoriteCountText}>
+	                          찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
+	                          {' · 저장된 매장'}
+	                        </Text>
+	                      ) : (
+	                        <Text style={styles.favoriteCountText}>미등록 장소</Text>
+	                      )}
 
-                  <View style={styles.cardFooterDivider} />
+	                      <View style={styles.categoryBadge}>
+	                        <Text style={styles.categoryText}>{place.category || activeFilter}</Text>
+	                      </View>
 
-                  <View style={styles.cardFooter}>
-                    <View style={styles.footerItem}>
-                      <Ionicons name="star" size={14} color="#ffb300" />
-                      <Text style={styles.footerText}>
-                        {registeredStoreDetailsByExternalPlaceId[place.id]?.reviewAverageRating
-                          ?? registeredStoreDetailsByExternalPlaceId[place.id]?.rating
-                          ?? '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.footerItem}>
-                      <Ionicons name="chatbubble-outline" size={14} color="#8f9bb3" />
-                      <Text style={styles.footerText}>
-                        리뷰 {registeredStoreDetailsByExternalPlaceId[place.id]?.reviewCount ?? 0}개
-                      </Text>
-                    </View>
-                    <View style={styles.footerItem}>
-                      <Ionicons name="heart" size={14} color="#f44336" />
-                      <Text style={styles.footerText}>
-                        찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
-                      </Text>
-                    </View>
-                  </View>
+	                      {registeredStoreDetailsByExternalPlaceId[place.id] ? (
+	                        <View style={styles.statusRow}>
+	                          <View style={styles.statusBadge}>
+	                            <Text style={styles.statusText}>
+	                              {registeredStoreDetailsByExternalPlaceId[place.id].liveBusinessStatus
+	                                ?? registeredStoreDetailsByExternalPlaceId[place.id].businessStatus
+	                                ?? registeredStoreDetailsByExternalPlaceId[place.id].operationalState
+	                                ?? '우리 서비스 매장'}
+	                            </Text>
+	                          </View>
+	                          <Text style={styles.statusUpdateText}>
+	                            {registeredStoreDetailsByExternalPlaceId[place.id].operationalState ?? '우리 서비스 매장'}
+	                          </Text>
+	                        </View>
+	                      ) : (
+	                        <View style={styles.statusRow}>
+	                          <View style={styles.unknownStatusBadge}>
+	                            <Text style={styles.unknownStatusText}>상태정보 없음</Text>
+	                          </View>
+	                          <Text style={styles.statusUpdateText}>
+	                            {place.distance ? `${place.distance}m · 미등록 장소` : '미등록 장소'}
+	                          </Text>
+	                        </View>
+	                      )}
 
-                  {registeredStoreIdsByExternalPlaceId[place.id] ? (
-                    <TouchableOpacity
-                      style={styles.detailButton}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/views/store_detail',
-                          params: {
-                            storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
-                            storeName: place.name,
-                            storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
-                          },
-                        })
-                      }
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.detailButtonText}>상세 보기</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
-                    </TouchableOpacity>
-                  ) : null}
+	                      <View style={styles.infoRow}>
+	                        <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.6)" />
+	                        <Text style={styles.infoText}>{place.address || '주소 정보 없음'}</Text>
+	                      </View>
+	                      <View style={styles.infoRow}>
+	                        <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.6)" />
+	                        <Text style={styles.infoText}>
+	                          {registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '전화번호 정보 없음'}
+	                        </Text>
+	                      </View>
 
-                  {registeredStoreIdsByExternalPlaceId[place.id] ? (
-                    <TouchableOpacity
-                      style={styles.reviewButton}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/views/store_reviews',
-                          params: {
-                            storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
-                            storeName: place.name,
-                            storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
-                          },
-                        })
-                      }
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.reviewButtonText}>리뷰 보기</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              ))
-            )}
-            </ScrollView>
-            </>
-          ) : null}
+	                      {registeredStoreIdsByExternalPlaceId[place.id] ? (
+	                        <>
+	                          <View style={styles.cardFooterDivider} />
+
+	                          <View style={styles.cardFooter}>
+	                            <View style={styles.footerItem}>
+	                              <Ionicons name="star" size={14} color="#ffb300" />
+	                              <Text style={styles.footerText}>
+	                                {registeredStoreDetailsByExternalPlaceId[place.id]?.reviewAverageRating
+	                                  ?? registeredStoreDetailsByExternalPlaceId[place.id]?.rating
+	                                  ?? '—'}
+	                              </Text>
+	                            </View>
+	                            <View style={styles.footerItem}>
+	                              <Ionicons name="chatbubble-outline" size={14} color="#8f9bb3" />
+	                              <Text style={styles.footerText}>
+	                                리뷰 {registeredStoreDetailsByExternalPlaceId[place.id]?.reviewCount ?? 0}개
+	                              </Text>
+	                            </View>
+	                            <View style={styles.footerItem}>
+	                              <Ionicons name="heart" size={14} color="#f44336" />
+	                              <Text style={styles.footerText}>
+	                                찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
+	                              </Text>
+	                            </View>
+	                          </View>
+	                        </>
+	                      ) : null}
+
+	                      {registeredStoreIdsByExternalPlaceId[place.id] ? (
+	                        <TouchableOpacity
+	                          style={styles.detailButton}
+	                          onPress={() =>
+	                            router.push({
+	                              pathname: '/views/store_detail',
+	                              params: {
+	                                storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
+	                                storeName: place.name,
+	                                storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
+	                              },
+	                            })
+	                          }
+	                          activeOpacity={0.9}
+	                        >
+	                          <Text style={styles.detailButtonText}>상세 보기</Text>
+	                          <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+	                        </TouchableOpacity>
+	                      ) : null}
+
+	                      {registeredStoreIdsByExternalPlaceId[place.id] ? (
+	                        <TouchableOpacity
+	                          style={styles.reviewButton}
+	                          onPress={() =>
+	                            router.push({
+	                              pathname: '/views/store_reviews',
+	                              params: {
+	                                storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
+	                                storeName: place.name,
+	                                storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
+	                              },
+	                            })
+	                          }
+	                          activeOpacity={0.9}
+	                        >
+	                          <Text style={styles.reviewButtonText}>리뷰 보기</Text>
+	                          <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+	                        </TouchableOpacity>
+	                      ) : null}
+	                    </View>
+	                  ))
+	                )}
+	              </View>
+	            </ScrollView>
+	          ) : null}
       </Animated.View>
 
       {showInternalTabBar ? <AppBottomNav activeTab="map" /> : null}
@@ -1305,6 +1839,54 @@ const styles = StyleSheet.create({
     zIndex: 10,
     paddingTop: Platform.OS === 'android' ? 12 : 0,
   },
+  scopedHeader: {
+    marginHorizontal: 16,
+    minHeight: 58,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 10,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  scopedBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopedHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scopedHeaderTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  scopedHeaderSubtitle: {
+    marginTop: 3,
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  scopedRefreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   searchContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 0, alignItems: 'center' },
   menuButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#0ea5a4', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   searchInputBox: { flex: 1, height: 44, backgroundColor: '#fff', borderRadius: 22, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: '#dbeff0' },
@@ -1329,7 +1911,53 @@ const styles = StyleSheet.create({
   searchThisAreaButton: { flexDirection: 'row', backgroundColor: '#e6fbfa', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, alignItems: 'center', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
   searchThisAreaText: { color: '#0ea5a4', fontSize: 14, fontWeight: '700' },
 
-  gpsButton: { position: 'absolute', right: 16, top: 160, width: 44, height: 44, borderRadius: 22, backgroundColor: '#0ea5a4', alignItems: 'center', justifyContent: 'center', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 3 },
+  nearbyPlaceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  nearbyPlaceMetaText: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  nearbyPlaceMetaHint: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  nearbyPlaceLimitScroll: {
+    paddingHorizontal: 0,
+    gap: 8,
+    paddingBottom: 12,
+  },
+  nearbyPlaceLimitChip: {
+    minWidth: 48,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d8eceb',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  nearbyPlaceLimitChipActive: {
+    borderColor: '#0ea5a4',
+    backgroundColor: '#e6fbfa',
+  },
+  nearbyPlaceLimitText: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  nearbyPlaceLimitTextActive: {
+    color: '#0ea5a4',
+  },
+
+  gpsButton: { position: 'absolute', right: 16, top: 200, width: 44, height: 44, borderRadius: 22, backgroundColor: '#0ea5a4', alignItems: 'center', justifyContent: 'center', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 3 },
 
   categoryOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1528,10 +2156,15 @@ const styles = StyleSheet.create({
     borderColor: '#0ea5a4',
     backgroundColor: '#e6fbfa',
   },
-  cardScroll: { flex: 1 },
-  cardScrollContent: {
+  sheetBodyScroll: {
+    flex: 1,
+    marginTop: 8,
+  },
+  sheetBodyScrollContent: {
     paddingBottom: 28,
-    flexGrow: 1,
+  },
+  placeListWrap: {
+    marginTop: 8,
   },
   emptyText: { color: '#64748b', fontSize: 14, fontWeight: '600', paddingVertical: 20, textAlign: 'center' },
   storeCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e6eef1', marginBottom: 10, shadowColor: '#0f172a', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },

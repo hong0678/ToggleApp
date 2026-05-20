@@ -212,7 +212,7 @@ export default function OwnerDailyLogScreen() {
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {!isLoggedIn ? (
-            <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+            <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
           ) : isLoading ? (
             <View style={styles.loadingCard}>
               <ActivityIndicator color="#fff" />

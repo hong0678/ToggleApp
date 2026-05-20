@@ -14,6 +14,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { OwnerStorePicker } from '@/components/owner-store-picker';
+import { useSafeBack } from '@/components/use-safe-back';
 import { filesApi, ownerApi, storeMenusApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 import type { StoreMenuItem } from '@/services/api/storeMenus';
@@ -65,24 +67,6 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
         </TouchableOpacity>
       </View>
     </View>
-  );
-}
-
-function StoreChip({
-  store,
-  active,
-  onPress,
-}: {
-  store: OwnerLinkedStoreResponse;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity style={[styles.storeChip, active ? styles.storeChipActive : null]} onPress={onPress} activeOpacity={0.9}>
-      <Text style={[styles.storeChipText, active ? styles.storeChipTextActive : null]} numberOfLines={1}>
-        {store.storeName}
-      </Text>
-    </TouchableOpacity>
   );
 }
 
@@ -161,6 +145,7 @@ function MenuRow({
 
 export default function OwnerMenuManageScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -320,7 +305,7 @@ export default function OwnerMenuManageScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -330,7 +315,7 @@ export default function OwnerMenuManageScreen() {
         </View>
 
         {!isLoggedIn ? (
-          <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+          <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#0ea5a4" />
@@ -344,22 +329,12 @@ export default function OwnerMenuManageScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>매장 선택</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storeChips}>
-                {stores.map((store) => (
-                  <StoreChip
-                    key={store.storeId}
-                    store={store}
-                    active={selectedStoreId === store.storeId}
-                    onPress={() => void selectStore(store.storeId)}
-                  />
-                ))}
-              </ScrollView>
-              <Text style={styles.selectedStoreName} numberOfLines={1}>
-                {selectedStore?.storeName ?? '매장을 선택해주세요'}
-              </Text>
-            </View>
+            <OwnerStorePicker
+              stores={stores}
+              selectedStoreId={selectedStoreId}
+              selectedStore={selectedStore}
+              onSelect={(storeId) => void selectStore(storeId)}
+            />
 
             <View style={styles.card}>
               <View style={styles.sectionHeaderRow}>

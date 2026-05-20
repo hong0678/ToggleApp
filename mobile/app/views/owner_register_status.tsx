@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import { useSafeBack } from '@/components/use-safe-back';
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerApplicationSummaryResponse } from '@/services/api/owner';
 
@@ -79,6 +80,7 @@ function ApplicationCard({ item }: { item: OwnerApplicationSummaryResponse }) {
 
 export default function OwnerRegisterStatusScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState<OwnerApplicationSummaryResponse[]>([]);
@@ -121,7 +123,7 @@ export default function OwnerRegisterStatusScreen() {
     <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>신청 현황</Text>
@@ -142,8 +144,8 @@ export default function OwnerRegisterStatusScreen() {
 
           {!isLoggedIn ? (
             <LoginGatePanel
-              onLogin={() => router.push('/views/owner_login')}
-              onSignup={() => router.push('/views/owner_signup')}
+              onLogin={() => router.replace('/views/owner_login')}
+              onSignup={() => router.replace('/views/owner_signup')}
             />
           ) : isLoading ? (
             <View style={styles.loadingCard}>

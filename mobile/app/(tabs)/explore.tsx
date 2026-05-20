@@ -111,7 +111,7 @@ export default function ExploreScreen() {
                 <Text style={styles.mapFooterSub}>홈과 같은 톤으로 둘러보기를 이어가요</Text>
               </View>
               <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
-                <Text style={styles.mapFooterButtonText}>리스트 보기</Text>
+                <Text style={styles.mapFooterButtonText}>마이지도 보기</Text>
                 <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
               </TouchableOpacity>
             </View>

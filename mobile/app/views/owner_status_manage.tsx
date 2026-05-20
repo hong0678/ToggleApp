@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,13 +13,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { OwnerStorePicker } from '@/components/owner-store-picker';
+import { useSafeBack } from '@/components/use-safe-back';
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 
-type StatusOption = 'OPEN' | 'CLOSED' | 'TEMP_CLOSED' | 'EARLY_CLOSED';
+type StatusOption = 'OPEN' | 'BREAK_TIME' | 'CLOSED' | 'TEMP_CLOSED' | 'EARLY_CLOSED';
 
 const STATUS_OPTIONS: { label: string; value: StatusOption; description: string }[] = [
   { label: '영업중', value: 'OPEN', description: '현재 영업 중으로 표시' },
+  { label: '브레이크타임', value: 'BREAK_TIME', description: '잠시 쉬는 시간으로 표시' },
   { label: '영업종료', value: 'CLOSED', description: '현재 영업 종료로 표시' },
   { label: '임시휴무', value: 'TEMP_CLOSED', description: '잠시 운영을 멈춘 상태로 표시' },
   { label: '조기마감', value: 'EARLY_CLOSED', description: '조기 종료 상태로 표시' },
@@ -48,13 +51,19 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
 function StoreCard({
   store,
   onChangeStatus,
+  onSaveNotice,
   onUnlink,
 }: {
   store: OwnerLinkedStoreResponse;
   onChangeStatus: (storeId: number, status: StatusOption) => Promise<void>;
+  onSaveNotice: (storeId: number, ownerNotice: string) => void;
   onUnlink: (storeId: number) => Promise<void>;
 }) {
   const [comment, setComment] = useState(store.ownerNotice ?? '');
+
+  useEffect(() => {
+    setComment(store.ownerNotice ?? '');
+  }, [store.ownerNotice, store.storeId]);
 
   return (
     <View style={styles.card}>
@@ -72,24 +81,36 @@ function StoreCard({
       <Text style={styles.storeAddress} numberOfLines={2}>{store.storeAddress}</Text>
 
       <View style={styles.statusButtons}>
-        {STATUS_OPTIONS.map((option) => (
-          <TouchableOpacity
-            key={option.value}
-            style={styles.statusButton}
-            activeOpacity={0.9}
-            onPress={async () => {
-              try {
-                await onChangeStatus(store.storeId, option.value);
-                Alert.alert('상태 변경', `${store.storeName} 상태를 ${option.label}로 바꿨어요.`);
-              } catch (error) {
-                Alert.alert('실패', error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
-              }
-            }}
-          >
-            <Text style={styles.statusButtonLabel}>{option.label}</Text>
-            <Text style={styles.statusButtonSub}>{option.description}</Text>
-          </TouchableOpacity>
-        ))}
+        {STATUS_OPTIONS.map((option) => {
+          const active = store.liveBusinessStatus === option.value;
+
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[styles.statusButton, active ? styles.statusButtonActive : null]}
+              activeOpacity={0.9}
+              onPress={async () => {
+                try {
+                  await onChangeStatus(store.storeId, option.value);
+                  Alert.alert('상태 변경', `${store.storeName} 상태를 ${option.label}로 바꿨어요.`);
+                } catch (error) {
+                  Alert.alert('실패', error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+                }
+              }}
+            >
+              <View style={styles.statusButtonHeader}>
+                <Text style={[styles.statusButtonLabel, active ? styles.statusButtonLabelActive : null]}>{option.label}</Text>
+                {active ? (
+                  <View style={styles.savedBadge}>
+                    <Ionicons name="checkmark" size={12} color="#0ea5a4" />
+                    <Text style={styles.savedBadgeText}>저장됨</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[styles.statusButtonSub, active ? styles.statusButtonSubActive : null]}>{option.description}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={styles.noticeBox}>
@@ -118,6 +139,7 @@ function StoreCard({
                 breakEnd: store.breakEnd ?? '',
                 imageUrls: store.imageUrls,
               });
+              onSaveNotice(store.storeId, comment.trim());
               Alert.alert('저장 완료', '안내 문구를 저장했어요.');
             } catch (error) {
               Alert.alert('실패', error instanceof Error ? error.message : '안내 문구 저장에 실패했습니다.');
@@ -158,10 +180,12 @@ function StoreCard({
 
 export default function OwnerStatusManageScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stores, setStores] = useState<OwnerLinkedStoreResponse[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
 
   useEffect(() => {
@@ -187,9 +211,11 @@ export default function OwnerStatusManageScreen() {
             ? [...response.filter((store) => store.storeId === requestedId), ...response.filter((store) => store.storeId !== requestedId)]
             : response;
         setStores(orderedStores);
+        setSelectedStoreId(orderedStores[0]?.storeId ?? null);
       } catch {
         if (!active) return;
         setStores([]);
+        setSelectedStoreId(null);
       } finally {
         if (!active) return;
         setIsLoading(false);
@@ -203,6 +229,11 @@ export default function OwnerStatusManageScreen() {
     };
   }, [requestedStoreId]);
 
+  const selectedStore = useMemo(
+    () => stores.find((store) => store.storeId === selectedStoreId) ?? null,
+    [selectedStoreId, stores]
+  );
+
   const changeStatus = async (storeId: number, status: StatusOption) => {
     await ownerApi.updateStoreStatus(storeId, { status });
     const response = await ownerApi.listStores();
@@ -213,13 +244,25 @@ export default function OwnerStatusManageScreen() {
     await ownerApi.unlinkStore(storeId);
     const response = await ownerApi.listStores();
     setStores(response);
+    setSelectedStoreId((current) => {
+      if (current && response.some((store) => store.storeId === current)) {
+        return current;
+      }
+      return response[0]?.storeId ?? null;
+    });
+  };
+
+  const updateStoreNotice = (storeId: number, ownerNotice: string) => {
+    setStores((current) => current.map((store) => (
+      store.storeId === storeId ? { ...store, ownerNotice } : store
+    )));
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -229,7 +272,7 @@ export default function OwnerStatusManageScreen() {
         </View>
 
         {!isLoggedIn ? (
-          <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+          <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#0ea5a4" />
@@ -242,11 +285,23 @@ export default function OwnerStatusManageScreen() {
             <Text style={styles.emptySubtitle}>매장 등록 신청 후 점주 매장이 연결되면 상태를 관리할 수 있어요.</Text>
           </View>
         ) : (
-          <View style={styles.list}>
-            {stores.map((store) => (
-              <StoreCard key={store.storeId} store={store} onChangeStatus={changeStatus} onUnlink={unlinkStore} />
-            ))}
-          </View>
+          <>
+            <OwnerStorePicker
+              stores={stores}
+              selectedStoreId={selectedStoreId}
+              selectedStore={selectedStore}
+              onSelect={setSelectedStoreId}
+            />
+            {selectedStore ? (
+              <StoreCard
+                key={selectedStore.storeId}
+                store={selectedStore}
+                onChangeStatus={changeStatus}
+                onSaveNotice={updateStoreNotice}
+                onUnlink={unlinkStore}
+              />
+            ) : null}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -356,8 +411,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  statusButtonActive: {
+    borderColor: '#0ea5a4',
+    backgroundColor: '#e6fbfa',
+  },
+  statusButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 4,
+  },
   statusButtonLabel: { color: '#0f172a', fontSize: 15, fontWeight: '800', marginBottom: 4 },
+  statusButtonLabelActive: { color: '#0ea5a4' },
   statusButtonSub: { color: '#64748b', fontSize: 12 },
+  statusButtonSubActive: { color: '#0f766e' },
+  savedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  savedBadgeText: { color: '#0ea5a4', fontSize: 11, fontWeight: '900' },
   noticeBox: {
     marginTop: 14,
     borderRadius: 16,

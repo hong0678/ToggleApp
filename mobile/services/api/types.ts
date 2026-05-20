@@ -16,6 +16,7 @@ export type AuthUserResponse = {
   email: string;
   nickname: string | null;
   displayName: string | null;
+  profileImageUrl: string | null;
   role: UserRole;
   status: string;
 };
@@ -52,6 +53,16 @@ export type RefreshTokenRequest = {
 
 export type LogoutResponse = {
   loggedOut: boolean;
+};
+
+export type UserProfileResponse = {
+  userId: number;
+  nickname: string | null;
+  profileImageUrl: string | null;
+};
+
+export type SimpleMessageResponse = {
+  message: string;
 };
 
 export type MapProfile = {
@@ -283,6 +294,24 @@ export type PublicMapSearchResponse = {
   content: PublicMapSearchItemResponse[];
 };
 
+export type PublicMapListItemResponse = {
+  mapId: number;
+  publicMapUuid: string;
+  nickname: string;
+  title: string | null;
+  description: string | null;
+  profileImageUrl: string | null;
+  likeCount: number;
+};
+
+export type PublicMapListResponse = {
+  content: PublicMapListItemResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 export type UserPublicMapResponse = {
   publicMapUuid: string;
   nickname: string;
@@ -291,4 +320,10 @@ export type UserPublicMapResponse = {
   profileImageUrl: string | null;
   stores: number[];
   publics: number[];
+};
+
+export type MapLikeResponse = {
+  mapId: number;
+  likeCount: number;
+  likedByMe: boolean;
 };

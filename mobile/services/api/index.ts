@@ -12,4 +12,6 @@ export { storeReviewsApi } from './storeReviews';
 export { publicMapsApi } from './publicMaps';
 export { storesApi } from './stores';
 export { tokenStore } from './tokenStore';
+export { userMapsApi } from './userMaps';
+export type * from './userMaps';
 export type * from './types';

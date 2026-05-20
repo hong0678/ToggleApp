@@ -13,6 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { OwnerStorePicker } from '@/components/owner-store-picker';
+import { useSafeBack } from '@/components/use-safe-back';
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 
@@ -38,6 +40,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
 
 export default function OwnerCloseRequestScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +51,7 @@ export default function OwnerCloseRequestScreen() {
   const [latestText, setLatestText] = useState('최근 요청을 아직 불러오지 못했어요.');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
+  const selectedStore = stores.find((store) => store.storeId === selectedStoreId) ?? null;
 
   useEffect(() => {
     let active = true;
@@ -130,7 +134,7 @@ export default function OwnerCloseRequestScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -140,7 +144,7 @@ export default function OwnerCloseRequestScreen() {
         </View>
 
         {!isLoggedIn ? (
-          <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+          <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#0ea5a4" />
@@ -154,26 +158,15 @@ export default function OwnerCloseRequestScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>대상 매장</Text>
-              <View style={styles.storeChips}>
-                {stores.map((store) => {
-                  const active = selectedStoreId === store.storeId;
-                  return (
-                    <TouchableOpacity
-                      key={store.storeId}
-                      style={[styles.storeChip, active ? styles.storeChipActive : null]}
-                      activeOpacity={0.9}
-                      onPress={() => setSelectedStoreId(store.storeId)}
-                    >
-                      <Text style={[styles.storeChipText, active ? styles.storeChipTextActive : null]} numberOfLines={1}>
-                        {store.storeName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+            <OwnerStorePicker
+              stores={stores}
+              selectedStoreId={selectedStoreId}
+              selectedStore={selectedStore}
+              title="대상 매장"
+              onSelect={setSelectedStoreId}
+            />
 
+            <View style={styles.card}>
               <View style={styles.inputBlock}>
                 <Text style={styles.fieldLabel}>종료 사유</Text>
                 <TextInput

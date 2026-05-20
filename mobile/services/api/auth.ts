@@ -4,9 +4,17 @@ import type {
   AuthTokenResponse,
   LogoutResponse,
   MeResponse,
+  SimpleMessageResponse,
   SignupRequest,
   SignupResponse,
+  UserProfileResponse,
 } from './types';
+
+type UploadFileInput = {
+  uri: string;
+  name: string;
+  type: string;
+};
 
 export const authApi = {
   async signup(request: SignupRequest) {
@@ -60,5 +68,39 @@ export const authApi = {
 
   async me() {
     return apiClient.request<MeResponse>('/api/v1/auth/me');
+  },
+
+  async updateNickname(nickname: string) {
+    return apiClient.request<UserProfileResponse>('/api/v1/users/me/nickname', {
+      method: 'PATCH',
+      body: { nickname },
+    });
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    return apiClient.request<SimpleMessageResponse>('/api/v1/users/me/password', {
+      method: 'PATCH',
+      body: { currentPassword, newPassword },
+    });
+  },
+
+  async updateProfileImage(file: UploadFileInput) {
+    const formData = new FormData();
+    formData.append('profileImage', file as any);
+
+    return apiClient.request<UserProfileResponse>('/api/v1/users/me/profile-image', {
+      method: 'PATCH',
+      body: formData,
+      timeoutMs: 60000,
+    });
+  },
+
+  async deleteMe() {
+    const response = await apiClient.request<SimpleMessageResponse>('/api/v1/users/me', {
+      method: 'DELETE',
+    });
+
+    await tokenStore.clear();
+    return response;
   },
 };

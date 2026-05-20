@@ -11,9 +11,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { useSafeBack } from '@/components/use-safe-back';
 import { adminApi } from '@/services/api';
 import type { OwnerApplicationDetailResponse, OwnerApplicationSummaryResponse } from '@/services/api/owner';
 
@@ -84,6 +85,7 @@ function HistoryCard({
 }
 
 type ApplicationCardMode = 'review' | 'registered';
+type ApplicationSection = 'review' | 'registered' | 'rejected';
 
 function ApplicationCard({
   item,
@@ -94,6 +96,7 @@ function ApplicationCard({
   onReject,
   isApproving,
   isRejecting,
+  showActions = true,
 }: {
   item: OwnerApplicationSummaryResponse;
   mode: ApplicationCardMode;
@@ -103,6 +106,7 @@ function ApplicationCard({
   onReject: () => void;
   isApproving?: boolean;
   isRejecting?: boolean;
+  showActions?: boolean;
 }) {
   const isRegistered = mode === 'registered';
   const tagLabel = isRegistered ? '등록 완료' : item.requestStatus;
@@ -138,44 +142,52 @@ function ApplicationCard({
         <TouchableOpacity style={styles.secondaryButton} onPress={onSelect} activeOpacity={0.85}>
           <Text style={styles.secondaryButtonText}>상세 보기</Text>
         </TouchableOpacity>
-        {isRegistered ? (
-          <View style={styles.registeredButton}>
-            <Text style={styles.registeredButtonText}>매장 등록 된 곳</Text>
-          </View>
+        {showActions ? (
+          isRegistered ? (
+            <View style={styles.registeredButton}>
+              <Text style={styles.registeredButtonText}>매장 등록 된 곳</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.primaryButton, isApproving ? styles.primaryButtonDisabled : null]}
+              onPress={onApprove}
+              activeOpacity={0.85}
+              disabled={Boolean(isApproving)}
+            >
+              {isApproving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>매장 등록</Text>
+              )}
+            </TouchableOpacity>
+          )
         ) : (
-          <TouchableOpacity
-            style={[styles.primaryButton, isApproving ? styles.primaryButtonDisabled : null]}
-            onPress={onApprove}
-            activeOpacity={0.85}
-            disabled={Boolean(isApproving)}
-          >
-            {isApproving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>매장 등록</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.registeredButton}>
+            <Text style={styles.registeredButtonText}>처리 내역</Text>
+          </View>
         )}
       </View>
 
-      <TouchableOpacity
-        style={[styles.dangerButton, isRejecting ? styles.primaryButtonDisabled : null]}
-        onPress={onReject}
-        activeOpacity={0.85}
-        disabled={Boolean(isRejecting)}
-      >
-        {isRejecting ? (
-          <ActivityIndicator color="#dc2626" />
-        ) : (
-          <Text style={styles.dangerButtonText}>삭제</Text>
-        )}
-      </TouchableOpacity>
+      {showActions ? (
+        <TouchableOpacity
+          style={[styles.dangerButton, isRejecting ? styles.primaryButtonDisabled : null]}
+          onPress={onReject}
+          activeOpacity={0.85}
+          disabled={Boolean(isRejecting)}
+        >
+          {isRejecting ? (
+            <ActivityIndicator color="#dc2626" />
+          ) : (
+            <Text style={styles.dangerButtonText}>삭제</Text>
+          )}
+        </TouchableOpacity>
+      ) : null}
     </TouchableOpacity>
   );
 }
 
 export default function AdminOwnerApplicationsScreen() {
-  const router = useRouter();
+  const goBack = useSafeBack('/views/user_login');
   const [applications, setApplications] = useState<OwnerApplicationSummaryResponse[]>([]);
   const [selectedApplicationId, setSelectedApplicationId] = useState<number | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<OwnerApplicationDetailResponse | null>(null);
@@ -183,6 +195,7 @@ export default function AdminOwnerApplicationsScreen() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isApproving, setIsApproving] = useState<number | null>(null);
   const [isRejecting, setIsRejecting] = useState<number | null>(null);
+  const [activeSection, setActiveSection] = useState<ApplicationSection>('review');
 
   const selectedApplication = useMemo(
     () => applications.find((item) => item.applicationId === selectedApplicationId) ?? null,
@@ -192,10 +205,25 @@ export default function AdminOwnerApplicationsScreen() {
     () => applications.filter((item) => item.requestStatus === 'APPROVED'),
     [applications]
   );
-  const reviewApplications = useMemo(
-    () => applications.filter((item) => item.requestStatus !== 'APPROVED'),
+  const rejectedApplications = useMemo(
+    () => applications.filter((item) => item.requestStatus === 'REJECTED'),
     [applications]
   );
+  const reviewApplications = useMemo(
+    () => applications.filter((item) => item.requestStatus === 'PENDING' || item.requestStatus === 'UNDER_REVIEW'),
+    [applications]
+  );
+  const visibleApplications = useMemo(() => {
+    if (activeSection === 'registered') return registeredApplications;
+    if (activeSection === 'rejected') return rejectedApplications;
+    return reviewApplications;
+  }, [activeSection, registeredApplications, rejectedApplications, reviewApplications]);
+  const visibleSectionTitle = activeSection === 'registered'
+    ? '등록 완료'
+    : activeSection === 'rejected'
+      ? '반려/삭제'
+      : '검토 중';
+  const visibleSectionCount = visibleApplications.length;
 
   const loadApplications = useCallback(async () => {
     try {
@@ -283,7 +311,7 @@ export default function AdminOwnerApplicationsScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.hero}>
             <View style={styles.heroTopRow}>
-              <TouchableOpacity onPress={() => router.replace('/views/user_login')} style={styles.backButton} activeOpacity={0.8}>
+              <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
                 <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
               </TouchableOpacity>
               <TouchableOpacity onPress={loadApplications} style={styles.refreshButton} activeOpacity={0.85}>
@@ -306,7 +334,7 @@ export default function AdminOwnerApplicationsScreen() {
               </View>
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryValue}>
-                  {applications.filter((item) => item.requestStatus === 'APPROVED').length}
+                  {registeredApplications.length}
                 </Text>
                 <Text style={styles.summaryLabel}>등록 완료</Text>
               </View>
@@ -324,52 +352,68 @@ export default function AdminOwnerApplicationsScreen() {
             </View>
           ) : (
             <View style={styles.sectionBlocks}>
+              <View style={styles.sectionTabs}>
+                <TouchableOpacity
+                  style={[styles.sectionTab, activeSection === 'review' ? styles.sectionTabActive : null]}
+                  onPress={() => setActiveSection('review')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionTabText, activeSection === 'review' ? styles.sectionTabTextActive : null]}>
+                    검토 중
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sectionTab, activeSection === 'registered' ? styles.sectionTabActive : null]}
+                  onPress={() => setActiveSection('registered')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionTabText, activeSection === 'registered' ? styles.sectionTabTextActive : null]}>
+                    등록 완료
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sectionTab, activeSection === 'rejected' ? styles.sectionTabActive : null]}
+                  onPress={() => setActiveSection('rejected')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionTabText, activeSection === 'rejected' ? styles.sectionTabTextActive : null]}>
+                    반려/삭제
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.listSection}>
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitle}>검토 중인 신청</Text>
-                  <Text style={styles.sectionMore}>{reviewApplications.length}개</Text>
+                  <Text style={styles.sectionTitle}>{visibleSectionTitle}</Text>
+                  <Text style={styles.sectionMore}>{visibleSectionCount}개</Text>
                 </View>
-                {reviewApplications.length === 0 ? (
+                {visibleApplications.length === 0 ? (
                   <View style={styles.emptyCard}>
-                    <Text style={styles.emptyText}>검토 중인 신청이 없어요.</Text>
+                    <Text style={styles.emptyText}>
+                      {activeSection === 'review'
+                        ? '검토 중인 신청이 없어요.'
+                        : activeSection === 'registered'
+                          ? '등록 완료된 신청이 없어요.'
+                          : '반려/삭제된 신청이 없어요.'}
+                    </Text>
                   </View>
                 ) : (
-                  reviewApplications.map((application) => (
+                  visibleApplications.map((application) => (
                     <ApplicationCard
                       key={application.applicationId}
                       item={application}
-                      mode="review"
+                      mode={activeSection === 'registered' ? 'registered' : 'review'}
                       isSelected={application.applicationId === selectedApplicationId}
                       onSelect={() => setSelectedApplicationId(application.applicationId)}
                       onApprove={() => void handleApprove(application.applicationId)}
                       onReject={() => void handleReject(application.applicationId)}
                       isApproving={isApproving === application.applicationId}
                       isRejecting={isRejecting === application.applicationId}
+                      showActions={activeSection !== 'rejected'}
                     />
                   ))
                 )}
               </View>
-
-              {registeredApplications.length > 0 ? (
-                <View style={styles.listSection}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionTitle}>매장 등록 된 곳</Text>
-                    <Text style={styles.sectionMore}>{registeredApplications.length}개</Text>
-                  </View>
-                  {registeredApplications.map((application) => (
-                    <ApplicationCard
-                      key={application.applicationId}
-                      item={application}
-                      mode="registered"
-                      isSelected={application.applicationId === selectedApplicationId}
-                      onSelect={() => setSelectedApplicationId(application.applicationId)}
-                      onApprove={() => void handleApprove(application.applicationId)}
-                      onReject={() => void handleReject(application.applicationId)}
-                      isRejecting={isRejecting === application.applicationId}
-                    />
-                  ))}
-                </View>
-              ) : null}
             </View>
           )}
 
@@ -525,6 +569,33 @@ const styles = StyleSheet.create({
   emptyTitle: { color: '#0f172a', fontSize: 16, fontWeight: '900', marginBottom: 6 },
   emptyText: { color: '#64748b', fontSize: 13, lineHeight: 18 },
   sectionBlocks: { gap: 16, marginBottom: 16 },
+  sectionTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  sectionTab: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTabActive: {
+    borderColor: '#0ea5a4',
+    backgroundColor: '#e6fbfa',
+  },
+  sectionTabText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sectionTabTextActive: {
+    color: '#0ea5a4',
+  },
   listSection: { gap: 12, marginBottom: 16 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   applicationCard: {

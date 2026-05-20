@@ -14,11 +14,10 @@ const NAV_ITEMS: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   route: Href;
-  replace?: boolean;
 }[] = [
-  { key: 'home', label: '홈', icon: 'home', route: '/', replace: true },
+  { key: 'home', label: '홈', icon: 'home', route: '/' },
   { key: 'map', label: '지도', icon: 'location-outline', route: '/map' },
-  { key: 'list', label: '리스트', icon: 'list', route: '/list' },
+  { key: 'list', label: '마이지도', icon: 'map-outline', route: '/list' },
   { key: 'saved', label: '저장', icon: 'heart-outline', route: '/saved' },
   { key: 'my', label: '마이', icon: 'person-outline', route: '/my' },
 ];
@@ -40,12 +39,7 @@ export function AppBottomNav({ activeTab }: AppBottomNavProps) {
                 return;
               }
 
-              if (item.replace) {
-                router.replace(item.route);
-                return;
-              }
-
-                router.push(item.route);
+              router.navigate(item.route);
             }}
             activeOpacity={0.85}
           >

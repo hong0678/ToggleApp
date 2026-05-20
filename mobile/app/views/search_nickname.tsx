@@ -141,7 +141,16 @@ export default function SearchNicknameScreen() {
                         key={item.publicMapUuid}
                         style={styles.resultCard}
                         activeOpacity={0.85}
-                        onPress={() => Alert.alert('공개 마이지도', `지도 ID: ${item.publicMapUuid}`)}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/views/public_map_detail',
+                            params: {
+                              uuid: item.publicMapUuid,
+                              title: item.title ?? '',
+                              nickname: item.nickname,
+                            },
+                          })
+                        }
                       >
                         <View style={styles.resultAvatar}>
                           <Ionicons name="person" size={22} color="#fff" />
@@ -178,8 +187,8 @@ export default function SearchNicknameScreen() {
               </View>
             ) : (
               <LoginGatePanel
-                onLogin={() => router.push('/views/user_login')}
-                onSignup={() => router.push('/views/user_signup')}
+                onLogin={() => router.replace('/views/user_login')}
+                onSignup={() => router.replace('/views/user_signup')}
               />
             )}
           </ScrollView>

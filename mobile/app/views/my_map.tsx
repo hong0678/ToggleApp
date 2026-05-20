@@ -1,132 +1,35 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
   SafeAreaView,
   ScrollView,
-  Image,
-  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { authApi, myMapApi, storesApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
+import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
+import { PageHero } from '@/components/page-hero';
+import { ApiClientError, authApi, tokenStore, userMapsApi } from '@/services/api';
 
-function StatCard({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={styles.statCard}>
-      <View style={styles.statIconWrap}>
-        <Ionicons name={icon} size={18} color="#0ea5a4" />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
 
-function ActionCard({
-  title,
-  subtitle,
-  icon,
-  onPress,
-}: {
-  title: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.9}>
-      <View style={styles.actionIconWrap}>
-        <Ionicons name={icon} size={22} color="#0ea5a4" />
-      </View>
-      <View style={styles.actionTextWrap}>
-        <Text style={styles.actionTitle}>{title}</Text>
-        <Text style={styles.actionSubtitle}>{subtitle}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
-    </TouchableOpacity>
-  );
-}
-
-function SavedStoreCard({
-  place,
-  onPressDetail,
-  onPressReviews,
-}: {
-  place: StoreLookupItemResponse;
-  onPressDetail: () => void;
-  onPressReviews: () => void;
-}) {
-  const isServiceStore = Boolean(
-    place.verified
-    || place.liveBusinessStatus
-    || place.businessStatus
-    || place.operationalState
-    || place.ownerNotice
-    || place.openTime
-    || place.closeTime
-    || place.breakStart
-    || place.breakEnd
-    || place.menuEligible
-    || place.menuEditable
-    || (place.imageUrls?.length ?? 0) > 0
-  );
-
-  return (
-    <View style={styles.savedStoreCard}>
-      <View style={styles.savedStoreTopRow}>
-        <View style={styles.savedStoreBadge}>
-          <Ionicons name="bookmark-outline" size={14} color="#0ea5a4" />
-          <Text style={styles.savedStoreBadgeText}>{place.categoryName ?? '저장한 장소'}</Text>
-        </View>
-        <Text style={styles.savedStoreCountText}>찜 {place.favoriteCount}</Text>
-      </View>
-      <Text style={styles.savedStoreName}>{place.name}</Text>
-      <Text style={styles.savedStoreAddress}>
-        {place.roadAddress ?? place.address ?? place.jibunAddress ?? '주소 정보 없음'}
-      </Text>
-      <View style={styles.savedStoreMetaRow}>
-        <View style={styles.savedStoreMetaItem}>
-          <Ionicons name="heart" size={12} color="#ff4d74" />
-          <Text style={styles.savedStoreMetaText}>{place.reviewCount}개 리뷰</Text>
-        </View>
-        <View style={styles.savedStoreMetaItem}>
-          <Ionicons name="location-outline" size={12} color="#94a3b8" />
-          <Text style={styles.savedStoreMetaText}>
-            {place.liveBusinessStatus ?? place.businessStatus ?? (isServiceStore ? place.operationalState ?? '우리 서비스 매장' : '상태 정보 없음')}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.savedStoreActionRow}>
-        {isServiceStore ? (
-          <TouchableOpacity style={styles.savedStoreDetailButton} onPress={onPressDetail} activeOpacity={0.9}>
-            <Text style={styles.savedStoreDetailButtonText}>상세 보기</Text>
-            <Ionicons name="chevron-forward" size={14} color="#2563eb" />
-          </TouchableOpacity>
-        ) : null}
-        {isServiceStore ? (
-          <TouchableOpacity style={styles.savedStoreActionButton} onPress={onPressReviews} activeOpacity={0.9}>
-            <Text style={styles.savedStoreActionButtonText}>리뷰 보기</Text>
-            <Ionicons name="chevron-forward" size={14} color="#0ea5a4" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    </View>
-  );
-}
+const resolveAssetUrl = (value?: string | null) => {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
+};
 
 function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
   return (
@@ -134,8 +37,8 @@ function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: 
       <View style={styles.gateIconWrap}>
         <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
       </View>
-      <Text style={styles.gateTitle}>내 지도를 보려면 로그인하세요</Text>
-      <Text style={styles.gateSubtitle}>저장한 장소와 공개 지도를 확인하고 관리할 수 있어요.</Text>
+      <Text style={styles.gateTitle}>로그인이 필요해요</Text>
+      <Text style={styles.gateSubtitle}>내 지도, 저장한 장소, 내정보 수정을 사용하려면 먼저 로그인해주세요.</Text>
       <View style={styles.gateButtons}>
         <TouchableOpacity style={styles.gateSecondaryButton} onPress={onLogin} activeOpacity={0.9}>
           <Text style={styles.gateSecondaryButtonText}>로그인</Text>
@@ -148,35 +51,109 @@ function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: 
   );
 }
 
+function StatCard({
+  icon,
+  value,
+  label,
+  tone = 'teal',
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: number;
+  label: string;
+  tone?: 'teal' | 'pink' | 'violet';
+}) {
+  const isPink = tone === 'pink';
+  const isViolet = tone === 'violet';
+
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrap, isPink && styles.statIconPink, isViolet && styles.statIconViolet]}>
+        <Ionicons name={icon} size={22} color={isPink ? '#ef4b7a' : isViolet ? '#8b5cf6' : '#0ea5a4'} />
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function MenuRow({
+  icon,
+  title,
+  subtitle,
+  tone = 'teal',
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  tone?: 'teal' | 'pink' | 'violet' | 'red';
+  onPress: () => void;
+}) {
+  const iconColor = tone === 'pink' ? '#ef4b7a' : tone === 'violet' ? '#8b5cf6' : tone === 'red' ? '#ef4444' : '#0ea5a4';
+
+  return (
+    <TouchableOpacity style={styles.menuRow} onPress={onPress} activeOpacity={0.86}>
+      <View style={[styles.menuIconWrap, tone === 'pink' && styles.menuIconPink, tone === 'violet' && styles.menuIconViolet, tone === 'red' && styles.menuIconRed]}>
+        <Ionicons name={icon} size={21} color={iconColor} />
+      </View>
+      <View style={styles.menuTextWrap}>
+        <Text style={styles.menuTitle}>{title}</Text>
+        <Text style={styles.menuSubtitle}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#64748b" />
+    </TouchableOpacity>
+  );
+}
+
+type EditMode = 'nickname' | 'password' | 'profileImage' | null;
+
 export default function MyMapScreen() {
   const router = useRouter();
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
+
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [accountRole, setAccountRole] = useState<'USER' | 'OWNER' | 'ADMIN' | null>(null);
-  const [storeCount, setStoreCount] = useState(0);
-  const [publicCount, setPublicCount] = useState(0);
   const [displayName, setDisplayName] = useState<string | null>(null);
-  const [savedStores, setSavedStores] = useState<StoreLookupItemResponse[]>([]);
+  const [nicknameDraft, setNicknameDraft] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [savedPlaceCount, setSavedPlaceCount] = useState(0);
+  const [myMapCount, setMyMapCount] = useState(0);
+  const [receivedLikeCount, setReceivedLikeCount] = useState(0);
 
-  const loadMyMapState = useCallback(async () => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [savingKey, setSavingKey] = useState<'nickname' | 'password' | 'image' | 'delete' | null>(null);
+  const [isInfoMenuVisible, setIsInfoMenuVisible] = useState(false);
+  const [activeEditMode, setActiveEditMode] = useState<EditMode>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+
+  const profileImageSource = resolveAssetUrl(profileImageUrl);
+
+  const loadProfileState = useCallback(async () => {
+    setIsLoading(true);
     const token = await tokenStore.getAccessToken();
     const loggedIn = Boolean(token);
     setIsLoggedIn(loggedIn);
 
     if (!loggedIn) {
-      setStoreCount(0);
-      setPublicCount(0);
-      setDisplayName(null);
       setAccountRole(null);
-      setSavedStores([]);
+      setDisplayName(null);
+      setNicknameDraft('');
+      setProfileImageUrl(null);
+      setSavedPlaceCount(0);
+      setMyMapCount(0);
+      setReceivedLikeCount(0);
+      setIsLoading(false);
       return;
     }
 
     try {
-      const [meResponse, myMapResponse] = await Promise.all([
+      const [meResponse, mapsResponse] = await Promise.all([
         authApi.me(),
-        myMapApi.get(),
+        userMapsApi.list().catch(() => []),
       ]);
 
       if (meResponse.role === 'ADMIN') {
@@ -186,34 +163,24 @@ export default function MyMapScreen() {
 
       setAccountRole(meResponse.role ?? null);
       setDisplayName(meResponse.displayName ?? meResponse.nickname ?? null);
-      setStoreCount(myMapResponse.stores.length);
-      setPublicCount(myMapResponse.publics.length);
-
-      if (myMapResponse.stores.length > 0) {
-        try {
-          const storeResponse = await storesApi.listByIds(myMapResponse.stores);
-          setSavedStores(storeResponse.stores);
-        } catch {
-          setSavedStores([]);
-        }
-      } else {
-        setSavedStores([]);
-      }
-    } catch {
-      setStoreCount(0);
-      setPublicCount(0);
-      setDisplayName(null);
+      setNicknameDraft(meResponse.nickname ?? '');
+      setProfileImageUrl(meResponse.profileImageUrl ?? null);
+      setSavedPlaceCount((meResponse.favorites?.stores ?? []).length);
+      setMyMapCount(mapsResponse.length);
+      setReceivedLikeCount(mapsResponse.reduce((sum, map) => sum + (map.likeCount ?? 0), 0));
+    } catch (error) {
+      setIsLoggedIn(false);
       setAccountRole(null);
-      setSavedStores([]);
+      setDisplayName(null);
+      setNicknameDraft('');
+      setProfileImageUrl(null);
+      Alert.alert('내 정보 불러오기 실패', error instanceof Error ? error.message : '내 정보를 불러오지 못했어요.');
+    } finally {
+      setIsLoading(false);
     }
   }, [router]);
 
-  const handleAccountButtonPress = useCallback(async () => {
-    if (!isLoggedIn) {
-      router.push('/views/user_login');
-      return;
-    }
-
+  const handleLogout = useCallback(async () => {
     try {
       await authApi.logout();
     } catch {
@@ -221,19 +188,139 @@ export default function MyMapScreen() {
     } finally {
       setIsLoggedIn(false);
       setAccountRole(null);
-      setDisplayName(null);
-      setStoreCount(0);
-      setPublicCount(0);
-      setSavedStores([]);
       router.replace('/views/user_login');
     }
-  }, [isLoggedIn, router]);
+  }, [router]);
+
+  const getErrorMessage = useCallback((error: unknown, fallback: string) => {
+    if (error instanceof ApiClientError) return error.message;
+    if (error instanceof Error) return error.message;
+    return fallback;
+  }, []);
+
+  const handleSaveNickname = useCallback(async () => {
+    const nickname = nicknameDraft.trim();
+    if (nickname.length < 2 || nickname.length > 30) {
+      Alert.alert('닉네임 확인', '닉네임은 2글자 이상 30글자 이하로 입력해주세요.');
+      return;
+    }
+
+    setSavingKey('nickname');
+    try {
+      const response = await authApi.updateNickname(nickname);
+      setDisplayName(response.nickname ?? nickname);
+      setNicknameDraft(response.nickname ?? nickname);
+      setProfileImageUrl(response.profileImageUrl ?? profileImageUrl);
+      setActiveEditMode(null);
+      Alert.alert('저장 완료', '닉네임을 수정했어요.');
+    } catch (error) {
+      Alert.alert('닉네임 수정 실패', getErrorMessage(error, '닉네임을 수정하지 못했어요.'));
+    } finally {
+      setSavingKey(null);
+    }
+  }, [getErrorMessage, nicknameDraft, profileImageUrl]);
+
+  const handleChangePassword = useCallback(async () => {
+    if (!currentPassword) {
+      Alert.alert('비밀번호 확인', '현재 비밀번호를 입력해주세요.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert('비밀번호 확인', '새 비밀번호는 8자 이상으로 입력해주세요.');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      Alert.alert('비밀번호 확인', '새 비밀번호가 서로 일치하지 않습니다.');
+      return;
+    }
+
+    setSavingKey('password');
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setActiveEditMode(null);
+      Alert.alert('변경 완료', '비밀번호를 변경했어요.');
+    } catch (error) {
+      Alert.alert('비밀번호 변경 실패', getErrorMessage(error, '비밀번호를 변경하지 못했어요.'));
+    } finally {
+      setSavingKey(null);
+    }
+  }, [currentPassword, getErrorMessage, newPassword, newPasswordConfirm]);
+
+  const handleUpdateProfileImage = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      if (!file?.uri) {
+        Alert.alert('파일 선택 실패', '이미지 파일을 읽지 못했어요.');
+        return;
+      }
+
+      setSavingKey('image');
+      const response = await authApi.updateProfileImage({
+        uri: file.uri,
+        name: file.name ?? 'profile-image.jpg',
+        type: file.mimeType ?? 'image/jpeg',
+      });
+
+      setProfileImageUrl(response.profileImageUrl ?? null);
+      setDisplayName(response.nickname ?? displayName);
+      setActiveEditMode(null);
+      Alert.alert('저장 완료', '프로필 이미지를 수정했어요.');
+    } catch (error) {
+      Alert.alert('프로필 이미지 수정 실패', getErrorMessage(error, '프로필 이미지를 수정하지 못했어요.'));
+    } finally {
+      setSavingKey(null);
+    }
+  }, [displayName, getErrorMessage]);
+
+  const handleDeleteAccount = useCallback(() => {
+    setIsInfoMenuVisible(false);
+    Alert.alert('회원탈퇴', '정말 회원탈퇴를 진행하시겠습니까? 이 작업은 되돌릴 수 없어요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '탈퇴하기',
+        style: 'destructive',
+        onPress: async () => {
+          setSavingKey('delete');
+          try {
+            await authApi.deleteMe();
+            Alert.alert('탈퇴 완료', '계정이 삭제되었습니다.');
+            router.replace('/views/user_login');
+          } catch (error) {
+            Alert.alert('회원탈퇴 실패', getErrorMessage(error, '회원탈퇴를 처리하지 못했어요.'));
+          } finally {
+            setSavingKey(null);
+          }
+        },
+      },
+    ]);
+  }, [getErrorMessage, router]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadMyMapState();
-    }, [loadMyMapState])
+      void loadProfileState();
+    }, [loadProfileState])
   );
+
+  const openEditMode = useCallback((mode: Exclude<EditMode, null>) => {
+    setIsInfoMenuVisible(false);
+    setActiveEditMode(mode);
+  }, []);
+
+  const closeEditMode = useCallback(() => {
+    setActiveEditMode(null);
+  }, []);
+  const closePreview = useCallback(() => setPreviewImageUrl(null), []);
 
   return (
     <>
@@ -241,187 +328,298 @@ export default function MyMapScreen() {
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            <View style={styles.heroShell}>
-              <View style={styles.topRow}>
-                <View style={styles.brand}>
-                  <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
-                  <View style={styles.brandCopy}>
-                    <Text style={styles.brandTitle}>Toggle</Text>
-                    <Text style={styles.brandSubtitle}>내 지도와 공개 정보를 한 번에 관리해요</Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={styles.profileButton} onPress={() => void handleAccountButtonPress()} activeOpacity={0.85}>
-                  <Ionicons name={isLoggedIn ? 'log-out-outline' : 'log-in-outline'} size={16} color="#0ea5a4" />
-                  <Text style={styles.profileButtonText}>{isLoggedIn ? '로그아웃' : '로그인'}</Text>
-                </TouchableOpacity>
+            {isLoading ? (
+              <View style={styles.loadingCard}>
+                <ActivityIndicator color="#0ea5a4" />
+                <Text style={styles.loadingText}>내 정보를 불러오는 중이에요</Text>
               </View>
-
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroTitle}>
-                  <Text style={styles.heroAccent}>나만의 </Text>지도
-                </Text>
-                <Text style={styles.heroSubtitle}>
-                  {displayName
-                    ? `${displayName}님, 저장한 장소와 공개 지도를 손쉽게 정리해보세요`
-                    : '저장한 장소와 공개 지도를 손쉽게 정리해보세요'}
-                </Text>
-              </View>
-            </View>
-
-            {!isLoggedIn ? (
-              <LoginGatePanel
-                onLogin={() => router.push('/views/user_login')}
-                onSignup={() => router.push('/views/user_signup')}
-              />
+            ) : !isLoggedIn ? (
+            <LoginGatePanel
+                onLogin={() => router.replace('/views/user_login')}
+                onSignup={() => router.replace('/views/user_signup')}
+            />
             ) : (
               <>
-                <View style={styles.statRow}>
-                  <StatCard label="저장한 장소" value={String(storeCount)} icon="bookmark-outline" />
-                  <StatCard label="공개 지도" value={String(publicCount)} icon="globe-outline" />
-                  <StatCard label="최근 저장" value="0" icon="time-outline" />
-                </View>
+                <PageHero
+                  title="마이페이지"
+                  subtitle="나의 활동과 설정을 한눈에 확인해요"
+                  rightIcon="log-out-outline"
+                  rightIconColor="#0ea5a4"
+                  rightIconBackground="#e6fbfa"
+                  onRightPress={() => void handleLogout()}
+                />
 
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionHeaderLeft}>
-                    <Ionicons name="bookmark-outline" size={18} color="#0ea5a4" />
-                    <Text style={styles.sectionTitle}>내 지도</Text>
-                  </View>
-                  <Text style={styles.sectionMore}>보기</Text>
-                </View>
-
-                <View style={styles.mapCard}>
-                  <View style={styles.mapChip}>
-                    <Ionicons name="bookmark-outline" size={14} color="#0ea5a4" />
-                    <Text style={styles.mapChipText}>내 지도</Text>
-                  </View>
-                  <View style={styles.mapPreview}>
-                    <Image source={require('@/assets/images/목지도.png')} style={styles.mapPreviewImage} />
-                    <View style={styles.mapBackdropGlow} />
-                    <View style={[styles.pin, styles.pinLeftTop]}>
-                      <Ionicons name="heart" size={10} color="#ff4d74" />
-                    </View>
-                    <View style={[styles.pin, styles.pinCenter]}>
-                      <View style={styles.centerDotOuter}>
-                        <View style={styles.centerDotInner} />
+                <View style={styles.profileHero}>
+                  <View style={styles.heroContent}>
+                    <TouchableOpacity
+                      style={styles.avatarCircle}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        if (profileImageSource) {
+                          setPreviewImageUrl(profileImageSource);
+                        }
+                      }}
+                      disabled={!profileImageSource}
+                    >
+                      {profileImageSource ? (
+                        <Image source={{ uri: profileImageSource }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarLetter}>{(displayName || nicknameDraft || 'T').trim().charAt(0).toUpperCase()}</Text>
+                      )}
+                      <View style={styles.avatarEditBadge}>
+                        <Ionicons name="pencil" size={11} color="#0ea5a4" />
                       </View>
+                    </TouchableOpacity>
+                    <View style={styles.heroTextWrap}>
+                      <Text style={styles.heroName}>{displayName || nicknameDraft || 'Toggle'}님</Text>
+                      <Text style={styles.heroSubtitle}>나만의 장소를 기록하고 공유해보세요</Text>
                     </View>
-                    <View style={[styles.pin, styles.pinRightTop]}>
-                      <Ionicons name="heart" size={10} color="#ff4d74" />
-                    </View>
-                    <View style={styles.mapHalo} />
                   </View>
-                  <View style={styles.mapFooter}>
-                    <View>
-                      <Text style={styles.mapFooterTitle}>나만의 지도 {storeCount}개</Text>
-                      <Text style={styles.mapFooterSub}>좋아하는 장소를 모아보세요</Text>
-                    </View>
-                    <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
-                      <Text style={styles.mapFooterButtonText}>지도 관리</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+                  <View style={styles.heroButtonRow}>
+                    <TouchableOpacity style={styles.heroPrimaryButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
+                      <Ionicons name="map-outline" size={18} color="#fff" />
+                      <Text style={styles.heroPrimaryButtonText}>내 지도 보기</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.heroSecondaryButton} onPress={() => setIsInfoMenuVisible(true)} activeOpacity={0.9}>
+                      <Ionicons name="person-outline" size={18} color="#0ea5a4" />
+                      <Text style={styles.heroSecondaryButtonText}>프로필 수정</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.mapQuickAction} activeOpacity={0.9} onPress={() => router.push('/saved')}>
-                  <View style={styles.mapQuickActionLeft}>
-                    <View style={styles.mapQuickActionIcon}>
-                      <Ionicons name="library-outline" size={18} color="#0ea5a4" />
-                    </View>
-                    <View style={styles.mapQuickActionTextWrap}>
-                      <Text style={styles.mapQuickActionTitle}>내 지도 목록 보기</Text>
-                      <Text style={styles.mapQuickActionSubtitle}>저장한 장소와 코스를 한눈에 확인해요</Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
-                </TouchableOpacity>
+                <Text style={styles.sectionTitle}>내 활동 요약</Text>
+                <View style={styles.statsRow}>
+                  <StatCard icon="bookmark-outline" value={savedPlaceCount} label="저장한 장소" />
+                  <StatCard icon="map-outline" value={myMapCount} label="내 지도" />
+                  <StatCard icon="thumbs-up-outline" value={receivedLikeCount} label="좋아요 받은 수" tone="pink" />
+                </View>
+
+                <Text style={styles.sectionTitle}>주요 메뉴</Text>
+                <View style={styles.menuCard}>
+                  <MenuRow
+                    icon="map-outline"
+                    title="나만의 지도"
+                    subtitle="내가 만든 지도를 확인하고 관리해요"
+                    onPress={() => router.push('/list')}
+                  />
+                  <View style={styles.menuDivider} />
+                  <MenuRow
+                    icon="bookmark-outline"
+                    title="저장한 장소"
+                    subtitle="저장해둔 장소 목록을 확인해요"
+                    onPress={() => router.push('/saved')}
+                  />
+                  <View style={styles.menuDivider} />
+                  <MenuRow
+                    icon="thumbs-up-outline"
+                    title="내가 좋아요한 지도"
+                    subtitle="좋아요한 지도를 모아봤어요"
+                    tone="pink"
+                    onPress={() => Alert.alert('준비 중', '좋아요한 지도 목록 화면은 준비 중이에요.')}
+                  />
+                  <View style={styles.menuDivider} />
+                  <MenuRow
+                    icon="chatbubble-ellipses-outline"
+                    title="리뷰 관리"
+                    subtitle="내가 작성한 리뷰를 확인하고 수정해요"
+                    tone="violet"
+                    onPress={() => Alert.alert('준비 중', '내 리뷰 관리 화면은 준비 중이에요.')}
+                  />
+                </View>
 
                 {accountRole === 'OWNER' ? (
-                  <TouchableOpacity
-                    style={styles.ownerQuickAction}
-                    activeOpacity={0.9}
-                    onPress={() => router.push('/views/owner_dashboard')}
-                  >
-                    <View style={styles.mapQuickActionLeft}>
-                      <View style={styles.mapQuickActionIcon}>
-                        <Ionicons name="storefront-outline" size={18} color="#0ea5a4" />
-                      </View>
-                      <View style={styles.mapQuickActionTextWrap}>
-                        <Text style={styles.mapQuickActionTitle}>점주 페이지</Text>
-                        <Text style={styles.mapQuickActionSubtitle}>매장 관리 화면으로 바로 이동해요</Text>
-                      </View>
+                  <TouchableOpacity style={styles.ownerCard} onPress={() => router.push('/views/owner_dashboard')} activeOpacity={0.9}>
+                    <View style={styles.ownerIconWrap}>
+                      <Ionicons name="storefront-outline" size={24} color="#0ea5a4" />
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+                    <View style={styles.ownerTextWrap}>
+                      <Text style={styles.ownerTitle}>점주 페이지</Text>
+                      <Text style={styles.ownerSubtitle}>매장 알림과 운영 상태를 바로 확인해요</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={19} color="#64748b" />
                   </TouchableOpacity>
                 ) : null}
 
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionHeaderLeft}>
-                    <Ionicons name="heart" size={18} color="#0ea5a4" />
-                    <Text style={styles.sectionTitle}>저장한 장소</Text>
-                  </View>
-                  <Text style={styles.sectionMore}>{savedStores.length}개</Text>
+                <Text style={styles.sectionTitle}>설정</Text>
+                <View style={styles.menuCard}>
+                  <MenuRow
+                    icon="person-circle-outline"
+                    title="내정보 수정"
+                    subtitle="닉네임, 비밀번호, 프로필 이미지를 관리해요"
+                    onPress={() => setIsInfoMenuVisible(true)}
+                  />
                 </View>
-
-                {savedStores.length === 0 ? (
-                  <View style={styles.emptySavedCard}>
-                    <Text style={styles.emptySavedTitle}>저장한 장소가 아직 없어요</Text>
-                    <Text style={styles.emptySavedText}>지도에서 찜한 장소가 여기에 차곡차곡 보여요.</Text>
-                  </View>
-                ) : (
-                  <View style={styles.savedStoreList}>
-                    {savedStores.map((place) => (
-                      <SavedStoreCard
-                        key={place.storeId}
-                        place={place}
-                        onPressDetail={() =>
-                          router.push({
-                            pathname: '/views/store_detail',
-                            params: {
-                              storeId: String(place.storeId),
-                              storeName: place.name,
-                              storePhone: place.phone ?? '',
-                            },
-                          })
-                        }
-                        onPressReviews={() =>
-                          router.push({
-                            pathname: '/views/store_reviews',
-                            params: {
-                              storeId: String(place.storeId),
-                              storeName: place.name,
-                              storePhone: place.phone ?? '',
-                            },
-                          })
-                        }
-                      />
-                    ))}
-                  </View>
-                )}
-
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionHeaderLeft}>
-                    <Ionicons name="options-outline" size={18} color="#0ea5a4" />
-                    <Text style={styles.sectionTitle}>빠른 관리</Text>
-                  </View>
-                  <Text style={styles.sectionMore}>설정</Text>
-                </View>
-
-                <ActionCard
-                  title="공개 지도 설정"
-                  subtitle="내 지도를 다른 사람에게 보여줄지 정해요"
-                  icon="lock-closed-outline"
-                  onPress={() => router.push('/views/user_login')}
-                />
-                <ActionCard
-                  title="내 장소 추가"
-                  subtitle="좋아하는 장소를 지도에 담아보세요"
-                  icon="add-circle-outline"
-                  onPress={() => router.push('/map')}
-                />
               </>
             )}
           </ScrollView>
         </SafeAreaView>
+
+        <FullscreenImageViewer visible={Boolean(previewImageUrl)} uri={previewImageUrl} onClose={closePreview} title="프로필 사진" />
+
+        <Modal
+          visible={isInfoMenuVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setIsInfoMenuVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.bottomSheet}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>내정보 수정</Text>
+                  <Text style={styles.modalSubtitle}>수정할 항목을 선택해주세요.</Text>
+                </View>
+                <TouchableOpacity style={styles.modalCloseButton} onPress={() => setIsInfoMenuVisible(false)} activeOpacity={0.85}>
+                  <Ionicons name="close" size={20} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.menuCard}>
+                <MenuRow
+                  icon="person-outline"
+                  title="닉네임 수정"
+                  subtitle="앱에서 보이는 이름을 바꿔요"
+                  onPress={() => openEditMode('nickname')}
+                />
+                <View style={styles.menuDivider} />
+                <MenuRow
+                  icon="key-outline"
+                  title="비밀번호 변경"
+                  subtitle="현재 비밀번호 확인 후 변경해요"
+                  onPress={() => openEditMode('password')}
+                />
+                <View style={styles.menuDivider} />
+                <MenuRow
+                  icon="image-outline"
+                  title="프로필 이미지 수정"
+                  subtitle="이미지 파일을 선택해서 바꿔요"
+                  onPress={() => openEditMode('profileImage')}
+                />
+                <View style={styles.menuDivider} />
+                <MenuRow
+                  icon="trash-outline"
+                  title="회원탈퇴"
+                  subtitle="계정 삭제 전 한 번 더 확인해요"
+                  tone="red"
+                  onPress={handleDeleteAccount}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={activeEditMode !== null}
+          animationType="fade"
+          transparent
+          onRequestClose={closeEditMode}
+        >
+          <View style={styles.centerModalBackdrop}>
+            <View style={styles.centerModalCard}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>
+                    {activeEditMode === 'nickname'
+                      ? '닉네임 수정'
+                      : activeEditMode === 'password'
+                        ? '비밀번호 변경'
+                        : '프로필 이미지 수정'}
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    {activeEditMode === 'nickname'
+                      ? '새 닉네임을 입력해주세요.'
+                      : activeEditMode === 'password'
+                        ? '현재 비밀번호와 새 비밀번호를 입력해주세요.'
+                        : '프로필에 사용할 이미지를 선택해주세요.'}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.modalCloseButton} onPress={closeEditMode} activeOpacity={0.85}>
+                  <Ionicons name="close" size={20} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              {activeEditMode === 'nickname' ? (
+                <>
+                  <TextInput
+                    value={nicknameDraft}
+                    onChangeText={setNicknameDraft}
+                    placeholder="닉네임"
+                    placeholderTextColor="#94a3b8"
+                    style={styles.input}
+                  />
+                  <TouchableOpacity
+                    style={[styles.primaryButton, savingKey === 'nickname' && styles.disabledButton]}
+                    onPress={() => void handleSaveNickname()}
+                    disabled={savingKey === 'nickname'}
+                    activeOpacity={0.9}
+                  >
+                    {savingKey === 'nickname' ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
+                    <Text style={styles.primaryButtonText}>닉네임 저장</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
+
+              {activeEditMode === 'password' ? (
+                <>
+                  <TextInput
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    placeholder="현재 비밀번호"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry
+                    style={styles.input}
+                  />
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="새 비밀번호"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry
+                    style={styles.input}
+                  />
+                  <TextInput
+                    value={newPasswordConfirm}
+                    onChangeText={setNewPasswordConfirm}
+                    placeholder="새 비밀번호 확인"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry
+                    style={styles.input}
+                  />
+                  <TouchableOpacity
+                    style={[styles.primaryButton, savingKey === 'password' && styles.disabledButton]}
+                    onPress={() => void handleChangePassword()}
+                    disabled={savingKey === 'password'}
+                    activeOpacity={0.9}
+                  >
+                    {savingKey === 'password' ? <ActivityIndicator color="#fff" /> : <Ionicons name="lock-closed-outline" size={18} color="#fff" />}
+                    <Text style={styles.primaryButtonText}>비밀번호 변경</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
+
+              {activeEditMode === 'profileImage' ? (
+                <View style={styles.imageEditRow}>
+                  <View style={styles.imagePreview}>
+                    {profileImageSource ? (
+                      <Image source={{ uri: profileImageSource }} style={styles.imagePreviewPhoto} />
+                    ) : (
+                      <Ionicons name="person-outline" size={22} color="#0ea5a4" />
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.outlineButton, savingKey === 'image' && styles.disabledOutlineButton]}
+                    onPress={() => void handleUpdateProfileImage()}
+                    disabled={savingKey === 'image'}
+                    activeOpacity={0.9}
+                  >
+                    {savingKey === 'image' ? <ActivityIndicator color="#0ea5a4" /> : <Ionicons name="cloud-upload-outline" size={18} color="#0ea5a4" />}
+                    <Text style={styles.outlineButtonText}>이미지 선택</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
 
         {showInternalTabBar ? <AppBottomNav activeTab="my" /> : null}
       </View>
@@ -438,450 +636,57 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: Platform.OS === 'ios' ? 8 : 18,
-    paddingBottom: 26,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 10 : 18,
+    paddingBottom: 110,
   },
-  heroShell: {
+  pageHeroCard: {
     backgroundColor: '#fff',
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 12,
+    borderColor: '#d9eef0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
     shadowColor: '#0f172a',
     shadowOpacity: 0.05,
-    shadowRadius: 14,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  topRow: {
+  pageHeroRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 12,
   },
-  brand: {
+  pageHeroBrand: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
   },
-  logo: {
-    width: 50,
-    height: 50,
+  pageHeroLogo: {
+    width: 36,
+    height: 36,
     resizeMode: 'contain',
-    marginRight: 12,
   },
-  brandCopy: {
-    justifyContent: 'center',
-  },
-  brandTitle: {
-    color: '#0ea5a4',
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
-  brandSubtitle: {
-    marginTop: 2,
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  profileButton: {
-    minHeight: 40,
-    borderRadius: 20,
-    backgroundColor: '#e6fbfa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    gap: 6,
-  },
-  profileButtonText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
-  heroCopy: {
-    alignItems: 'flex-start',
-  },
-  heroTitle: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  heroAccent: {
-    color: '#0ea5a4',
-  },
-  heroSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    color: '#64748b',
-    lineHeight: 18,
-  },
-  statRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#dbeff0',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    alignItems: 'flex-start',
-  },
-  statIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#e6fbfa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  statValue: {
-    color: '#0f172a',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  statLabel: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  mapCard: {
-    marginTop: 16,
-    borderRadius: 24,
-    backgroundColor: '#f7fbff',
-    borderWidth: 1,
-    borderColor: '#eef2f7',
-    overflow: 'hidden',
-  },
-  mapChip: {
-    position: 'absolute',
-    left: 14,
-    top: 14,
-    zIndex: 2,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  mapChipText: {
-    color: '#0f172a',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  mapPreview: {
-    height: 180,
-    backgroundColor: '#eef7f7',
-    overflow: 'hidden',
-  },
-  mapPreviewImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-    opacity: 0.9,
-  },
-  mapBackdropGlow: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(230,251,250,0.24)',
-  },
-  pin: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  pinLeftTop: { left: 52, top: 36 },
-  pinCenter: { left: '50%', top: '50%', marginLeft: -18, marginTop: -18 },
-  pinRightTop: { right: 58, top: 38 },
-  centerDotOuter: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#e6fbfa',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerDotInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#0ea5a4',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  mapHalo: {
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    width: 120,
-    height: 120,
-    marginLeft: -60,
-    marginTop: -60,
-    borderRadius: 60,
-    backgroundColor: 'rgba(14,165,164,0.12)',
-  },
-  mapFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-  },
-  mapFooterTitle: {
-    color: '#0f172a',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  mapFooterSub: {
-    marginTop: 4,
-    color: '#64748b',
-    fontSize: 12,
-  },
-  mapFooterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: '#e6fbfa',
-  },
-  mapFooterButtonText: {
-    color: '#0ea5a4',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 18,
-    marginBottom: 12,
-  },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionTitle: {
-    color: '#0f172a',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  sectionMore: {
-    color: '#0ea5a4',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  mapQuickAction: {
-    marginTop: 14,
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#e6eef1',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  ownerQuickAction: {
-    marginTop: 12,
-    backgroundColor: '#f3fdfd',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#bfeceb',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  mapQuickActionLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minWidth: 0,
-  },
-  mapQuickActionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#e6fbfa',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapQuickActionTextWrap: {
+  pageHeroBrandText: {
     flex: 1,
     minWidth: 0,
   },
-  mapQuickActionTitle: {
-    color: '#0f172a',
-    fontSize: 14,
+  pageHeroBrandTitle: {
+    color: '#0ea5a4',
+    fontSize: 20,
     fontWeight: '900',
   },
-  mapQuickActionSubtitle: {
-    marginTop: 3,
+  pageHeroBrandSubtitle: {
     color: '#64748b',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  savedStoreList: {
-    gap: 10,
-    marginBottom: 8,
-  },
-  savedStoreCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#dbeff0',
-    padding: 14,
-  },
-  savedStoreTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  savedStoreBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#e6fbfa',
-  },
-  savedStoreBadgeText: {
-    color: '#0ea5a4',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  savedStoreCountText: {
-    color: '#64748b',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
-  savedStoreName: {
-    color: '#0f172a',
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 6,
-  },
-  savedStoreAddress: {
-    color: '#64748b',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  savedStoreMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  savedStoreMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  savedStoreMetaText: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  savedStoreActionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  savedStoreDetailButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#cfe0ff',
-    backgroundColor: '#f4f8ff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  savedStoreDetailButtonText: {
-    color: '#2563eb',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  savedStoreActionButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  savedStoreActionButtonText: {
-    color: '#0ea5a4',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  emptySavedCard: {
-    backgroundColor: '#f8fbfc',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#dbeff0',
-    padding: 16,
-  },
-  emptySavedTitle: {
-    color: '#0f172a',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  emptySavedText: {
-    color: '#64748b',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  actionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#e6eef1',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 10,
-  },
-  actionIconWrap: {
+  pageHeroAction: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -889,20 +694,549 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionTextWrap: {
+  pageHeroTitle: {
+    marginTop: 10,
+    color: '#0ea5a4',
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  pageHeroDescription: {
+    marginTop: 4,
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  loadingCard: {
+    minHeight: 180,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  profileHero: {
+    minHeight: 172,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#d9eef0',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 15,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  heroArtwork: {
+    position: 'absolute',
+    right: -10,
+    top: -4,
+    width: 160,
+    height: 120,
+    opacity: 0.9,
+  },
+  artworkDotA: {
+    position: 'absolute',
+    right: 22,
+    top: 28,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#9ee7ea',
+  },
+  artworkDotB: {
+    position: 'absolute',
+    right: 52,
+    top: 48,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#bfeceb',
+  },
+  artworkLineA: {
+    position: 'absolute',
+    right: 10,
+    top: 28,
+    width: 94,
+    height: 1.5,
+    backgroundColor: '#d9f5f4',
+    transform: [{ rotate: '18deg' }],
+  },
+  artworkLineB: {
+    position: 'absolute',
+    right: 20,
+    top: 44,
+    width: 110,
+    height: 1.5,
+    backgroundColor: '#d9f5f4',
+    transform: [{ rotate: '35deg' }],
+  },
+  artworkPin: {
+    position: 'absolute',
+    right: 18,
+    top: 28,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#d9f7f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingRight: 86,
+  },
+  avatarCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#5ed7dd',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  avatarLetter: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTextWrap: {
     flex: 1,
     minWidth: 0,
   },
-  actionTitle: {
+  heroName: {
+    color: '#0f172a',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  heroSubtitle: {
+    marginTop: 6,
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  heroButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 22,
+    paddingRight: 96,
+  },
+  heroPrimaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#19b7b8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  heroPrimaryButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  heroSecondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#b7c0cf',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  heroSecondaryButtonText: {
+    color: '#0ea5a4',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  heroLogoutButton: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    marginTop: 18,
+    marginBottom: 9,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statCard: {
+    flex: 1,
+    minHeight: 104,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e3edf2',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  statIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statIconPink: {
+    backgroundColor: '#fff1f4',
+  },
+  statIconViolet: {
+    backgroundColor: '#f3e8ff',
+  },
+  statValue: {
+    marginTop: 7,
+    color: '#0f172a',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  statLabel: {
+    marginTop: 3,
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  menuCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e3edf2',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  menuRow: {
+    minHeight: 66,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconPink: {
+    backgroundColor: '#fff1f4',
+  },
+  menuIconViolet: {
+    backgroundColor: '#f3e8ff',
+  },
+  menuIconRed: {
+    backgroundColor: '#fee2e2',
+  },
+  menuTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  menuTitle: {
     color: '#0f172a',
     fontSize: 14,
     fontWeight: '900',
   },
-  actionSubtitle: {
+  menuSubtitle: {
+    marginTop: 2,
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#edf3f6',
+    marginLeft: 54,
+  },
+  ownerCard: {
+    marginTop: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#9de7e4',
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  ownerIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ownerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  ownerTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  ownerSubtitle: {
+    marginTop: 4,
     color: '#64748b',
     fontSize: 12,
+    fontWeight: '700',
     lineHeight: 17,
-    marginTop: 2,
+  },
+  editSection: {
+    gap: 12,
+  },
+  editCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e3edf2',
+    backgroundColor: '#fff',
+    padding: 14,
+  },
+  editHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginBottom: 12,
+  },
+  editIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  editTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  dangerTitle: {
+    color: '#991b1b',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  editDescription: {
+    marginTop: 3,
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  input: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#dbe7ec',
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  primaryButton: {
+    minHeight: 48,
+    borderRadius: 24,
+    backgroundColor: '#0ea5a4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  outlineButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#81e4df',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  outlineButtonText: {
+    color: '#0ea5a4',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+  disabledOutlineButton: {
+    opacity: 0.6,
+  },
+  imageEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  imagePreview: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#e6fbfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  imagePreviewPhoto: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  dangerCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff',
+    padding: 14,
+  },
+  dangerButton: {
+    minHeight: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dangerButtonText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.42)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: '#f7fbfc',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 22,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 54,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#d8eef0',
+    marginBottom: 18,
+  },
+  centerModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  centerModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    padding: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 14,
+    marginBottom: 14,
+  },
+  modalTitle: {
+    color: '#0f172a',
+    fontSize: 21,
+    fontWeight: '900',
+  },
+  modalSubtitle: {
+    marginTop: 6,
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gateCard: {
     backgroundColor: '#fff',

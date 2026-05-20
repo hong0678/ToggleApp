@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import { useSafeBack } from '@/components/use-safe-back';
 import { ownerApi, tokenStore } from '@/services/api';
 
 type FieldKey =
@@ -108,6 +109,7 @@ function InputRow({
 
 export default function OwnerStoreRegisterScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [licenseFile, setLicenseFile] = useState<BusinessLicenseFile | null>(null);
@@ -278,7 +280,7 @@ export default function OwnerStoreRegisterScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
               <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
@@ -288,7 +290,7 @@ export default function OwnerStoreRegisterScreen() {
           </View>
 
           {!isLoggedIn ? (
-            <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+            <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
           ) : (
             <View style={styles.card}>
               <InputRow

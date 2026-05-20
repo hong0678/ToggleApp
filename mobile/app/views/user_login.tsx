@@ -16,12 +16,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Link } from 'expo-router';
+import { useSafeBack } from '@/components/use-safe-back';
 import { authApi } from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
 export default function UserLoginScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/');
   const [role, setRole] = useState<'user' | 'owner'>('user');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -65,7 +67,7 @@ export default function UserLoginScreen() {
   return (
     <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/')} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={28} color="#0ea5a4" />
         </TouchableOpacity>
 

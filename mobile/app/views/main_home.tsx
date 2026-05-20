@@ -238,9 +238,9 @@ export default function MainHomeScreen() {
               accentStyle={styles.shortcutA}
             />
             <ShortcutCard
-              title="주변 리스트"
-              subtitle="카드로 빠르게 비교해요"
-              icon="list"
+              title="마이지도"
+              subtitle="저장한 장소와 공개 지도"
+              icon="map-outline"
               onPress={() => router.push('/list')}
               accentStyle={styles.shortcutB}
             />
@@ -362,10 +362,12 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
   },
   heroShell: {
+    position: 'relative',
     backgroundColor: '#fff',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#dbeff0',
+    minHeight: 214,
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 12,
@@ -374,8 +376,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
+    overflow: 'hidden',
   },
   topRow: {
+    position: 'relative',
+    zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -417,6 +422,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroCopy: {
+    position: 'relative',
+    zIndex: 2,
     alignItems: 'flex-start',
   },
   heroTitle: {
@@ -435,6 +442,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   searchBar: {
+    position: 'relative',
+    zIndex: 2,
     marginTop: 14,
     height: 58,
     borderRadius: 29,
@@ -467,6 +476,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   shortcutGrid: {
+    position: 'relative',
+    zIndex: 2,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
@@ -511,6 +522,8 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   actionCard: {
+    position: 'relative',
+    zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -546,6 +559,8 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   mapCard: {
+    position: 'relative',
+    zIndex: 2,
     marginTop: 18,
     borderRadius: 24,
     backgroundColor: '#f7fbff',
@@ -667,6 +682,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   sectionHeader: {
+    position: 'relative',
+    zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -692,10 +709,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   horizontalCards: {
+    position: 'relative',
+    zIndex: 2,
     gap: 12,
     paddingBottom: 6,
   },
   peopleCards: {
+    position: 'relative',
+    zIndex: 2,
     gap: 12,
     paddingBottom: 6,
   },

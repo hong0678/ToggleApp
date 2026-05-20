@@ -15,6 +15,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
+import { OwnerStorePicker } from '@/components/owner-store-picker';
+import { useSafeBack } from '@/components/use-safe-back';
 import { filesApi, ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 
@@ -44,10 +47,12 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   );
 }
 
-function PhotoPreview({ uri, onRemove }: { uri: string; onRemove: () => void }) {
+function PhotoPreview({ uri, onRemove, onPress }: { uri: string; onRemove: () => void; onPress: () => void }) {
   return (
     <View style={styles.photoCard}>
-      <Image source={{ uri: resolveAssetUrl(uri) }} style={styles.photoImage} />
+      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
+        <Image source={{ uri: resolveAssetUrl(uri) }} style={styles.photoImage} />
+      </TouchableOpacity>
       <TouchableOpacity style={styles.photoRemoveButton} onPress={onRemove} activeOpacity={0.9}>
         <Ionicons name="close" size={14} color="#fff" />
       </TouchableOpacity>
@@ -57,6 +62,7 @@ function PhotoPreview({ uri, onRemove }: { uri: string; onRemove: () => void }) 
 
 export default function OwnerPhotosManageScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const { width: screenWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -65,6 +71,8 @@ export default function OwnerPhotosManageScreen() {
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewImageTitle, setPreviewImageTitle] = useState('매장 사진');
   const requestedStoreId = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   const photoCardWidth = Math.max(240, screenWidth - 76);
 
@@ -182,12 +190,17 @@ export default function OwnerPhotosManageScreen() {
   const handleRemovePhoto = (index: number) => {
     setPhotoUrls((current) => current.filter((_, photoIndex) => photoIndex !== index));
   };
+  const openPreview = (url: string, title = '매장 사진') => {
+    setPreviewImageUrl(url);
+    setPreviewImageTitle(title);
+  };
+  const closePreview = () => setPreviewImageUrl(null);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -197,7 +210,7 @@ export default function OwnerPhotosManageScreen() {
         </View>
 
         {!isLoggedIn ? (
-          <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+          <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#0ea5a4" />
@@ -211,49 +224,53 @@ export default function OwnerPhotosManageScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>연결된 매장</Text>
-              <View style={styles.storeChips}>
-                {stores.map((store) => {
-                  const active = selectedStoreId === store.storeId;
-                  return (
-                    <TouchableOpacity
-                      key={store.storeId}
-                      style={[styles.storeChip, active ? styles.storeChipActive : null]}
-                      activeOpacity={0.9}
-                      onPress={() => handleSelectStore(store.storeId)}
-                    >
-                      <Text style={[styles.storeChipText, active ? styles.storeChipTextActive : null]} numberOfLines={1}>
-                        {store.storeName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+            <OwnerStorePicker
+              stores={stores}
+              selectedStoreId={selectedStoreId}
+              selectedStore={selectedStore}
+              onSelect={handleSelectStore}
+            />
 
+            <View style={styles.card}>
               <Text style={styles.sectionSubTitle}>현재 등록된 사진</Text>
               <Text style={styles.helperText}>여러 장을 등록하고, 필요 없는 사진은 지운 뒤 저장할 수 있어요.</Text>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                decelerationRate="fast"
-                snapToInterval={photoCardWidth + 12}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.photoPager}
-              >
-                {photoUrls.length === 0 ? (
-                  <View style={[styles.emptyPhotoCard, { width: photoCardWidth }]}>
-                    <Ionicons name="image-outline" size={20} color="#94a3b8" />
-                    <Text style={styles.emptyPhotoText}>등록된 사진이 없습니다.</Text>
-                  </View>
-                ) : (
-                  photoUrls.map((uri, index) => (
-                    <View key={`${uri}-${index}`} style={{ width: photoCardWidth, marginRight: 12 }}>
-                      <PhotoPreview uri={uri} onRemove={() => handleRemovePhoto(index)} />
+              <View style={styles.photoPagerWrap}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  decelerationRate="fast"
+                  snapToInterval={photoCardWidth + 12}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.photoPager}
+                >
+                  {photoUrls.length === 0 ? (
+                    <View style={[styles.emptyPhotoCard, { width: photoCardWidth }]}>
+                      <Ionicons name="image-outline" size={20} color="#94a3b8" />
+                      <Text style={styles.emptyPhotoText}>등록된 사진이 없습니다.</Text>
                     </View>
-                  ))
-                )}
-              </ScrollView>
+                  ) : (
+                    photoUrls.map((uri, index) => (
+                      <View key={`${uri}-${index}`} style={{ width: photoCardWidth, marginRight: 12 }}>
+                        <PhotoPreview
+                          uri={uri}
+                          onRemove={() => handleRemovePhoto(index)}
+                          onPress={() => openPreview(resolveAssetUrl(uri), selectedStore?.storeName ?? '매장 사진')}
+                        />
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+                {photoUrls.length > 1 ? (
+                  <>
+                    <View style={styles.photoNextHint}>
+                      <Ionicons name="chevron-forward" size={22} color="#0ea5a4" />
+                    </View>
+                    <View style={styles.photoCountBadge}>
+                      <Text style={styles.photoCountText}>{photoUrls.length}장</Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
 
               <TouchableOpacity style={styles.uploadButton} onPress={() => void handleUploadStorePhoto()} activeOpacity={0.9}>
                 <Ionicons name="image-outline" size={16} color="#0ea5a4" />
@@ -273,6 +290,7 @@ export default function OwnerPhotosManageScreen() {
           </>
         )}
       </ScrollView>
+      <FullscreenImageViewer visible={Boolean(previewImageUrl)} uri={previewImageUrl} onClose={closePreview} title={previewImageTitle} />
     </SafeAreaView>
   );
 }
@@ -369,8 +387,39 @@ const styles = StyleSheet.create({
   },
   storeChipText: { color: '#334155', fontSize: 13, fontWeight: '700' },
   storeChipTextActive: { color: '#0ea5a4' },
+  photoPagerWrap: {
+    position: 'relative',
+  },
   photoPager: {
     paddingVertical: 4,
+  },
+  photoNextHint: {
+    position: 'absolute',
+    right: 10,
+    top: '50%',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    marginTop: -17,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: '#bfeceb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoCountBadge: {
+    position: 'absolute',
+    left: 12,
+    bottom: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  photoCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
   },
   photoCard: {
     height: 220,

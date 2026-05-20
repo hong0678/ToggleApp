@@ -13,6 +13,8 @@ export type NearbySearchContext = {
   query: string | null;
   categoryLabel: string | null;
   categoryCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 let nearbyPlacesCache: NearbyPlaceCacheItem[] = [];
@@ -20,6 +22,8 @@ let nearbySearchContext: NearbySearchContext = {
   query: null,
   categoryLabel: null,
   categoryCode: null,
+  latitude: null,
+  longitude: null,
 };
 
 export const mapCache = {
@@ -37,9 +41,11 @@ export const mapCache = {
 
   setNearbySearchContext(context: Partial<NearbySearchContext>) {
     nearbySearchContext = {
-      query: context.query ?? nearbySearchContext.query,
-      categoryLabel: context.categoryLabel ?? nearbySearchContext.categoryLabel,
-      categoryCode: context.categoryCode ?? nearbySearchContext.categoryCode,
+      query: 'query' in context ? context.query ?? null : nearbySearchContext.query,
+      categoryLabel: 'categoryLabel' in context ? context.categoryLabel ?? null : nearbySearchContext.categoryLabel,
+      categoryCode: 'categoryCode' in context ? context.categoryCode ?? null : nearbySearchContext.categoryCode,
+      latitude: 'latitude' in context ? context.latitude ?? null : nearbySearchContext.latitude,
+      longitude: 'longitude' in context ? context.longitude ?? null : nearbySearchContext.longitude,
     };
   },
 
@@ -52,6 +58,8 @@ export const mapCache = {
       query: null,
       categoryLabel: null,
       categoryCode: null,
+      latitude: null,
+      longitude: null,
     };
   },
 };

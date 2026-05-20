@@ -1,5 +1,17 @@
 import { apiClient } from './client';
-import type { PublicMapSearchResponse, UserPublicMapResponse } from './types';
+import type {
+  MapLikeResponse,
+  PublicMapListResponse,
+  PublicMapSearchResponse,
+  UserPublicMapResponse,
+} from './types';
+
+type PublicMapListParams = {
+  keyword?: string;
+  sort?: 'latest' | 'likes';
+  page?: number;
+  size?: number;
+};
 
 export const publicMapsApi = {
   async search(nickname: string) {
@@ -8,9 +20,36 @@ export const publicMapsApi = {
     );
   },
 
+  async list(params: PublicMapListParams = {}) {
+    return apiClient.request<PublicMapListResponse>(`/api/v1/maps${apiClient.query({
+      keyword: params.keyword,
+      sort: params.sort ?? 'latest',
+      page: params.page ?? 0,
+      size: params.size ?? 12,
+    })}`);
+  },
+
   async get(publicMapUuid: string) {
     return apiClient.request<UserPublicMapResponse>(`/api/v1/public-maps/${publicMapUuid}`, {
       auth: false,
+    });
+  },
+
+  async getLikes(mapId: number) {
+    return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`, {
+      auth: false,
+    });
+  },
+
+  async like(mapId: number) {
+    return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`, {
+      method: 'POST',
+    });
+  },
+
+  async unlike(mapId: number) {
+    return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`, {
+      method: 'DELETE',
     });
   },
 };

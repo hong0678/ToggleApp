@@ -1,44 +1,46 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
-  Image,
   Platform,
   Modal,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { ApiClientError, favoritesApi, myMapApi, tokenStore, type FavoriteStoreListItemResponse } from '@/services/api';
+import { PageHero } from '@/components/page-hero';
+import {
+  ApiClientError,
+  favoritesApi,
+  myMapApi,
+  tokenStore,
+  userMapsApi,
+  type FavoriteStoreListItemResponse,
+  type UserMapSummaryResponse,
+} from '@/services/api';
 
 const isConflictError = (error: unknown) => error instanceof ApiClientError && error.status === 409;
+const isServerError = (error: unknown) => error instanceof ApiClientError && error.status >= 500;
 
 type SavedPlace = {
   id: string;
   title: string;
   category: string;
   address: string;
+  phone: string | null;
   note: string;
   accent: string;
+  favoriteCount: number;
 };
-
-type MapCollection = {
-  id: string;
-  name: string;
-  count: number;
-};
-
-const MAP_COLLECTIONS: MapCollection[] = [
-  { id: 'map-1', name: '내 주변 지도', count: 12 },
-  { id: 'map-2', name: '카페 코스 지도', count: 8 },
-  { id: 'map-3', name: '데이트 코스 지도', count: 5 },
-];
 
 const PLACE_ACCENTS = ['#e8f6f7', '#fff3d8', '#eaf7ff', '#f2fbfa'];
 
@@ -47,8 +49,10 @@ const mapFavoriteToSavedPlace = (place: FavoriteStoreListItemResponse, index: nu
   title: place.name,
   category: place.categoryName ?? '카테고리 정보 없음',
   address: place.roadAddress ?? place.address ?? place.jibunAddress ?? '주소 정보 없음',
+  phone: place.phone ?? null,
   note: place.ownerNotice ?? '찜한 장소예요.',
   accent: PLACE_ACCENTS[index % PLACE_ACCENTS.length],
+  favoriteCount: place.favoriteCount,
 });
 
 function SavedSuggestionCard({
@@ -81,9 +85,15 @@ function SavedSuggestionCard({
 function SavedPlaceCard({
   place,
   onAddToMap,
+  onRemove,
+  onPressDetail,
+  onPressReviews,
 }: {
   place: SavedPlace;
   onAddToMap: () => void;
+  onRemove: () => void;
+  onPressDetail: () => void;
+  onPressReviews: () => void;
 }) {
   return (
     <View style={styles.placeCard}>
@@ -91,7 +101,7 @@ function SavedPlaceCard({
         <View style={[styles.placeThumb, { backgroundColor: place.accent }]}>
           <Ionicons name="bookmark-outline" size={20} color="#0ea5a4" />
         </View>
-        <TouchableOpacity activeOpacity={0.85} style={styles.heartButton}>
+        <TouchableOpacity activeOpacity={0.85} style={styles.heartButton} onPress={onRemove}>
           <Ionicons name="heart" size={18} color="#ff4d74" />
         </TouchableOpacity>
       </View>
@@ -110,6 +120,14 @@ function SavedPlaceCard({
       </View>
 
       <View style={styles.placeActions}>
+        <TouchableOpacity style={styles.detailButton} onPress={onPressDetail} activeOpacity={0.9}>
+          <Text style={styles.detailButtonText}>상세 보기</Text>
+          <Ionicons name="chevron-forward" size={15} color="#2563eb" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.reviewButton} onPress={onPressReviews} activeOpacity={0.9}>
+          <Text style={styles.reviewButtonText}>리뷰 보기</Text>
+          <Ionicons name="chevron-forward" size={15} color="#0ea5a4" />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.mapAddButton} onPress={onAddToMap} activeOpacity={0.9}>
           <Ionicons name="map-outline" size={16} color="#0ea5a4" />
           <Text style={styles.mapAddButtonText}>내 지도에 추가</Text>
@@ -155,6 +173,13 @@ export default function SavedPlacesScreen() {
   const [activePlaceId, setActivePlaceId] = useState<string | null>(null);
   const [assignedMapByPlaceId, setAssignedMapByPlaceId] = useState<Record<string, string>>({});
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
+  const [mapCollections, setMapCollections] = useState<UserMapSummaryResponse[]>([]);
+  const [mapPlaceCounts, setMapPlaceCounts] = useState<Record<number, number>>({});
+  const [isLoadingMaps, setIsLoadingMaps] = useState(false);
+  const [isCreatingMap, setIsCreatingMap] = useState(false);
+  const [isCreateMapOpen, setIsCreateMapOpen] = useState(false);
+  const [newMapTitle, setNewMapTitle] = useState('');
+  const [newMapDescription, setNewMapDescription] = useState('');
 
   const activePlace = useMemo(
     () => savedPlaces.find((item) => item.id === activePlaceId) ?? null,
@@ -168,14 +193,34 @@ export default function SavedPlacesScreen() {
 
     if (!loggedIn) {
       setSavedPlaces([]);
+      setMapCollections([]);
+      setMapPlaceCounts({});
       return;
     }
 
     try {
-      const favorites = await favoritesApi.listStores();
+      const [favorites, maps] = await Promise.all([
+        favoritesApi.listStores(),
+        userMapsApi.list(),
+      ]);
       setSavedPlaces(favorites.content.map(mapFavoriteToSavedPlace));
+      setMapCollections(maps);
+
+      const countEntries = await Promise.all(
+        maps.map(async (map) => {
+          try {
+            const detail = await userMapsApi.get(map.mapId);
+            return [map.mapId, detail.stores.length + detail.publicInstitutions.length] as const;
+          } catch {
+            return [map.mapId, 0] as const;
+          }
+        })
+      );
+      setMapPlaceCounts(Object.fromEntries(countEntries));
     } catch {
       setSavedPlaces([]);
+      setMapCollections([]);
+      setMapPlaceCounts({});
     }
   }, []);
 
@@ -185,31 +230,165 @@ export default function SavedPlacesScreen() {
     }, [loadSavedPlaces])
   );
 
-  const openMapPicker = (placeId: string) => {
+  const openMapPicker = async (placeId: string) => {
     setActivePlaceId(placeId);
+    setNewMapTitle('');
+    setNewMapDescription('');
+    setIsCreateMapOpen(mapCollections.length === 0);
     setIsMapPickerOpen(true);
+
+    if (!isLoggedIn) return;
+
+    try {
+      setIsLoadingMaps(true);
+      const maps = await userMapsApi.list();
+      setMapCollections(maps);
+      setIsCreateMapOpen(maps.length === 0);
+    } catch {
+      Alert.alert('지도 목록 실패', '내 지도 목록을 불러오지 못했어요.');
+    } finally {
+      setIsLoadingMaps(false);
+    }
   };
 
-  const selectMap = (mapId: string) => {
-    if (!activePlaceId) return;
-    setAssignedMapByPlaceId((current) => ({
-      ...current,
-      [activePlaceId]: mapId,
-    }));
+  const removeSavedPlace = useCallback((place: SavedPlace) => {
+    Alert.alert(
+      '저장 취소',
+      `${place.title} 저장을 정말 취소하시겠습니까?`,
+      [
+        { text: '아니요', style: 'cancel' },
+        {
+          text: '취소하기',
+          style: 'destructive',
+          onPress: () => {
+            const placeId = Number(place.id);
+            if (Number.isNaN(placeId)) return;
 
-    if (isLoggedIn) {
-      const placeId = Number(activePlaceId);
-      if (!Number.isNaN(placeId)) {
-        void myMapApi.addStore(placeId).catch((error) => {
-          if (!isConflictError(error)) {
-            throw error;
-          }
+            void (async () => {
+              try {
+                await favoritesApi.removeStore(placeId);
+                await myMapApi.removeStore(placeId).catch((error) => {
+                  if (error instanceof ApiClientError && error.status === 404) {
+                    return;
+                  }
+                  throw error;
+                });
+
+                setSavedPlaces((current) => current.filter((item) => item.id !== place.id));
+                setAssignedMapByPlaceId((current) => {
+                  const next = { ...current };
+                  delete next[place.id];
+                  return next;
+                });
+              } catch (error) {
+                Alert.alert('저장 취소 실패', error instanceof Error ? error.message : '저장을 취소하지 못했어요.');
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }, []);
+
+  const addActivePlaceToMap = useCallback(async (mapId: number) => {
+    if (!activePlaceId) return;
+
+    const placeId = Number(activePlaceId);
+    if (Number.isNaN(placeId)) return;
+
+    if (__DEV__) {
+      console.log('[SavedPlaces.addActivePlaceToMap:request]', {
+        mapId,
+        storeId: placeId,
+        activePlaceTitle: activePlace?.title ?? null,
+      });
+    }
+
+    try {
+      await userMapsApi.addStore(mapId, placeId);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[SavedPlaces.addActivePlaceToMap:error]', {
+          mapId,
+          storeId: placeId,
+          activePlaceTitle: activePlace?.title ?? null,
+          status: error instanceof ApiClientError ? error.status : null,
+          code: error instanceof ApiClientError ? error.code : null,
+          message: error instanceof Error ? error.message : String(error),
         });
+      }
+
+      if (!isConflictError(error)) {
+        if (!isServerError(error)) {
+          Alert.alert('추가 실패', error instanceof Error ? error.message : '지도에 장소를 추가하지 못했어요.');
+          return;
+        }
+
+        try {
+          await myMapApi.removeStore(placeId);
+          await userMapsApi.addStore(mapId, placeId);
+        } catch (retryError) {
+          if (__DEV__) {
+            console.warn('[SavedPlaces.addActivePlaceToMap:retryError]', {
+              mapId,
+              storeId: placeId,
+              activePlaceTitle: activePlace?.title ?? null,
+              status: retryError instanceof ApiClientError ? retryError.status : null,
+              code: retryError instanceof ApiClientError ? retryError.code : null,
+              message: retryError instanceof Error ? retryError.message : String(retryError),
+            });
+          }
+
+          Alert.alert(
+            '추가 실패',
+            retryError instanceof Error ? retryError.message : '지도에 장소를 추가하지 못했어요.'
+          );
+          return;
+        }
       }
     }
 
+    setAssignedMapByPlaceId((current) => ({
+      ...current,
+      [activePlaceId]: String(mapId),
+    }));
+    setMapPlaceCounts((current) => ({
+      ...current,
+      [mapId]: (current[mapId] ?? 0) + 1,
+    }));
     setIsMapPickerOpen(false);
-  };
+    Alert.alert('추가 완료', '선택한 지도에 장소를 담았어요.');
+  }, [activePlace?.title, activePlaceId]);
+
+  const createMapAndAddPlace = useCallback(async () => {
+    const title = newMapTitle.trim();
+    if (!title) {
+      Alert.alert('지도 이름 확인', '새 지도 이름을 입력해주세요.');
+      return;
+    }
+
+    try {
+      setIsCreatingMap(true);
+      const createdMap = await userMapsApi.create({
+        title,
+        description: newMapDescription.trim() || null,
+        isPublic: false,
+      });
+      setMapCollections((current) => [...current, createdMap]);
+      setMapPlaceCounts((current) => ({
+        ...current,
+        [createdMap.mapId]: 0,
+      }));
+      await addActivePlaceToMap(createdMap.mapId);
+      setNewMapTitle('');
+      setNewMapDescription('');
+      setIsCreateMapOpen(false);
+    } catch (error) {
+      Alert.alert('지도 만들기 실패', error instanceof Error ? error.message : '새 지도를 만들지 못했어요.');
+    } finally {
+      setIsCreatingMap(false);
+    }
+  }, [addActivePlaceToMap, newMapDescription, newMapTitle]);
 
   return (
     <>
@@ -217,32 +396,20 @@ export default function SavedPlacesScreen() {
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            <View style={styles.heroShell}>
-              <View style={styles.topRow}>
-                <View style={styles.brand}>
-                  <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
-                  <View style={styles.brandCopy}>
-                    <Text style={styles.brandTitle}>Toggle</Text>
-                    <Text style={styles.brandSubtitle}>좋아한 장소를 한곳에 모아봐요</Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/my')} activeOpacity={0.85}>
-                  <Ionicons name="heart-outline" size={18} color="#0ea5a4" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroTitle}>
-                  <Text style={styles.heroAccent}>저장, </Text>지도에 담기
-                </Text>
-                <Text style={styles.heroSubtitle}>저장한 장소를 내 지도에 옮겨서 코스로 정리해보세요</Text>
-              </View>
-            </View>
+            <PageHero
+              title="저장, 지도에 담기"
+              titleAccent="저장, "
+              subtitle="저장한 장소를 내 지도에 옮겨서 코스로 정리해보세요"
+              rightIcon="heart-outline"
+              rightIconColor="#0ea5a4"
+              rightIconBackground="#e6fbfa"
+              onRightPress={() => router.push('/my')}
+            />
 
             {!isLoggedIn ? (
               <LoginGatePanel
-                onLogin={() => router.push('/views/user_login')}
-                onSignup={() => router.push('/views/user_signup')}
+                onLogin={() => router.replace('/views/user_login')}
+                onSignup={() => router.replace('/views/user_signup')}
               />
             ) : (
               <>
@@ -255,7 +422,7 @@ export default function SavedPlacesScreen() {
                     onPress={() => router.push('/map')}
                   />
                   <SavedSuggestionCard
-                    title="리스트로 보기"
+                    title="마이지도로 보기"
                     subtitle="카드로 한 번에 비교해요"
                     icon="list"
                     accent="#fff3e4"
@@ -282,7 +449,28 @@ export default function SavedPlacesScreen() {
                       <SavedPlaceCard
                         key={place.id}
                         place={place}
-                        onAddToMap={() => openMapPicker(place.id)}
+                        onAddToMap={() => void openMapPicker(place.id)}
+                        onRemove={() => removeSavedPlace(place)}
+                        onPressDetail={() =>
+                          router.push({
+                            pathname: '/views/store_detail',
+                            params: {
+                              storeId: place.id,
+                              storeName: place.title,
+                              storePhone: place.phone ?? '',
+                            },
+                          })
+                        }
+                        onPressReviews={() =>
+                          router.push({
+                            pathname: '/views/store_reviews',
+                            params: {
+                              storeId: place.id,
+                              storeName: place.title,
+                              storePhone: place.phone ?? '',
+                            },
+                          })
+                        }
                       />
                     ))}
                   </View>
@@ -309,37 +497,85 @@ export default function SavedPlacesScreen() {
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
-              <View style={styles.mapList}>
-                {MAP_COLLECTIONS.map((map) => {
-                  const isSelected = assignedMapByPlaceId[activePlaceId ?? ''] === map.id;
+              {isLoadingMaps ? (
+                <View style={styles.mapPickerEmpty}>
+                  <ActivityIndicator color="#0ea5a4" />
+                  <Text style={styles.mapPickerEmptyText}>지도 목록을 불러오는 중이에요</Text>
+                </View>
+              ) : mapCollections.length > 0 ? (
+                <View style={styles.mapList}>
+                  {mapCollections.map((map) => {
+                    const isSelected = assignedMapByPlaceId[activePlaceId ?? ''] === String(map.mapId);
 
-                  return (
-                    <TouchableOpacity
-                      key={map.id}
-                      style={[styles.mapOption, isSelected ? styles.mapOptionActive : null]}
-                      activeOpacity={0.9}
-                      onPress={() => selectMap(map.id)}
-                    >
-                      <View style={styles.mapOptionLeft}>
-                        <View style={styles.mapOptionIcon}>
-                          <Ionicons name="bookmark-outline" size={18} color="#0ea5a4" />
+                    return (
+                      <TouchableOpacity
+                        key={map.mapId}
+                        style={[styles.mapOption, isSelected ? styles.mapOptionActive : null]}
+                        activeOpacity={0.9}
+                        onPress={() => void addActivePlaceToMap(map.mapId)}
+                      >
+                        <View style={styles.mapOptionLeft}>
+                          <View style={styles.mapOptionIcon}>
+                            <Ionicons name="bookmark-outline" size={18} color="#0ea5a4" />
+                          </View>
+                          <View style={styles.mapOptionTextWrap}>
+                            <Text style={styles.mapOptionTitle}>{map.title}</Text>
+                            <Text style={styles.mapOptionSubtitle}>{mapPlaceCounts[map.mapId] ?? 0}개 저장됨</Text>
+                          </View>
                         </View>
-                        <View style={styles.mapOptionTextWrap}>
-                          <Text style={styles.mapOptionTitle}>{map.name}</Text>
-                          <Text style={styles.mapOptionSubtitle}>{map.count}개 저장됨</Text>
+                        <View style={[styles.mapOptionCheck, isSelected ? styles.mapOptionCheckActive : null]}>
+                          {isSelected ? <Ionicons name="checkmark" size={16} color="#0ea5a4" /> : null}
                         </View>
-                      </View>
-                      <View style={[styles.mapOptionCheck, isSelected ? styles.mapOptionCheckActive : null]}>
-                        {isSelected ? <Ionicons name="checkmark" size={16} color="#0ea5a4" /> : null}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.mapPickerEmpty}>
+                  <Ionicons name="map-outline" size={36} color="#b8d9dc" />
+                  <Text style={styles.mapPickerEmptyTitle}>아직 만든 지도가 없어요</Text>
+                  <Text style={styles.mapPickerEmptyText}>새 지도를 만들고 바로 이 장소를 담아보세요.</Text>
+                </View>
+              )}
 
-              <TouchableOpacity style={styles.newMapButton} activeOpacity={0.9}>
+              {isCreateMapOpen ? (
+                <View style={styles.newMapForm}>
+                  <Text style={styles.newMapFormTitle}>새 지도 만들기</Text>
+                  <TextInput
+                    style={styles.newMapInput}
+                    value={newMapTitle}
+                    onChangeText={setNewMapTitle}
+                    placeholder="지도 이름"
+                    placeholderTextColor="#94a3b8"
+                    returnKeyType="next"
+                  />
+                  <TextInput
+                    style={[styles.newMapInput, styles.newMapDescriptionInput]}
+                    value={newMapDescription}
+                    onChangeText={setNewMapDescription}
+                    placeholder="설명은 선택이에요"
+                    placeholderTextColor="#94a3b8"
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={[styles.createMapButton, isCreatingMap ? styles.createMapButtonDisabled : null]}
+                    activeOpacity={0.9}
+                    disabled={isCreatingMap}
+                    onPress={() => void createMapAndAddPlace()}
+                  >
+                    {isCreatingMap ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
+                    <Text style={styles.createMapButtonText}>만들고 추가하기</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                style={styles.newMapButton}
+                activeOpacity={0.9}
+                onPress={() => setIsCreateMapOpen((current) => !current)}
+              >
                 <Ionicons name="add" size={18} color="#0ea5a4" />
-                <Text style={styles.newMapButtonText}>새 지도 만들기</Text>
+                <Text style={styles.newMapButtonText}>{isCreateMapOpen ? '새 지도 접기' : '새 지도 만들기'}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -653,7 +889,42 @@ const styles = StyleSheet.create({
   },
   placeActions: {
     marginTop: 14,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  detailButton: {
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailButtonText: {
+    color: '#2563eb',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  reviewButton: {
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: '#8dd9d7',
+    backgroundColor: '#f0fdfa',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reviewButtonText: {
+    color: '#0ea5a4',
+    fontSize: 13,
+    fontWeight: '800',
   },
   mapAddButton: {
     height: 42,
@@ -719,6 +990,32 @@ const styles = StyleSheet.create({
   mapList: {
     gap: 10,
   },
+  mapPickerEmpty: {
+    minHeight: 128,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e6eef1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  mapPickerEmptyTitle: {
+    marginTop: 10,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  mapPickerEmptyText: {
+    marginTop: 6,
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   mapOption: {
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -777,6 +1074,54 @@ const styles = StyleSheet.create({
   mapOptionCheckActive: {
     borderColor: '#8dd9d7',
     backgroundColor: '#fff',
+  },
+  newMapForm: {
+    marginTop: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#fff',
+    padding: 14,
+  },
+  newMapFormTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+    marginBottom: 10,
+  },
+  newMapInput: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dbeff0',
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  newMapDescriptionInput: {
+    minHeight: 72,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+  createMapButton: {
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#0ea5a4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+  createMapButtonDisabled: {
+    opacity: 0.7,
+  },
+  createMapButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
   },
   newMapButton: {
     marginTop: 14,

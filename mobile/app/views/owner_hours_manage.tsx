@@ -13,6 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { OwnerStorePicker } from '@/components/owner-store-picker';
+import { useSafeBack } from '@/components/use-safe-back';
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 
@@ -52,43 +54,6 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   );
 }
 
-function StorePicker({
-  stores,
-  selectedStoreId,
-  onSelect,
-}: {
-  stores: OwnerLinkedStoreResponse[];
-  selectedStoreId: number | null;
-  onSelect: (storeId: number) => void;
-}) {
-  return (
-    <View style={styles.pickerCard}>
-      <Text style={styles.sectionTitle}>연결된 매장</Text>
-      <View style={styles.pickerList}>
-        {stores.map((store) => {
-          const active = selectedStoreId === store.storeId;
-
-          return (
-            <TouchableOpacity
-              key={store.storeId}
-              style={[styles.pickerItem, active ? styles.pickerItemActive : null]}
-              onPress={() => onSelect(store.storeId)}
-              activeOpacity={0.9}
-            >
-              <Text style={[styles.pickerItemTitle, active ? styles.pickerItemTitleActive : null]} numberOfLines={1}>
-                {store.storeName}
-              </Text>
-              <Text style={[styles.pickerItemSub, active ? styles.pickerItemSubActive : null]}>
-                {store.categoryName ?? '카테고리 없음'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function Field({
   label,
   value,
@@ -116,6 +81,7 @@ function Field({
 
 export default function OwnerHoursManageScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_dashboard');
   const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -221,7 +187,7 @@ export default function OwnerHoursManageScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.replace('/views/owner_dashboard')} style={styles.backButton} activeOpacity={0.8}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
@@ -231,7 +197,7 @@ export default function OwnerHoursManageScreen() {
         </View>
 
         {!isLoggedIn ? (
-          <GatePanel onLogin={() => router.push('/views/owner_login')} onSignup={() => router.push('/views/owner_signup')} />
+          <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#0ea5a4" />
@@ -245,7 +211,12 @@ export default function OwnerHoursManageScreen() {
           </View>
         ) : (
           <>
-            <StorePicker stores={stores} selectedStoreId={selectedStoreId} onSelect={handleSelectStore} />
+            <OwnerStorePicker
+              stores={stores}
+              selectedStoreId={selectedStoreId}
+              selectedStore={selectedStore}
+              onSelect={handleSelectStore}
+            />
 
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>선택된 매장</Text>

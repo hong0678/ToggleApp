@@ -43,8 +43,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="list"
         options={{
-          title: '리스트',
-          tabBarIcon: ({ color }) => <Ionicons name="list" size={24} color={color} />,
+          title: '마이지도',
+          tabBarIcon: ({ color }) => <Ionicons name="map-outline" size={24} color={color} />,
         }}
       />
       <Tabs.Screen

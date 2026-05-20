@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { useSafeBack } from '@/components/use-safe-back';
+import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
 import { filesApi, storeReviewsApi, storesApi, tokenStore } from '@/services/api';
 import type { StoreLookupItemResponse } from '@/services/api/types';
 import type { StoreReviewItem } from '@/services/api/storeReviews';
@@ -93,11 +95,13 @@ function ReviewCard({
   isMine,
   onEdit,
   onDelete,
+  onPressImage,
 }: {
   item: StoreReviewItem;
   isMine: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
+  onPressImage: (url: string) => void;
 }) {
   return (
     <View style={styles.reviewCard}>
@@ -117,9 +121,9 @@ function ReviewCard({
       {item.imageUrls.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewImageRow}>
           {item.imageUrls.map((url) => (
-            <View key={url} style={styles.reviewImageCard}>
+            <TouchableOpacity key={url} style={styles.reviewImageCard} activeOpacity={0.9} onPress={() => onPressImage(resolveAssetUrl(url))}>
               <Image source={{ uri: resolveAssetUrl(url) }} style={styles.reviewImage} />
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       ) : null}
@@ -146,6 +150,7 @@ function ReviewCard({
 
 export default function StoreReviewsScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/my_map');
   const params = useLocalSearchParams<{ storeId?: string | string[]; storeName?: string | string[] }>();
   const storeIdParam = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   const storeNameParam = Array.isArray(params.storeName) ? params.storeName[0] : params.storeName;
@@ -160,6 +165,8 @@ export default function StoreReviewsScreen() {
   const [publicReviews, setPublicReviews] = useState<StoreReviewItem[]>([]);
   const [myReviews, setMyReviews] = useState<StoreReviewItem[]>([]);
   const [draft, setDraft] = useState<ReviewDraft>(EMPTY_DRAFT);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewImageTitle, setPreviewImageTitle] = useState('사진 보기');
 
   const load = useCallback(async () => {
     if (!storeId) {
@@ -200,9 +207,9 @@ export default function StoreReviewsScreen() {
   useEffect(() => {
     if (!storeId) {
       Alert.alert('매장 정보', '리뷰를 볼 매장 정보가 없어요.');
-      router.replace('/views/my_map');
+      goBack();
     }
-  }, [router, storeId]);
+  }, [goBack, storeId]);
 
   const storeTitle = store?.name ?? storeNameParam ?? '매장 리뷰';
   const storeAddress = store?.roadAddress ?? store?.address ?? store?.jibunAddress ?? '주소 정보 없음';
@@ -211,6 +218,11 @@ export default function StoreReviewsScreen() {
     if (rating === null || rating === undefined) return '—';
     return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
   }, [store]);
+  const openPreview = useCallback((url: string, title: string) => {
+    setPreviewImageUrl(url);
+    setPreviewImageTitle(title);
+  }, []);
+  const closePreview = useCallback(() => setPreviewImageUrl(null), []);
 
   const handlePickImage = async () => {
     if (!isLoggedIn) {
@@ -329,7 +341,7 @@ export default function StoreReviewsScreen() {
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.replace('/views/my_map')} style={styles.backButton} activeOpacity={0.85}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.85}>
               <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
@@ -381,10 +393,10 @@ export default function StoreReviewsScreen() {
                     <Text style={styles.loginTitle}>로그인이 필요해요</Text>
                     <Text style={styles.loginSubtitle}>리뷰 작성, 수정, 삭제는 로그인 후 사용할 수 있어요.</Text>
                     <View style={styles.loginButtons}>
-                      <TouchableOpacity style={styles.loginSecondaryButton} onPress={() => router.push('/views/user_login')}>
+                      <TouchableOpacity style={styles.loginSecondaryButton} onPress={() => router.replace('/views/user_login')}>
                         <Text style={styles.loginSecondaryButtonText}>로그인</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.loginPrimaryButton} onPress={() => router.push('/views/user_signup')}>
+                      <TouchableOpacity style={styles.loginPrimaryButton} onPress={() => router.replace('/views/user_signup')}>
                         <Text style={styles.loginPrimaryButtonText}>회원가입</Text>
                       </TouchableOpacity>
                     </View>
@@ -448,6 +460,7 @@ export default function StoreReviewsScreen() {
                         isMine={myReviews.some((review) => review.reviewId === item.reviewId)}
                         onEdit={myReviews.some((review) => review.reviewId === item.reviewId) ? () => handleEdit(item) : undefined}
                         onDelete={myReviews.some((review) => review.reviewId === item.reviewId) ? () => void handleDelete(item.reviewId) : undefined}
+                        onPressImage={(url) => openPreview(url, '리뷰 사진')}
                       />
                     ))}
                   </View>
@@ -469,6 +482,7 @@ export default function StoreReviewsScreen() {
                         isMine
                         onEdit={() => handleEdit(item)}
                         onDelete={() => void handleDelete(item.reviewId)}
+                        onPressImage={(url) => openPreview(url, '리뷰 사진')}
                       />
                     ))}
                   </View>
@@ -478,6 +492,8 @@ export default function StoreReviewsScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      <FullscreenImageViewer visible={Boolean(previewImageUrl)} uri={previewImageUrl} onClose={closePreview} title={previewImageTitle} />
     </>
   );
 }

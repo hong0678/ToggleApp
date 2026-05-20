@@ -43,7 +43,7 @@ export default function LandingScreen() {
   const handlePeopleMapPress = async () => {
     const accessToken = await tokenStore.getAccessToken();
     if (!accessToken) {
-      router.push('/views/user_login');
+      router.replace('/views/user_login');
       return;
     }
 
@@ -53,7 +53,7 @@ export default function LandingScreen() {
   const handleMyMapPress = async () => {
     const accessToken = await tokenStore.getAccessToken();
     if (!accessToken) {
-      router.push('/views/user_login');
+      router.replace('/views/user_login');
       return;
     }
 
@@ -77,18 +77,18 @@ export default function LandingScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.heroShell}>
             <View style={styles.topRow}>
-              <View style={styles.brand}>
-                <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
-                <View style={styles.brandCopy}>
-                  <Text style={styles.brandTitle}>Toggle</Text>
-                </View>
-              </View>
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroTitle}>
-                  <Text style={styles.heroAccent}>지금, </Text>어디 갈까?
-                </Text>
-                <Text style={styles.heroSubtitle}>지금 <Text style={styles.heroSubtitleAccent}>열려있는</Text> 장소를 확인해보세요</Text>
-              </View>
+               <View style={styles.brand}>
+                 <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
+                 <View style={styles.brandCopy}>
+                   <Text style={styles.brandTitle}>Toggle</Text>
+                 </View>
+               </View>
+               <View style={styles.heroCopy}>
+                 <Text style={styles.heroTitle}>
+                   <Text style={styles.heroAccent}>지금, </Text>어디 갈까?
+                 </Text>
+                 <Text style={styles.heroSubtitle}>지금 <Text style={styles.heroSubtitleAccent}>열려있는</Text> 장소를 확인해보세요</Text>
+               </View>
             </View>
 
             <View style={styles.searchBar}>
@@ -204,10 +204,10 @@ export default function LandingScreen() {
             <Text style={styles.authPanelTitle}>사람들 지도를 보려면 로그인하세요</Text>
             <Text style={styles.authPanelSubtitle}>다른 사람들의 추천 코스와 장소를 확인해보세요</Text>
             <View style={styles.authButtons}>
-              <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/views/user_login')} activeOpacity={0.9}>
+              <TouchableOpacity style={styles.loginButton} onPress={() => router.replace('/views/user_login')} activeOpacity={0.9}>
                 <Text style={styles.loginButtonText}>로그인</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.signupButton} onPress={() => router.push('/views/user_signup')} activeOpacity={0.9}>
+              <TouchableOpacity style={styles.signupButton} onPress={() => router.replace('/views/user_signup')} activeOpacity={0.9}>
                 <Text style={styles.signupButtonText}>회원가입</Text>
               </TouchableOpacity>
             </View>
@@ -245,25 +245,30 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
   },
   topRow: {
-    marginBottom: 2,
+    position: 'relative',
+    zIndex: 2,
+    marginBottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
   heroShell: {
+    position: 'relative',
     backgroundColor: '#f8fbfc',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#edf2f7',
+    minHeight: 168,
     paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: 4,
+    paddingBottom: 4,
     shadowColor: '#0f172a',
     shadowOpacity: 0.03,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
+    overflow: 'hidden',
   },
   brand: {
     flexDirection: 'row',
@@ -286,6 +291,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   heroCopy: {
+    position: 'relative',
+    zIndex: 2,
     alignItems: 'flex-end',
     flexShrink: 1,
   },
@@ -311,7 +318,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   searchBar: {
-    marginTop: 8,
+    position: 'relative',
+    zIndex: 2,
+    marginTop: 2,
     height: 58,
     borderRadius: 29,
     borderWidth: 1,

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
 import { ApiClientError, favoritesApi, myMapApi, storeMenusApi, storeReviewsApi, storesApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
 import type { StoreMenuItem } from '@/services/api/storeMenus';
 import type { StoreReviewItem } from '@/services/api/storeReviews';
@@ -118,11 +119,13 @@ function TabButton({
   );
 }
 
-function MenuRow({ item }: { item: StoreMenuItem }) {
+function MenuRow({ item, onPressImage }: { item: StoreMenuItem; onPressImage?: () => void }) {
   return (
     <View style={styles.menuRow}>
       {item.imageUrl ? (
-        <Image source={{ uri: resolveAssetUrl(item.imageUrl) }} style={styles.menuThumb} />
+        <TouchableOpacity onPress={onPressImage} activeOpacity={0.9} disabled={!onPressImage}>
+          <Image source={{ uri: resolveAssetUrl(item.imageUrl) }} style={styles.menuThumb} />
+        </TouchableOpacity>
       ) : (
         <View style={styles.menuThumbPlaceholder}>
           <Ionicons name="restaurant-outline" size={18} color="#0ea5a4" />
@@ -153,7 +156,7 @@ function MenuRow({ item }: { item: StoreMenuItem }) {
   );
 }
 
-function ReviewCard({ item }: { item: StoreReviewItem }) {
+function ReviewCard({ item, onPressImage }: { item: StoreReviewItem; onPressImage: (url: string) => void }) {
   return (
     <View style={styles.reviewCard}>
       <View style={styles.reviewTopRow}>
@@ -173,7 +176,9 @@ function ReviewCard({ item }: { item: StoreReviewItem }) {
       {item.imageUrls.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewPhotoRow}>
           {item.imageUrls.map((url, index) => (
-            <Image key={`${url}-${index}`} source={{ uri: resolveAssetUrl(url) }} style={styles.reviewPhotoThumb} />
+            <TouchableOpacity key={`${url}-${index}`} activeOpacity={0.9} onPress={() => onPressImage(resolveAssetUrl(url))}>
+              <Image source={{ uri: resolveAssetUrl(url) }} style={styles.reviewPhotoThumb} />
+            </TouchableOpacity>
           ))}
         </ScrollView>
       ) : null}
@@ -205,6 +210,8 @@ export default function StoreDetailScreen() {
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('home');
   const [isMenuExpanded, setIsMenuExpanded] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewImageTitle, setPreviewImageTitle] = useState('사진 보기');
 
   const loadReviews = useCallback(
     async (sort: ReviewSort = reviewSort) => {
@@ -294,6 +301,11 @@ export default function StoreDetailScreen() {
     rating_desc: '별점 높은순',
     rating_asc: '별점 낮은순',
   };
+  const openPreview = useCallback((url: string, title: string) => {
+    setPreviewImageUrl(url);
+    setPreviewImageTitle(title);
+  }, []);
+  const closePreview = useCallback(() => setPreviewImageUrl(null), []);
 
   const handleFavoritePress = useCallback(async () => {
     if (!store || !isServiceStore) return;
@@ -304,7 +316,7 @@ export default function StoreDetailScreen() {
         '찜은 로그인 후 사용할 수 있어요.',
         [
           { text: '취소', style: 'cancel' },
-          { text: '로그인 페이지로 이동', onPress: () => router.push('/views/user_login') },
+          { text: '로그인 페이지로 이동', onPress: () => router.replace('/views/user_login') },
         ]
       );
       return;
@@ -400,9 +412,9 @@ export default function StoreDetailScreen() {
                   ) : (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heroPhotoRow}>
                       {heroPhotos.map((url, index) => (
-                        <View key={`${url}-${index}`} style={styles.heroPhotoCard}>
+                        <TouchableOpacity key={`${url}-${index}`} style={styles.heroPhotoCard} activeOpacity={0.9} onPress={() => openPreview(resolveAssetUrl(url), title)}>
                           <Image source={{ uri: resolveAssetUrl(url) }} style={styles.heroPhotoImage} />
-                        </View>
+                        </TouchableOpacity>
                       ))}
                     </ScrollView>
                   )}
@@ -523,8 +535,14 @@ export default function StoreDetailScreen() {
                     <Text style={styles.emptyInline}>등록된 메뉴가 없어요.</Text>
                   ) : (
                     <View style={styles.menuList}>
-                      {visibleMenus.map((item) => (
-                        <MenuRow key={String(item.menuId ?? `${item.name}-${item.displayOrder}`)} item={item} />
+                    {visibleMenus.map((item) => (
+                        <MenuRow
+                          key={String(item.menuId ?? `${item.name}-${item.displayOrder}`)}
+                          item={item}
+                          onPressImage={
+                            item.imageUrl ? () => openPreview(resolveAssetUrl(item.imageUrl), item.name) : undefined
+                          }
+                        />
                       ))}
                       {hasMoreMenus && !isMenuExpanded ? (
                         <TouchableOpacity style={styles.moreButton} onPress={() => setIsMenuExpanded(true)} activeOpacity={0.85}>
@@ -570,10 +588,10 @@ export default function StoreDetailScreen() {
                         <Text style={styles.loginCardLiteTitle}>로그인 후 작성 가능</Text>
                         <Text style={styles.loginCardLiteText}>리뷰 작성은 로그인 후 사용할 수 있어요.</Text>
                         <View style={styles.loginCardLiteButtons}>
-                          <TouchableOpacity style={styles.loginSecondaryButton} onPress={() => router.push('/views/user_login')} activeOpacity={0.9}>
+                          <TouchableOpacity style={styles.loginSecondaryButton} onPress={() => router.replace('/views/user_login')} activeOpacity={0.9}>
                             <Text style={styles.loginSecondaryButtonText}>로그인</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={styles.loginPrimaryButton} onPress={() => router.push('/views/user_signup')} activeOpacity={0.9}>
+                          <TouchableOpacity style={styles.loginPrimaryButton} onPress={() => router.replace('/views/user_signup')} activeOpacity={0.9}>
                             <Text style={styles.loginPrimaryButtonText}>회원가입</Text>
                           </TouchableOpacity>
                         </View>
@@ -616,7 +634,11 @@ export default function StoreDetailScreen() {
                     ) : (
                       <View style={styles.reviewList}>
                         {latestReviews.map((item) => (
-                          <ReviewCard key={String(item.reviewId)} item={item} />
+                          <ReviewCard
+                            key={String(item.reviewId)}
+                            item={item}
+                            onPressImage={(url) => openPreview(url, '리뷰 사진')}
+                          />
                         ))}
                       </View>
                     )}
@@ -635,14 +657,21 @@ export default function StoreDetailScreen() {
                   ) : (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewPhotoCarousel}>
                       {reviewPhotos.map((url, index) => (
-                        <View key={`${url}-${index}`} style={styles.reviewPhotoCardLarge}>
+                        <TouchableOpacity
+                          key={`${url}-${index}`}
+                          style={styles.reviewPhotoCardLarge}
+                          activeOpacity={0.9}
+                          onPress={() => openPreview(resolveAssetUrl(url), '리뷰 사진')}
+                        >
                           <Image source={{ uri: resolveAssetUrl(url) }} style={styles.reviewPhotoImageLarge} />
-                        </View>
+                        </TouchableOpacity>
                       ))}
                     </ScrollView>
                   )}
                 </Section>
               ) : null}
+
+              <FullscreenImageViewer visible={Boolean(previewImageUrl)} uri={previewImageUrl} onClose={closePreview} title={previewImageTitle} />
 
               <View style={styles.bottomActionRow}>
                 <TouchableOpacity
@@ -650,7 +679,7 @@ export default function StoreDetailScreen() {
                   onPress={() => router.push('/list')}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.actionButtonSecondaryText}>리스트로</Text>
+                  <Text style={styles.actionButtonSecondaryText}>마이지도</Text>
                 </TouchableOpacity>
               </View>
 
