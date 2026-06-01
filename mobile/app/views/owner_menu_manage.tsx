@@ -54,7 +54,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>메뉴 관리는 로그인 후 가능해요</Text>
       <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 메뉴를 보고 수정할 수 있어요.</Text>
@@ -89,14 +89,14 @@ function MenuRow({
           value={draft.name}
           onChangeText={(name) => onChange({ ...draft, name })}
           placeholder="메뉴명"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor="#8b95a1"
         />
         <TextInput
           style={[styles.menuInput, styles.priceInput]}
           value={draft.price}
           onChangeText={(price) => onChange({ ...draft, price })}
           placeholder="가격"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor="#8b95a1"
           keyboardType="numeric"
         />
       </View>
@@ -105,7 +105,7 @@ function MenuRow({
         value={draft.description}
         onChangeText={(description) => onChange({ ...draft, description })}
         placeholder="설명 (길게 적어도 돼요)"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor="#8b95a1"
         multiline
         numberOfLines={3}
       />
@@ -133,10 +133,10 @@ function MenuRow({
         value={draft.imageUrl}
         onChangeText={(imageUrl) => onChange({ ...draft, imageUrl })}
         placeholder="이미지 URL"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor="#8b95a1"
       />
       <TouchableOpacity style={styles.uploadButton} onPress={onUploadImage} activeOpacity={0.9}>
-        <Ionicons name="image-outline" size={16} color="#0ea5a4" />
+        <Ionicons name="image-outline" size={16} color="#18a5a5" />
         <Text style={styles.uploadButtonText}>이미지 파일 업로드</Text>
       </TouchableOpacity>
     </View>
@@ -306,7 +306,7 @@ export default function OwnerMenuManageScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
-            <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
+            <Ionicons name="chevron-back" size={24} color="#18a5a5" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>메뉴 관리</Text>
@@ -318,12 +318,12 @@ export default function OwnerMenuManageScreen() {
           <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator color="#0ea5a4" />
+            <ActivityIndicator color="#18a5a5" />
             <Text style={styles.loadingText}>메뉴를 불러오는 중...</Text>
           </View>
         ) : stores.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="restaurant-outline" size={28} color="#94a3b8" />
+            <Ionicons name="restaurant-outline" size={28} color="#8b95a1" />
             <Text style={styles.emptyTitle}>연결된 매장이 없어요</Text>
             <Text style={styles.emptySubtitle}>매장 등록이 승인되면 메뉴를 관리할 수 있어요.</Text>
           </View>
@@ -383,17 +383,17 @@ export default function OwnerMenuManageScreen() {
               </View>
 
               <TouchableOpacity style={styles.addMenuButton} onPress={handleAddDraft} activeOpacity={0.9} hitSlop={8}>
-                <Ionicons name="add" size={18} color="#0ea5a4" />
+                <Ionicons name="add" size={18} color="#18a5a5" />
                 <Text style={styles.addMenuButtonText}>메뉴 추가</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.primaryButton} onPress={handleSave} activeOpacity={0.9} disabled={isSaving}>
                 {isSaving ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#f9fafb" />
                 ) : (
                   <>
                     <Text style={styles.primaryButtonText}>저장하기</Text>
-                    <Ionicons name="chevron-forward" size={18} color="#fff" />
+                    <Ionicons name="chevron-forward" size={18} color="#f9fafb" />
                   </>
                 )}
               </TouchableOpacity>
@@ -406,128 +406,128 @@ export default function OwnerMenuManageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7fbff' },
+  container: { flex: 1, backgroundColor: '#f2f4f6' },
   scrollContent: { padding: 20, paddingBottom: 32 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   backButton: { paddingTop: 4, paddingRight: 4 },
   headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
-  headerSubtitle: { marginTop: 6, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: '#191f28' },
+  headerSubtitle: { marginTop: 6, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
   gateIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
   gateSecondaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
-  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gateSecondaryButtonText: { color: '#18a5a5', fontSize: 15, fontWeight: '800' },
   gatePrimaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
-  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   loadingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  loadingText: { color: '#6b7684', fontSize: 13, fontWeight: '600' },
   emptyCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginTop: 10 },
-  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#191f28', marginTop: 10 },
+  emptySubtitle: { fontSize: 13, color: '#6b7684', textAlign: 'center', marginTop: 8, lineHeight: 18 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     marginBottom: 12,
   },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: '900', color: '#0f172a' },
-  sectionSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  sectionTitle: { fontSize: 15, fontWeight: '900', color: '#191f28' },
+  sectionSubtitle: { fontSize: 13, fontWeight: '700', color: '#6b7684' },
   sectionHeaderHint: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  sectionHeaderHintText: { color: '#64748b', fontSize: 11, fontWeight: '700' },
-  helperText: { fontSize: 13, color: '#64748b', lineHeight: 18, marginBottom: 12 },
+  sectionHeaderHintText: { color: '#6b7684', fontSize: 11, fontWeight: '700' },
+  helperText: { fontSize: 13, color: '#6b7684', lineHeight: 18, marginBottom: 12 },
   storeChips: { gap: 10, paddingRight: 4 },
   storeChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginRight: 8,
   },
   storeChipActive: {
-    borderColor: '#0ea5a4',
-    backgroundColor: '#eefafa',
+    borderColor: '#18a5a5',
+    backgroundColor: '#eef1f5',
   },
-  storeChipText: { color: '#334155', fontSize: 13, fontWeight: '700' },
-  storeChipTextActive: { color: '#0ea5a4' },
-  selectedStoreName: { marginTop: 12, fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  storeChipText: { color: '#4e5968', fontSize: 13, fontWeight: '700' },
+  storeChipTextActive: { color: '#18a5a5' },
+  selectedStoreName: { marginTop: 12, fontSize: 18, fontWeight: '900', color: '#191f28' },
   addMenuButton: {
     minHeight: 52,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
+    borderColor: '#edf8f8',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
     marginBottom: 12,
   },
-  addMenuButtonText: { color: '#0ea5a4', fontSize: 14, fontWeight: '900' },
+  addMenuButtonText: { color: '#18a5a5', fontSize: 14, fontWeight: '900' },
   menuList: { gap: 12, marginTop: 8 },
   menuRow: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     padding: 14,
   },
   menuRowTop: { flexDirection: 'row', gap: 10 },
@@ -536,11 +536,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0f172a',
+    color: '#191f28',
   },
   menuNameInput: {
     flex: 1.35,
@@ -552,11 +552,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0f172a',
+    color: '#191f28',
     textAlignVertical: 'top',
   },
   menuFlagsRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 10 },
@@ -565,15 +565,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
   },
   flagButtonActive: {
-    borderColor: '#0ea5a4',
-    backgroundColor: '#eefafa',
+    borderColor: '#18a5a5',
+    backgroundColor: '#eef1f5',
   },
-  flagText: { color: '#334155', fontSize: 12, fontWeight: '800' },
-  flagTextActive: { color: '#0ea5a4' },
+  flagText: { color: '#4e5968', fontSize: 12, fontWeight: '800' },
+  flagTextActive: { color: '#18a5a5' },
   removeButton: {
     width: 34,
     height: 34,
@@ -582,17 +582,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#fecaca',
-    backgroundColor: '#fff7f7',
+    backgroundColor: '#f9fafb',
   },
   imageInput: {
     marginTop: 10,
     height: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
-    color: '#0f172a',
+    color: '#191f28',
   },
   uploadButton: {
     marginTop: 10,
@@ -602,53 +602,53 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
+    borderColor: '#edf8f8',
+    backgroundColor: '#eef1f5',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   uploadButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
   currentMenusBox: {
     marginTop: 14,
     borderRadius: 18,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     padding: 14,
   },
   currentMenuItem: {
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     padding: 12,
     marginTop: 10,
   },
   currentMenuTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  currentMenuTitle: { color: '#0f172a', fontSize: 14, fontWeight: '800', flexShrink: 1 },
+  currentMenuTitle: { color: '#191f28', fontSize: 14, fontWeight: '800', flexShrink: 1 },
   currentMenuBadge: {
     borderRadius: 999,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  currentMenuBadgeText: { color: '#0ea5a4', fontSize: 10, fontWeight: '900' },
-  currentMenuSub: { color: '#64748b', fontSize: 12, marginTop: 4 },
+  currentMenuBadgeText: { color: '#18a5a5', fontSize: 10, fontWeight: '900' },
+  currentMenuSub: { color: '#6b7684', fontSize: 12, marginTop: 4 },
   primaryButton: {
     marginTop: 14,
     height: 54,
     borderRadius: 16,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
   },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  primaryButtonText: { color: '#f9fafb', fontSize: 16, fontWeight: '800' },
 });

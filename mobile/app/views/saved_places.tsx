@@ -42,7 +42,7 @@ type SavedPlace = {
   favoriteCount: number;
 };
 
-const PLACE_ACCENTS = ['#e8f6f7', '#fff3d8', '#eaf7ff', '#f2fbfa'];
+const PLACE_ACCENTS = ['#e8f6f7', '#eef3ff', '#eaf7ff', '#f9fafb'];
 
 const mapFavoriteToSavedPlace = (place: FavoriteStoreListItemResponse, index: number): SavedPlace => ({
   id: String(place.storeId),
@@ -71,13 +71,13 @@ function SavedSuggestionCard({
   return (
     <TouchableOpacity style={styles.suggestionCard} onPress={onPress} activeOpacity={0.9}>
       <View style={[styles.suggestionIcon, { backgroundColor: accent }]}>
-        <Ionicons name={icon} size={22} color="#0ea5a4" />
+        <Ionicons name={icon} size={22} color="#18a5a5" />
       </View>
       <View style={styles.suggestionTextWrap}>
         <Text style={styles.suggestionTitle}>{title}</Text>
         <Text style={styles.suggestionSubtitle}>{subtitle}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+      <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
     </TouchableOpacity>
   );
 }
@@ -99,7 +99,7 @@ function SavedPlaceCard({
     <View style={styles.placeCard}>
       <View style={styles.placeCardTop}>
         <View style={[styles.placeThumb, { backgroundColor: place.accent }]}>
-          <Ionicons name="bookmark-outline" size={20} color="#0ea5a4" />
+          <Ionicons name="bookmark-outline" size={20} color="#18a5a5" />
         </View>
         <TouchableOpacity activeOpacity={0.85} style={styles.heartButton} onPress={onRemove}>
           <Ionicons name="heart" size={18} color="#ff4d74" />
@@ -114,7 +114,7 @@ function SavedPlaceCard({
 
       <View style={styles.placeMetaRow}>
         <View style={styles.placeMetaItem}>
-          <Ionicons name="location-outline" size={14} color="#94a3b8" />
+          <Ionicons name="location-outline" size={14} color="#8b95a1" />
           <Text style={styles.placeMetaText}>{place.address}</Text>
         </View>
       </View>
@@ -122,14 +122,14 @@ function SavedPlaceCard({
       <View style={styles.placeActions}>
         <TouchableOpacity style={styles.detailButton} onPress={onPressDetail} activeOpacity={0.9}>
           <Text style={styles.detailButtonText}>상세 보기</Text>
-          <Ionicons name="chevron-forward" size={15} color="#2563eb" />
+          <Ionicons name="chevron-forward" size={15} color="#18a5a5" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.reviewButton} onPress={onPressReviews} activeOpacity={0.9}>
           <Text style={styles.reviewButtonText}>리뷰 보기</Text>
-          <Ionicons name="chevron-forward" size={15} color="#0ea5a4" />
+          <Ionicons name="chevron-forward" size={15} color="#18a5a5" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.mapAddButton} onPress={onAddToMap} activeOpacity={0.9}>
-          <Ionicons name="map-outline" size={16} color="#0ea5a4" />
+          <Ionicons name="map-outline" size={16} color="#18a5a5" />
           <Text style={styles.mapAddButtonText}>내 지도에 추가</Text>
         </TouchableOpacity>
       </View>
@@ -147,7 +147,7 @@ function LoginGatePanel({
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>저장한 장소를 보려면 로그인하세요</Text>
       <Text style={styles.gateSubtitle}>찜한 장소, 내 지도 추가, 지도 선택까지 이어서 사용할 수 있어요.</Text>
@@ -171,7 +171,7 @@ export default function SavedPlacesScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [activePlaceId, setActivePlaceId] = useState<string | null>(null);
-  const [assignedMapByPlaceId, setAssignedMapByPlaceId] = useState<Record<string, string>>({});
+  const [placeMapIdsByPlaceId, setPlaceMapIdsByPlaceId] = useState<Record<string, string[]>>({});
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [mapCollections, setMapCollections] = useState<UserMapSummaryResponse[]>([]);
   const [mapPlaceCounts, setMapPlaceCounts] = useState<Record<number, number>>({});
@@ -195,6 +195,7 @@ export default function SavedPlacesScreen() {
       setSavedPlaces([]);
       setMapCollections([]);
       setMapPlaceCounts({});
+      setPlaceMapIdsByPlaceId({});
       return;
     }
 
@@ -217,10 +218,28 @@ export default function SavedPlacesScreen() {
         })
       );
       setMapPlaceCounts(Object.fromEntries(countEntries));
+
+      const placeMembershipEntries = await Promise.all(
+        maps.map(async (map) => {
+          try {
+            const detail = await userMapsApi.get(map.mapId);
+            return detail.stores.map((storeId) => [String(storeId), String(map.mapId)] as const);
+          } catch {
+            return [] as Array<readonly [string, string]>;
+          }
+        })
+      );
+      setPlaceMapIdsByPlaceId(
+        placeMembershipEntries.flat().reduce<Record<string, string[]>>((acc, [placeId, mapId]) => {
+          acc[placeId] = acc[placeId] ? [...acc[placeId], mapId] : [mapId];
+          return acc;
+        }, {})
+      );
     } catch {
       setSavedPlaces([]);
       setMapCollections([]);
       setMapPlaceCounts({});
+      setPlaceMapIdsByPlaceId({});
     }
   }, []);
 
@@ -275,7 +294,7 @@ export default function SavedPlacesScreen() {
                 });
 
                 setSavedPlaces((current) => current.filter((item) => item.id !== place.id));
-                setAssignedMapByPlaceId((current) => {
+                setPlaceMapIdsByPlaceId((current) => {
                   const next = { ...current };
                   delete next[place.id];
                   return next;
@@ -348,14 +367,19 @@ export default function SavedPlacesScreen() {
       }
     }
 
-    setAssignedMapByPlaceId((current) => ({
-      ...current,
-      [activePlaceId]: String(mapId),
-    }));
     setMapPlaceCounts((current) => ({
       ...current,
       [mapId]: (current[mapId] ?? 0) + 1,
     }));
+    setPlaceMapIdsByPlaceId((current) => {
+      const placeKey = String(placeId);
+      const mapKey = String(mapId);
+      const currentMaps = current[placeKey] ?? [];
+      return {
+        ...current,
+        [placeKey]: currentMaps.includes(mapKey) ? currentMaps : [...currentMaps, mapKey],
+      };
+    });
     setIsMapPickerOpen(false);
     Alert.alert('추가 완료', '선택한 지도에 장소를 담았어요.');
   }, [activePlace?.title, activePlaceId]);
@@ -401,8 +425,8 @@ export default function SavedPlacesScreen() {
               titleAccent="저장, "
               subtitle="저장한 장소를 내 지도에 옮겨서 코스로 정리해보세요"
               rightIcon="heart-outline"
-              rightIconColor="#0ea5a4"
-              rightIconBackground="#e6fbfa"
+              rightIconColor="#18a5a5"
+              rightIconBackground="#edf8f8"
               onRightPress={() => router.push('/my')}
             />
 
@@ -418,21 +442,21 @@ export default function SavedPlacesScreen() {
                     title="내 주변 보기"
                     subtitle="지금 바로 가까운 장소를 살펴봐요"
                     icon="location-outline"
-                    accent="#e8f8f7"
+                    accent="#f9fafb"
                     onPress={() => router.push('/map')}
                   />
                   <SavedSuggestionCard
                     title="마이지도로 보기"
                     subtitle="카드로 한 번에 비교해요"
                     icon="list"
-                    accent="#fff3e4"
+                    accent="#f9fafb"
                     onPress={() => router.push('/list')}
                   />
                 </View>
 
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeaderLeft}>
-                    <Ionicons name="heart" size={18} color="#0ea5a4" />
+                    <Ionicons name="heart" size={18} color="#18a5a5" />
                     <Text style={styles.sectionTitle}>저장한 장소</Text>
                   </View>
                   <Text style={styles.sectionMore}>{savedPlaces.length}개</Text>
@@ -499,13 +523,13 @@ export default function SavedPlacesScreen() {
             >
               {isLoadingMaps ? (
                 <View style={styles.mapPickerEmpty}>
-                  <ActivityIndicator color="#0ea5a4" />
+                  <ActivityIndicator color="#18a5a5" />
                   <Text style={styles.mapPickerEmptyText}>지도 목록을 불러오는 중이에요</Text>
                 </View>
               ) : mapCollections.length > 0 ? (
                 <View style={styles.mapList}>
                   {mapCollections.map((map) => {
-                    const isSelected = assignedMapByPlaceId[activePlaceId ?? ''] === String(map.mapId);
+                    const isSelected = (placeMapIdsByPlaceId[activePlaceId ?? ''] ?? []).includes(String(map.mapId));
 
                     return (
                       <TouchableOpacity
@@ -516,7 +540,7 @@ export default function SavedPlacesScreen() {
                       >
                         <View style={styles.mapOptionLeft}>
                           <View style={styles.mapOptionIcon}>
-                            <Ionicons name="bookmark-outline" size={18} color="#0ea5a4" />
+                            <Ionicons name="bookmark-outline" size={18} color="#18a5a5" />
                           </View>
                           <View style={styles.mapOptionTextWrap}>
                             <Text style={styles.mapOptionTitle}>{map.title}</Text>
@@ -524,7 +548,7 @@ export default function SavedPlacesScreen() {
                           </View>
                         </View>
                         <View style={[styles.mapOptionCheck, isSelected ? styles.mapOptionCheckActive : null]}>
-                          {isSelected ? <Ionicons name="checkmark" size={16} color="#0ea5a4" /> : null}
+                          {isSelected ? <Ionicons name="checkmark" size={16} color="#18a5a5" /> : null}
                         </View>
                       </TouchableOpacity>
                     );
@@ -546,7 +570,7 @@ export default function SavedPlacesScreen() {
                     value={newMapTitle}
                     onChangeText={setNewMapTitle}
                     placeholder="지도 이름"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     returnKeyType="next"
                   />
                   <TextInput
@@ -554,7 +578,7 @@ export default function SavedPlacesScreen() {
                     value={newMapDescription}
                     onChangeText={setNewMapDescription}
                     placeholder="설명은 선택이에요"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     multiline
                   />
                   <TouchableOpacity
@@ -563,7 +587,7 @@ export default function SavedPlacesScreen() {
                     disabled={isCreatingMap}
                     onPress={() => void createMapAndAddPlace()}
                   >
-                    {isCreatingMap ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
+                    {isCreatingMap ? <ActivityIndicator color="#f9fafb" /> : <Ionicons name="checkmark" size={18} color="#f9fafb" />}
                     <Text style={styles.createMapButtonText}>만들고 추가하기</Text>
                   </TouchableOpacity>
                 </View>
@@ -574,7 +598,7 @@ export default function SavedPlacesScreen() {
                 activeOpacity={0.9}
                 onPress={() => setIsCreateMapOpen((current) => !current)}
               >
-                <Ionicons name="add" size={18} color="#0ea5a4" />
+                <Ionicons name="add" size={18} color="#18a5a5" />
                 <Text style={styles.newMapButtonText}>{isCreateMapOpen ? '새 지도 접기' : '새 지도 만들기'}</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -588,7 +612,7 @@ export default function SavedPlacesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7fbfc',
+    backgroundColor: '#f2f4f6',
   },
   safeArea: {
     flex: 1,
@@ -599,14 +623,14 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
   },
   heroShell: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 12,
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
@@ -634,14 +658,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brandTitle: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: 0,
   },
   brandSubtitle: {
     marginTop: 2,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -649,7 +673,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -660,15 +684,15 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 30,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#191f28',
   },
   heroAccent: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
   },
   heroSubtitle: {
     marginTop: 6,
     fontSize: 13,
-    color: '#64748b',
+    color: '#6b7684',
     lineHeight: 18,
   },
   quickRow: {
@@ -680,8 +704,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 12,
     minHeight: 100,
@@ -699,13 +723,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   suggestionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 13,
     fontWeight: '900',
     marginBottom: 2,
   },
   suggestionSubtitle: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '600',
@@ -723,20 +747,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '900',
   },
   sectionMore: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '800',
   },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 18,
     paddingVertical: 20,
     marginTop: 14,
@@ -745,19 +769,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   gateTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 17,
     fontWeight: '900',
   },
   gateSubtitle: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     lineHeight: 19,
   },
@@ -770,14 +794,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gateSecondaryButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -785,12 +809,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gatePrimaryButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -798,33 +822,33 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyState: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 18,
     paddingVertical: 22,
     alignItems: 'center',
   },
   emptyStateTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   emptyStateText: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
   },
   placeCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     padding: 16,
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -850,7 +874,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   placeTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 17,
     fontWeight: '900',
   },
@@ -863,13 +887,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   placeCategoryText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
   placeNote: {
     marginTop: 10,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     lineHeight: 19,
   },
@@ -883,7 +907,7 @@ const styles = StyleSheet.create({
   },
   placeMetaText: {
     flex: 1,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 18,
   },
@@ -898,15 +922,15 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
-    backgroundColor: '#eff6ff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#edf8f8',
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   detailButtonText: {
-    color: '#2563eb',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -914,15 +938,15 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: '#8dd9d7',
-    backgroundColor: '#f0fdfa',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#edf8f8',
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   reviewButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -930,15 +954,15 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: '#8dd9d7',
-    backgroundColor: '#e6fbfa',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#edf8f8',
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   mapAddButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -951,14 +975,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   modalSheet: {
-    backgroundColor: '#f7fbfc',
+    backgroundColor: '#f2f4f6',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 24 : 18,
     borderTopWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     maxHeight: '82%',
   },
   modalHandle: {
@@ -970,13 +994,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   modalTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '900',
   },
   modalSubtitle: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     lineHeight: 18,
   },
@@ -994,8 +1018,8 @@ const styles = StyleSheet.create({
     minHeight: 128,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e6eef1',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
@@ -1003,23 +1027,23 @@ const styles = StyleSheet.create({
   },
   mapPickerEmptyTitle: {
     marginTop: 10,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
     textAlign: 'center',
   },
   mapPickerEmptyText: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 18,
     fontWeight: '600',
     textAlign: 'center',
   },
   mapOption: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -1029,7 +1053,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mapOptionActive: {
-    borderColor: '#8dd9d7',
+    borderColor: '#e5e8eb',
     backgroundColor: '#eaf9f8',
   },
   mapOptionLeft: {
@@ -1043,7 +1067,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1052,13 +1076,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   mapOptionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   mapOptionSubtitle: {
     marginTop: 3,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1067,24 +1091,24 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapOptionCheckActive: {
-    borderColor: '#8dd9d7',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
   },
   newMapForm: {
     marginTop: 12,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     padding: 14,
   },
   newMapFormTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
     marginBottom: 10,
@@ -1093,9 +1117,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
-    color: '#0f172a',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '700',
     paddingHorizontal: 12,
@@ -1109,7 +1133,7 @@ const styles = StyleSheet.create({
   createMapButton: {
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -1119,7 +1143,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   createMapButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -1128,15 +1152,15 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#8dd9d7',
-    backgroundColor: '#e6fbfa',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
   },
   newMapButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 14,
     fontWeight: '800',
   },

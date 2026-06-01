@@ -36,15 +36,15 @@
 | GET | `/api/v1/mobile-search/places/keyword` | 키워드 장소 검색 | `map_around.tsx`, `list_all.tsx` |
 | GET | `/api/v1/mobile-search/places/category` | 카테고리 장소 검색 | `map_around.tsx`, `list_all.tsx` |
 | GET | `/api/v1/mobile-search/places/nearby` | 현재 위치 주변 카테고리 검색 | `map_around.tsx`, `list_all.tsx` |
-| POST | `/api/v1/mobile-search/places/lookup` | 카카오 검색 결과를 내부 장소 정보와 매칭 | 레거시 helper (`mobileSearch.ts`) |
-| GET | `/api/v1/mobile-search/stores/nearby` | 주변 매장 조회 | 레거시 helper (`mobileSearch.ts`) |
+| POST | `/api/v1/mobile-search/places/lookup` | 카카오 검색 결과를 내부 장소 정보와 매칭 | `map_around.tsx`, `list_all.tsx` |
+| GET | `/api/v1/mobile-search/stores/nearby` | 주변 매장 조회 | `list_all.tsx` |
 
 ## Stores
 
 | Method | Path | 용도 | 모바일 연결 |
 |---|---|---|---|
 | POST | `/api/v1/stores/resolve` | 외부 장소를 내부 매장으로 해석/생성 | `map_around.tsx`, `list_all.tsx` |
-| POST | `/api/v1/stores/lookup` | 외부 장소를 내부 매장 정보와 매칭 | `map_around.tsx`, `list_all.tsx` |
+| POST | `/api/v1/stores/lookup` | 매장 ID/키워드 조회 | `storesApi.lookup` |
 | GET | `/api/v1/stores` | 매장 ID 목록 조회 | `my_map.tsx` (`storesApi.listByIds`) |
 | GET | `/api/v1/stores/nearby` | 주변 매장 조회 | 내부 확인용 |
 | DELETE | `/api/v1/stores/{storeId}` | 매장 삭제 | `storesApi` |
@@ -81,20 +81,21 @@
 
 | Method | Path | 용도 | 모바일 연결 |
 |---|---|---|---|
-| GET | `/api/v1/stores/{storeId}/reviews` | 리뷰 목록 | `store_reviews.tsx` (`storeReviewsApi.list`) |
-| GET | `/api/v1/stores/{storeId}/reviews/mine` | 내 리뷰 목록 | `store_reviews.tsx` (`storeReviewsApi.mine`) |
-| POST | `/api/v1/stores/{storeId}/reviews` | 리뷰 작성 | `store_reviews.tsx` (`storeReviewsApi.create`) |
-| PATCH | `/api/v1/reviews/{reviewId}` | 리뷰 수정 | `store_reviews.tsx` (`storeReviewsApi.update`) |
-| DELETE | `/api/v1/reviews/{reviewId}` | 리뷰 삭제 | `store_reviews.tsx` (`storeReviewsApi.remove`) |
+| GET | `/api/v1/stores/{storeId}/reviews` | 리뷰 목록 | `storeReviewsApi.list` |
+| GET | `/api/v1/stores/{storeId}/reviews/mine` | 내 리뷰 목록 | `storeReviewsApi.mineByStore` |
+| GET | `/api/v1/reviews/mine` | 내가 작성한 전체 리뷰 목록 | `review_management.tsx` |
+| POST | `/api/v1/stores/{storeId}/reviews` | 리뷰 작성 | `storeReviewsApi.create` |
+| PATCH | `/api/v1/reviews/{reviewId}` | 리뷰 수정 | `storeReviewsApi.update` |
+| DELETE | `/api/v1/reviews/{reviewId}` | 리뷰 삭제 | `storeReviewsApi.remove` |
 
 ## Files
 
 | Method | Path | 용도 | 모바일 연결 |
 |---|---|---|---|
 | POST | `/api/v1/files/business` | 사업자 등록증 업로드 | 점주 신청 흐름에서는 미사용 |
-| POST | `/api/v1/files/menu` | 메뉴 사진 업로드 | `owner_menu_manage.tsx` (`filesApi.uploadMenu`) |
-| POST | `/api/v1/files/review` | 리뷰 사진 업로드 | `store_reviews.tsx` (`filesApi.uploadReview`) |
-| POST | `/api/v1/files/store` | 매장 사진 업로드 | `owner_photos_manage.tsx` (`filesApi.uploadStore`) |
+| POST | `/api/v1/files/menu` | 메뉴 사진 업로드 | `filesApi.uploadMenu` |
+| POST | `/api/v1/files/review` | 리뷰 사진 업로드 | `filesApi.uploadReview` |
+| POST | `/api/v1/files/store` | 매장 사진 업로드 | `filesApi.uploadStore` |
 | GET | `/api/v1/files/view?key=...` | 업로드 파일 조회 URL | `filesApi.viewUrl` |
 
 ## Owner
@@ -150,11 +151,9 @@
 - 로그인 전 홈: `landing.tsx`
 - 로그인 후 홈: `main_home.tsx`
 - 지도: `map_around.tsx`
-- 리스트: `list_all.tsx` (`stores/nearby` 기반, 지도에서 고른 카테고리/검색어를 이어받음)
+- 리스트: `list_all.tsx` (`mobile-search/stores/nearby`)
 - 저장한 장소: `saved_places.tsx`
 - 내 지도: `my_map.tsx`
-- 매장 상세: `store_detail.tsx`
-- 리뷰: `store_reviews.tsx`
 - 관리자 신청 검토: `admin_owner_applications.tsx`
 - 마이지도 검색: `search_nickname.tsx`
 - 점주 대시보드: `owner_dashboard.tsx` (선택한 `storeId`를 각 관리 화면으로 전달)
@@ -163,32 +162,22 @@
 
 ## 메모
 
-- `owner_daily_log.tsx`는 전용 로그 API가 없어 `owner/store-applications`, `owner/stores`, `owner/stores/{storeId}/closure-requests/latest`를 묶어서 당일 활동 로그로 보여준다.
+- `owner_daily_log.tsx`는 현재 백엔드에 대응되는 별도 API를 찾지 못했다.
 - 관리자 화면은 `admin_owner_applications.tsx`로 노출된다. 로그인한 `ADMIN` 계정은 앱 진입 시 이 화면으로 바로 간다.
-- `map_around.tsx`는 공개 `stores/lookup`으로 현재 보이는 Kakao 결과를 내부 매장 ID와 먼저 매칭한 뒤, 등록된 매장만 `favorites/stores`와 `my-map/stores`에 반영하고, 지도 핀 색도 등록 매장과 외부 장소를 다르게 보여준다. 등록 매장 핀을 누르면 `store_detail.tsx`로 이동한다.
-- `map_around.tsx`와 `list_all.tsx`는 카드에 찜수, 전화번호, 서비스 매장 상태를 함께 보여준다.
-- `list_all.tsx`는 지도에서 선택한 카테고리를 이어받고, 공개 `stores/lookup`으로 서비스 매장 여부를 보강한 뒤 서비스 매장만 상세/리뷰 버튼을 보여준다.
+- `map_around.tsx`는 `mobile-search/places/lookup`으로 현재 보이는 Kakao 결과를 내부 매장 ID와 먼저 매칭한 뒤, 등록된 매장만 `favorites/stores`와 `my-map/stores`에 반영한다.
 - `list_all.tsx`에서 찜을 누르면 `favorites/stores`와 `my-map/stores`를 함께 갱신하고, 저장/내지도 화면은 포커스될 때 다시 읽는다.
 - `saved_places.tsx`의 `내 지도에 추가`는 선택 후 `my-map/stores/{storeId}`에 반영한다.
-- `my_map.tsx`는 `GET /api/v1/stores`로 저장된 매장 ID의 상세 정보를 다시 받아 카드로 보여주고, 서비스 매장에만 상세/리뷰 버튼을 노출한다. 상세 화면으로 이동할 때 전화번호도 함께 넘겨 fallback으로 사용한다.
-- `store_detail.tsx`는 매장 사진을 상단에 보여주고, 매장 정보와 운영 정보, 메뉴를 함께 보여주며 메뉴는 5개까지만 먼저 보여주고 더보기로 확장한다.
-- `store_detail.tsx`의 메뉴 카드에서는 순번 표기를 빼고 이름, 설명, 판매 상태만 보여준다.
-- `store_detail.tsx`의 사진 탭에는 매장 사진 대신 리뷰 사진을 모아서 보여준다.
-- `store_detail.tsx`는 상단에서 찜을 직접 토글할 수 있고, 전화번호는 상세 응답 값이 없으면 route fallback 값을 사용한다.
+- `my_map.tsx`는 `GET /api/v1/stores`로 저장된 매장 ID의 상세 정보를 다시 받아 카드로 보여준다.
 - `main_home.tsx`는 포커스될 때 `auth/me`, `favorites/stores`, `my-map`을 다시 읽어 저장 수와 내 지도 수를 갱신한다.
 - `owner_dashboard.tsx`는 로그인 후 `owner/store-applications`와 `owner/stores`를 요약해 보여주고, 선택한 매장의 `storeId`를 관리 화면으로 넘긴다.
 - `user_login.tsx`와 `owner_login.tsx`는 로그인 성공 후 응답의 `role`을 보고 `USER`는 `/(tabs)`, `OWNER`는 `/views/owner_dashboard`, `ADMIN`은 `/views/admin_owner_applications`로 분기한다.
 - `my_map.tsx`는 로그인 사용자의 `role`이 `ADMIN`이면 관리자 신청 검토 화면으로 보낸다.
-- `my_map.tsx`의 저장한 매장 카드에는 `store_reviews.tsx`로 이동하는 리뷰 보기 버튼이 있다.
 - `owner_status_manage.tsx`는 실시간 상태 변경 외에 `owner/stores/{storeId}/link`로 연결 해제도 지원한다.
 - `owner_hours_manage.tsx`, `owner_menu_manage.tsx`, `owner_photos_manage.tsx`, `owner_close_request.tsx`는 전달받은 `storeId`가 있으면 해당 매장을 먼저 연다.
 - `owner_store_register.tsx`는 점주가 신청만 진행하는 화면이고, 검증/승인 판단은 관리자 화면 흐름에서 이어진다.
 - `owner_store_register.tsx`는 사업자등록증 파일 1개를 선택해서 `owner/store-applications` multipart 요청으로 전송하며, `request`는 JSON 문자열 파트로 보낸다.
 - `owner_store_register.tsx`는 선업로드 없이 한 번의 multipart 요청만 사용한다.
 - `owner_store_register.tsx`는 디버깅을 위해 제출 시작 시 request payload와 selected file, 최종 신청 응답의 status/success/data/error를 console.log로 남긴다.
-- `owner_menu_manage.tsx`는 `filesApi.uploadMenu`로 메뉴 이미지 파일을 업로드해 각 메뉴의 `imageUrl`을 채울 수 있다.
-- `owner_photos_manage.tsx`는 `filesApi.uploadStore`로 매장 사진 파일을 업로드해 `imageUrls` 배열에 추가하고, 사진을 한 장씩 넘겨 보면서 개별 삭제 후 저장할 수 있다.
-- `store_reviews.tsx`는 `filesApi.uploadReview`로 리뷰 사진 파일을 업로드한 뒤 `storeReviewsApi.create/update`로 리뷰를 저장한다.
 - 사업자등록번호는 숫자 10자리만 통과하고, 하이픈은 있어도 없어도 된다.
 - 개업일은 `YYYY-MM-DD` 형식이다.
 - 대표 전화번호는 하이픈이 있어도 되고 없어도 된다.

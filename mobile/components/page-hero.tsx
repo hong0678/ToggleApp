@@ -17,8 +17,8 @@ export function PageHero({
   subtitle,
   titleAccent,
   rightIcon,
-  rightIconColor = '#0ea5a4',
-  rightIconBackground = '#e6fbfa',
+  rightIconColor = '#18a5a5',
+  rightIconBackground = '#edf8f8',
   onRightPress,
 }: PageHeroProps) {
   const titleNode = titleAccent ? (
@@ -57,14 +57,14 @@ export function PageHero({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 14,
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -93,13 +93,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   brandTitle: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 19,
     fontWeight: '900',
     lineHeight: 22,
   },
   brandSubtitle: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 10,
     fontWeight: '700',
     lineHeight: 14,
@@ -113,17 +113,17 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: 14,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 26,
     fontWeight: '900',
     lineHeight: 30,
   },
   titleAccent: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
   },
   subtitle: {
     marginTop: 7,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,

@@ -1,7 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,12 +16,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { PageHero } from '@/components/page-hero';
 import {
   authApi,
   publicMapsApi,
+  myMapApi,
   userMapsApi,
   tokenStore,
   type PublicMapListItemResponse,
@@ -57,7 +62,7 @@ function LoginGate({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIcon}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>마이지도를 보려면 로그인하세요</Text>
       <Text style={styles.gateText}>저장한 장소를 관리하고 다른 사람의 공개 지도를 찾아볼 수 있어요.</Text>
@@ -90,12 +95,12 @@ function MyMapCard({
           <Image source={{ uri: imageUri }} style={styles.mapListThumbImage} />
         ) : (
           <View style={styles.mapListThumbEmpty}>
-            <Ionicons name="image-outline" size={18} color="#94a3b8" />
+            <Ionicons name="image-outline" size={18} color="#8b95a1" />
             <Text style={styles.mapListThumbEmptyText}>대표 이미지 없음</Text>
           </View>
         )}
         <View style={styles.mapListThumbBadge}>
-          <Ionicons name={summary.isPublic ? 'lock-open-outline' : 'lock-closed-outline'} size={12} color="#fff" />
+          <Ionicons name={summary.isPublic ? 'lock-open-outline' : 'lock-closed-outline'} size={12} color="#f9fafb" />
         </View>
       </View>
 
@@ -110,14 +115,14 @@ function MyMapCard({
             </Text>
           </View>
           <TouchableOpacity style={styles.mapListMoreButton} activeOpacity={0.85}>
-            <Ionicons name="ellipsis-vertical" size={14} color="#64748b" />
+            <Ionicons name="ellipsis-vertical" size={14} color="#6b7684" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.mapListInfoRow}>
           <Text style={styles.mapListDate}>{formatDate(summary.updatedAt)}</Text>
           <View style={styles.mapListLikeRow}>
-            <Ionicons name="thumbs-up" size={12} color="#0ea5a4" />
+            <Ionicons name="thumbs-up" size={12} color="#18a5a5" />
             <Text style={styles.mapListLikeText}>{summary.likeCount}</Text>
           </View>
         </View>
@@ -130,7 +135,7 @@ function CreateMapCard({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.createMapCard} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.createMapCardIcon}>
-        <Ionicons name="add" size={18} color="#0ea5a4" />
+        <Ionicons name="add" size={18} color="#18a5a5" />
       </View>
       <View style={styles.createMapCardBody}>
         <Text style={styles.createMapCardTitle}>새 지도 만들기</Text>
@@ -154,11 +159,11 @@ function PublicMapCard({
           <Image source={{ uri: resolveAssetUrl(item.profileImageUrl) ?? undefined }} style={styles.publicGridImage} />
         ) : (
           <View style={styles.publicGridFallback}>
-            <Ionicons name="map-outline" size={22} color="#0ea5a4" />
+            <Ionicons name="map-outline" size={22} color="#18a5a5" />
           </View>
         )}
         <View style={styles.publicGridBadge}>
-          <Ionicons name="thumbs-up" size={11} color="#fff" />
+          <Ionicons name="thumbs-up" size={11} color="#f9fafb" />
           <Text style={styles.publicGridBadgeText}>{item.likeCount}</Text>
         </View>
       </View>
@@ -166,11 +171,11 @@ function PublicMapCard({
       <Text style={styles.publicGridAuthor} numberOfLines={1}>by {item.nickname}</Text>
       <View style={styles.publicGridMetaRow}>
         <View style={styles.publicGridMetaPill}>
-          <Ionicons name="bookmark-outline" size={11} color="#0ea5a4" />
+          <Ionicons name="bookmark-outline" size={11} color="#18a5a5" />
           <Text style={styles.publicGridMetaText}>{item.placeCount}개 장소</Text>
         </View>
         <View style={styles.publicGridMetaPill}>
-          <Ionicons name="thumbs-up" size={11} color="#0ea5a4" />
+          <Ionicons name="thumbs-up" size={11} color="#18a5a5" />
           <Text style={styles.publicGridMetaText}>{item.likeCount}</Text>
         </View>
       </View>
@@ -189,6 +194,11 @@ export default function ListAllScreen() {
   const [myMapStats, setMyMapStats] = useState({ mapCount: 0, totalPlaces: 0, likes: 0 });
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [mineError, setMineError] = useState<string | null>(null);
+  const [isCreateMapModalOpen, setIsCreateMapModalOpen] = useState(false);
+  const [isCreatingMap, setIsCreatingMap] = useState(false);
+  const [newMapTitle, setNewMapTitle] = useState('');
+  const [newMapDescription, setNewMapDescription] = useState('');
+  const [newMapImage, setNewMapImage] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [publicKeyword, setPublicKeyword] = useState('');
   const [publicSort, setPublicSort] = useState<PublicSort>('latest');
   const [publicResults, setPublicResults] = useState<PublicMapCardItem[]>([]);
@@ -204,6 +214,35 @@ export default function ListAllScreen() {
   const featuredMap = useMemo(() => {
     return myMapCards[0] ?? null;
   }, [myMapCards]);
+
+  const openCreateMapModal = useCallback(() => {
+    setNewMapTitle('');
+    setNewMapDescription('');
+    setNewMapImage(null);
+    setIsCreateMapModalOpen(true);
+  }, []);
+
+  const pickNewMapImage = useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'image/*',
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled) return;
+
+    const file = result.assets[0];
+    if (!file?.uri) {
+      Alert.alert('사진 선택 실패', '이미지 파일을 읽지 못했어요.');
+      return;
+    }
+
+    setNewMapImage({
+      uri: file.uri,
+      name: file.name ?? 'map-cover.jpg',
+      type: file.mimeType ?? 'image/jpeg',
+    });
+  }, []);
 
   const heroTitle = mode === 'public' ? '공개 지도 탐색' : greeting;
   const heroSubtitle =
@@ -324,6 +363,42 @@ export default function ListAllScreen() {
     [router]
   );
 
+  const createNewMap = useCallback(async () => {
+    const title = newMapTitle.trim();
+    if (!title) {
+      Alert.alert('지도 이름 확인', '새 지도 이름을 입력해주세요.');
+      return;
+    }
+
+    try {
+      setIsCreatingMap(true);
+      const createdMap = await userMapsApi.create({
+        title,
+        description: newMapDescription.trim() || null,
+        isPublic: false,
+      });
+
+      if (newMapImage) {
+        try {
+          await myMapApi.updateProfileImage(createdMap.mapId, newMapImage);
+        } catch (error) {
+          Alert.alert('사진 업로드 실패', error instanceof Error ? error.message : '대표 사진을 저장하지 못했어요.');
+        }
+      }
+
+      setIsCreateMapModalOpen(false);
+      setNewMapTitle('');
+      setNewMapDescription('');
+      setNewMapImage(null);
+      await loadMyMap();
+      Alert.alert('저장 완료', '새 지도를 만들었어요.');
+    } catch (error) {
+      Alert.alert('지도 만들기 실패', error instanceof Error ? error.message : '새 지도를 만들지 못했어요.');
+    } finally {
+      setIsCreatingMap(false);
+    }
+  }, [loadMyMap, newMapDescription, newMapImage, newMapTitle]);
+
 
   return (
     <>
@@ -334,8 +409,8 @@ export default function ListAllScreen() {
             title={heroTitle}
             subtitle={heroSubtitle}
             rightIcon={mode === 'public' ? 'people-outline' : 'map-outline'}
-            rightIconColor="#0ea5a4"
-            rightIconBackground="#e6fbfa"
+            rightIconColor="#18a5a5"
+            rightIconBackground="#edf8f8"
             onRightPress={() => (mode === 'public' ? router.push('/views/search_nickname') : router.push('/map'))}
           />
 
@@ -345,7 +420,7 @@ export default function ListAllScreen() {
               onPress={() => setMode('mine')}
               activeOpacity={0.9}
             >
-              <Ionicons name="bookmark-outline" size={16} color={mode === 'mine' ? '#fff' : '#64748b'} />
+              <Ionicons name="bookmark-outline" size={16} color={mode === 'mine' ? '#f9fafb' : '#6b7684'} />
               <Text style={[styles.segmentText, mode === 'mine' ? styles.segmentTextActive : null]}>내 장소</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -353,7 +428,7 @@ export default function ListAllScreen() {
               onPress={() => setMode('public')}
               activeOpacity={0.9}
             >
-              <Ionicons name="people-outline" size={16} color={mode === 'public' ? '#fff' : '#64748b'} />
+              <Ionicons name="people-outline" size={16} color={mode === 'public' ? '#f9fafb' : '#6b7684'} />
               <Text style={[styles.segmentText, mode === 'public' ? styles.segmentTextActive : null]}>공개 지도</Text>
             </TouchableOpacity>
           </View>
@@ -364,55 +439,40 @@ export default function ListAllScreen() {
               onSignup={() => router.replace('/views/user_signup')}
             />
           ) : mode === 'mine' ? (
-            <>
-              <View style={styles.mapCard}>
-                <View style={styles.mapChip}>
-                  <Ionicons name="bookmark-outline" size={14} color="#0ea5a4" />
-                  <Text style={styles.mapChipText}>대표</Text>
-                </View>
-                <View style={styles.mapPreview}>
-                  {featuredMap?.summary.profileImageUrl ? (
-                    <Image
-                      source={{ uri: resolveAssetUrl(featuredMap.summary.profileImageUrl) ?? undefined }}
-                      style={styles.mapPreviewImage}
-                    />
-                  ) : (
-                    <View style={styles.mapPreviewEmpty}>
-                      <Ionicons name="image-outline" size={24} color="#94a3b8" />
-                      <Text style={styles.mapPreviewEmptyText}>대표 이미지 없음</Text>
-                    </View>
-                  )}
-                  <View style={styles.mapBackdropGlow} />
-                  <View style={[styles.pin, styles.pinLeftTop]}>
-                    <Ionicons name="heart" size={10} color="#ff4d74" />
-                  </View>
-                  <View style={[styles.pin, styles.pinCenter]}>
-                    <View style={styles.centerDotOuter}>
-                      <View style={styles.centerDotInner} />
+              <>
+                <View style={styles.mapCard}>
+                  <View style={styles.mapPreview}>
+                    {featuredMap?.summary.profileImageUrl ? (
+                      <Image
+                        source={{ uri: resolveAssetUrl(featuredMap.summary.profileImageUrl) ?? undefined }}
+                        style={styles.mapPreviewImage}
+                      />
+                    ) : (
+                      <View style={styles.mapPreviewEmpty}>
+                        <Ionicons name="image-outline" size={24} color="#8b95a1" />
+                        <Text style={styles.mapPreviewEmptyText}>대표 이미지 없음</Text>
+                      </View>
+                    )}
+                    <View style={styles.featuredMapOverlay}>
+                      <Text style={styles.featuredMapTitle} numberOfLines={1}>
+                        {featuredMap?.summary.title ?? '나의 대표 지도'}
+                      </Text>
+                      <Text style={styles.featuredMapSubtitle} numberOfLines={2}>
+                        {featuredMap
+                          ? `${featuredMap.storeCount + featuredMap.publicCount}개 장소 · ${featuredMap.summary.isPublic ? '공개' : '비공개'}`
+                          : '나만의 지도를 만들고 관리해보세요'}
+                      </Text>
                     </View>
                   </View>
-                  <View style={[styles.pin, styles.pinRightTop]}>
-                    <Ionicons name="heart" size={10} color="#ff4d74" />
-                  </View>
-                  <View style={styles.mapHalo} />
-                  <View style={styles.featuredMapOverlay}>
-                    <Text style={styles.featuredMapTitle} numberOfLines={1}>
-                      {featuredMap?.summary.title ?? '나의 대표 지도'}
-                    </Text>
-                    <Text style={styles.featuredMapSubtitle} numberOfLines={2}>
-                      {featuredMap ? `${featuredMap.storeCount + featuredMap.publicCount}개 장소 · ${featuredMap.summary.isPublic ? '공개' : '비공개'}` : '나만의 지도를 만들고 관리해보세요'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.mapFooter}>
-                  <View>
-                    <Text style={styles.mapFooterTitle}>내 지도 {myMapStats.mapCount}개</Text>
-                    <Text style={styles.mapFooterSub}>저장한 장소와 코스를 한눈에 정리해요</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.mapFooterButton}
-                    onPress={() =>
-                      featuredMap
+                  <View style={styles.mapFooter}>
+                    <View>
+                      <Text style={styles.mapFooterTitle}>내 지도 {myMapStats.mapCount}개</Text>
+                      <Text style={styles.mapFooterSub}>저장한 장소와 코스를 한눈에 정리해요</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.mapFooterButton}
+                      onPress={() =>
+                        featuredMap
                         ? router.push({
                             pathname: '/views/my_map_detail',
                             params: {
@@ -420,15 +480,15 @@ export default function ListAllScreen() {
                               title: featuredMap.summary.title,
                             },
                           })
-                        : router.push('/saved')
-                    }
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.mapFooterButtonText}>지도 보기</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
-                  </TouchableOpacity>
+                          : openCreateMapModal()
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.mapFooterButtonText}>지도 보기</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#18a5a5" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
 
               <View style={styles.statGrid}>
                 <View style={styles.statCard}>
@@ -449,13 +509,13 @@ export default function ListAllScreen() {
                 <Text style={styles.sectionTitle}>내 지도 목록</Text>
                 <View style={styles.sectionSort}>
                   <Text style={styles.sectionAction}>최신순</Text>
-                  <Ionicons name="chevron-down" size={12} color="#64748b" />
+                  <Ionicons name="chevron-down" size={12} color="#6b7684" />
                 </View>
               </View>
 
               {isLoadingMine ? (
                 <View style={styles.emptyState}>
-                  <ActivityIndicator color="#0ea5a4" />
+                  <ActivityIndicator color="#18a5a5" />
                   <Text style={styles.emptyText}>마이지도를 불러오는 중이에요</Text>
                 </View>
               ) : myMapCards.length > 0 ? (
@@ -476,42 +536,42 @@ export default function ListAllScreen() {
                     />
                   ))}
                 </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Ionicons name="bookmark-outline" size={42} color="#cbd5e1" />
-                  <Text style={styles.emptyTitle}>저장한 장소가 아직 없어요</Text>
-                  <Text style={styles.emptyText}>{mineError ?? '내 지도를 만들고 저장한 장소를 추가하면 여기에 보여요.'}</Text>
-                  <TouchableOpacity style={styles.primaryButtonWide} onPress={() => router.push('/saved')} activeOpacity={0.9}>
-                    <Text style={styles.primaryButtonText}>새 지도 만들기</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              )}
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="bookmark-outline" size={42} color="#cbd5e1" />
+                    <Text style={styles.emptyTitle}>저장한 장소가 아직 없어요</Text>
+                    <Text style={styles.emptyText}>{mineError ?? '내 지도를 만들고 저장한 장소를 추가하면 여기에 보여요.'}</Text>
+                    <TouchableOpacity style={styles.primaryButtonWide} onPress={openCreateMapModal} activeOpacity={0.9}>
+                      <Text style={styles.primaryButtonText}>새 지도 만들기</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#f9fafb" />
+                    </TouchableOpacity>
+                  </View>
+                )}
 
-              <CreateMapCard onPress={() => router.push('/saved')} />
+              <CreateMapCard onPress={openCreateMapModal} />
 
               <TouchableOpacity style={styles.saveCallout} activeOpacity={0.9} onPress={() => router.push('/saved')}>
                 <View style={styles.saveCalloutIcon}>
-                  <Ionicons name="map-outline" size={18} color="#0ea5a4" />
+                  <Ionicons name="map-outline" size={18} color="#18a5a5" />
                 </View>
                 <View style={styles.saveCalloutBody}>
                   <Text style={styles.saveCalloutTitle}>저장한 장소를 내 지도에 추가해보세요</Text>
                   <Text style={styles.saveCalloutText}>저장 탭에서 원하는 장소를 선택해 내 지도에 추가할 수 있어요</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+                <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
               </TouchableOpacity>
             </>
           ) : (
             <>
               <View style={styles.searchCard}>
                 <View style={styles.searchInputRow}>
-                  <Ionicons name="search-outline" size={18} color="#94a3b8" />
+                  <Ionicons name="search-outline" size={18} color="#8b95a1" />
                   <TextInput
                     style={styles.searchInput}
                     value={publicKeyword}
                     onChangeText={setPublicKeyword}
                     placeholder="지도명, 닉네임 검색"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     returnKeyType="search"
                     autoCapitalize="none"
                     onSubmitEditing={() => void loadPublicMaps({ keyword: publicKeyword, sort: publicSort })}
@@ -522,9 +582,9 @@ export default function ListAllScreen() {
                     activeOpacity={0.9}
                   >
                     {isSearchingPublic ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color="#f9fafb" />
                     ) : (
-                      <Ionicons name="search" size={18} color="#fff" />
+                      <Ionicons name="search" size={18} color="#f9fafb" />
                     )}
                   </TouchableOpacity>
                 </View>
@@ -579,6 +639,81 @@ export default function ListAllScreen() {
 
         {showInternalTabBar ? <AppBottomNav activeTab="list" /> : null}
       </SafeAreaView>
+
+      <Modal
+        visible={isCreateMapModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCreateMapModalOpen(false)}
+      >
+        <View style={styles.createMapModalBackdrop}>
+          <TouchableOpacity
+            style={styles.createMapModalDimmer}
+            activeOpacity={1}
+            onPress={() => setIsCreateMapModalOpen(false)}
+          />
+          <View style={styles.createMapModalSheet}>
+            <View style={styles.createMapModalHandle} />
+            <Text style={styles.createMapModalTitle}>새 지도 만들기</Text>
+            <Text style={styles.createMapModalSubtitle}>이름, 설명, 대표 사진을 넣어서 나만의 지도를 만들어보세요.</Text>
+
+            <TouchableOpacity style={styles.createMapPhotoBox} onPress={() => void pickNewMapImage()} activeOpacity={0.9}>
+              {newMapImage ? (
+                <Image source={{ uri: newMapImage.uri }} style={styles.createMapPhotoImage} />
+              ) : (
+                <View style={styles.createMapPhotoPlaceholder}>
+                  <Ionicons name="image-outline" size={24} color="#8b95a1" />
+                  <Text style={styles.createMapPhotoPlaceholderText}>대표 사진 선택</Text>
+                </View>
+              )}
+              <View style={styles.createMapPhotoBadge}>
+                <Ionicons name="camera-outline" size={12} color="#18a5a5" />
+                <Text style={styles.createMapPhotoBadgeText}>{newMapImage ? '사진 변경' : '사진 추가'}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.createMapInput}
+              value={newMapTitle}
+              onChangeText={setNewMapTitle}
+              placeholder="지도 이름"
+              placeholderTextColor="#8b95a1"
+              returnKeyType="next"
+            />
+            <TextInput
+              style={[styles.createMapInput, styles.createMapDescriptionInput]}
+              value={newMapDescription}
+              onChangeText={setNewMapDescription}
+              placeholder="설명은 선택이에요"
+              placeholderTextColor="#8b95a1"
+              multiline
+            />
+
+            <View style={styles.createMapActions}>
+              <TouchableOpacity
+                style={styles.createMapGhostButton}
+                onPress={() => setIsCreateMapModalOpen(false)}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.createMapGhostButtonText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.createMapPrimaryButton, isCreatingMap ? styles.createMapPrimaryButtonDisabled : null]}
+                onPress={() => void createNewMap()}
+                activeOpacity={0.9}
+                disabled={isCreatingMap}
+              >
+                {isCreatingMap ? (
+                  <ActivityIndicator color="#f9fafb" />
+                ) : (
+                  <Ionicons name="checkmark" size={16} color="#f9fafb" />
+                )}
+                <Text style={styles.createMapPrimaryButtonText}>만들기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -586,7 +721,7 @@ export default function ListAllScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
   },
   content: {
     paddingHorizontal: 18,
@@ -600,19 +735,19 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   eyebrow: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '900',
   },
   title: {
     marginTop: 4,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 28,
     fontWeight: '900',
   },
   subtitle: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -620,7 +755,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -628,7 +763,7 @@ const styles = StyleSheet.create({
   },
   segment: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#e5e8eb',
     borderRadius: 8,
     padding: 4,
     marginBottom: 16,
@@ -643,41 +778,41 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   segmentButtonActive: {
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
   segmentText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '800',
   },
   segmentTextActive: {
-    color: '#fff',
+    color: '#f9fafb',
   },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 8,
     padding: 22,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     alignItems: 'center',
   },
   gateIcon: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   gateTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '900',
   },
   gateText: {
     marginTop: 8,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
@@ -692,12 +827,12 @@ const styles = StyleSheet.create({
     height: 42,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -705,12 +840,12 @@ const styles = StyleSheet.create({
     height: 42,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: '#334155',
+    color: '#4e5968',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -723,30 +858,30 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 76,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 12,
     paddingVertical: 14,
     justifyContent: 'center',
   },
   statValue: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 24,
     fontWeight: '900',
   },
   statLabel: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '800',
   },
   mapCard: {
     marginBottom: 14,
     borderRadius: 14,
-    backgroundColor: '#f7fbff',
+    backgroundColor: '#f2f4f6',
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
   },
   mapChip: {
@@ -754,7 +889,7 @@ const styles = StyleSheet.create({
     left: 14,
     top: 14,
     zIndex: 2,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -763,13 +898,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   mapChipText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '800',
   },
   mapPreview: {
     height: 178,
-    backgroundColor: '#eef7f7',
+    backgroundColor: '#eef1f5',
     overflow: 'hidden',
   },
   mapPreviewImage: {
@@ -782,11 +917,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eef7f7',
+    backgroundColor: '#eef1f5',
     gap: 6,
   },
   mapPreviewEmptyText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -799,10 +934,10 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
@@ -815,7 +950,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -823,9 +958,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#f9fafb',
   },
   mapHalo: {
     position: 'absolute',
@@ -849,7 +984,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.34)',
   },
   featuredMapTitle: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 18,
     fontWeight: '900',
   },
@@ -866,16 +1001,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
   mapFooterTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   mapFooterSub: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
   },
   mapFooterButton: {
@@ -885,19 +1020,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   mapFooterButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
   mapQuickAction: {
     marginBottom: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 14,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -916,7 +1051,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -925,13 +1060,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   mapQuickActionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   mapQuickActionSubtitle: {
     marginTop: 3,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
   },
@@ -943,7 +1078,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
@@ -953,12 +1088,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionAction: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '900',
   },
   sectionCount: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -967,17 +1102,17 @@ const styles = StyleSheet.create({
   },
   mapListCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
   },
   mapListThumb: {
     width: 110,
     height: 94,
     position: 'relative',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   mapListThumbImage: {
     width: '100%',
@@ -988,10 +1123,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
   },
   mapListThumbEmptyText: {
-    color: '#94a3b8',
+    color: '#8b95a1',
     fontSize: 10,
     fontWeight: '700',
   },
@@ -1022,13 +1157,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   mapListTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
   },
   mapListMetaLine: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1045,7 +1180,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mapListDate: {
-    color: '#94a3b8',
+    color: '#8b95a1',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1055,7 +1190,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   mapListLikeText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -1064,8 +1199,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -1076,7 +1211,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1085,22 +1220,159 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   createMapCardTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   createMapCardText: {
     marginTop: 3,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '600',
+  },
+  createMapModalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+  },
+  createMapModalDimmer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  createMapModalSheet: {
+    backgroundColor: '#f9fafb',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+    borderTopWidth: 1,
+    borderColor: '#e5e8eb',
+    maxHeight: '86%',
+  },
+  createMapModalHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#d7e8ea',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  createMapModalTitle: {
+    color: '#191f28',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  createMapModalSubtitle: {
+    marginTop: 6,
+    marginBottom: 14,
+    color: '#6b7684',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  createMapPhotoBox: {
+    height: 164,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    backgroundColor: '#eef8f8',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  createMapPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  createMapPhotoPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  createMapPhotoPlaceholderText: {
+    color: '#6b7684',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  createMapPhotoBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: 'rgba(249,250,251,0.95)',
+    borderWidth: 1,
+    borderColor: '#dbeeee',
+  },
+  createMapPhotoBadgeText: {
+    color: '#18a5a5',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  createMapInput: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
+    color: '#191f28',
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  createMapDescriptionInput: {
+    minHeight: 84,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+  createMapActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  createMapGhostButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createMapGhostButtonText: {
+    color: '#4e5968',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  createMapPrimaryButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#18a5a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  createMapPrimaryButtonDisabled: {
+    opacity: 0.7,
+  },
+  createMapPrimaryButtonText: {
+    color: '#f9fafb',
+    fontSize: 14,
+    fontWeight: '900',
   },
   saveCallout: {
     marginBottom: 4,
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     borderWidth: 1,
     borderColor: '#c9f2ef',
     flexDirection: 'row',
@@ -1111,7 +1383,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1120,33 +1392,33 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   saveCalloutTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 13,
     fontWeight: '900',
   },
   saveCalloutText: {
     marginTop: 3,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 11,
     lineHeight: 15,
     opacity: 0.7,
   },
   searchCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     marginBottom: 16,
   },
   searchTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   searchText: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1155,8 +1427,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: 12,
@@ -1165,7 +1437,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     paddingHorizontal: 10,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1173,18 +1445,18 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 7,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 3,
   },
   publicCard: {
     minHeight: 112,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -1193,7 +1465,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1201,26 +1473,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   publicNickname: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '900',
   },
   publicTitle: {
     marginTop: 3,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   publicDescription: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '600',
   },
   publicMeta: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -1241,26 +1513,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   publicSortChipActive: {
-    backgroundColor: '#0ea5a4',
-    borderColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
+    borderColor: '#18a5a5',
   },
   publicSortText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '900',
   },
   publicSortTextActive: {
-    color: '#fff',
+    color: '#f9fafb',
   },
   publicTotalText: {
     width: '100%',
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1279,15 +1551,15 @@ const styles = StyleSheet.create({
   publicGridCard: {
     width: '48.5%',
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
     paddingBottom: 10,
   },
   publicGridImageWrap: {
     height: 136,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     position: 'relative',
   },
   publicGridImage: {
@@ -1298,7 +1570,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   publicGridBadge: {
     position: 'absolute',
@@ -1313,14 +1585,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.48)',
   },
   publicGridBadgeText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 11,
     fontWeight: '900',
   },
   publicGridTitle: {
     marginTop: 10,
     paddingHorizontal: 10,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
     lineHeight: 18,
@@ -1328,7 +1600,7 @@ const styles = StyleSheet.create({
   publicGridAuthor: {
     marginTop: 4,
     paddingHorizontal: 10,
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -1345,37 +1617,37 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   publicGridMetaText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '800',
   },
   publicGridDescription: {
     marginTop: 6,
     paddingHorizontal: 10,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 15,
   },
   emptyState: {
     minHeight: 190,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 22,
   },
   emptyTitle: {
     marginTop: 10,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
     textAlign: 'center',
   },
   emptyText: {
     marginTop: 8,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
@@ -1386,7 +1658,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -52,16 +52,16 @@ export default function TabIndexScreen() {
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f7fbfc' }}>
-        <ActivityIndicator color="#0ea5a4" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f4f6' }}>
+        <ActivityIndicator color="#18a5a5" />
       </View>
     );
   }
 
   if (isRedirectingAdmin) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f7fbfc' }}>
-        <ActivityIndicator color="#0ea5a4" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f4f6' }}>
+        <ActivityIndicator color="#18a5a5" />
       </View>
     );
   }

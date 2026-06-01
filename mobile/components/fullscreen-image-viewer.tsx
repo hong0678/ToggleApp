@@ -20,7 +20,7 @@ export function FullscreenImageViewer({ visible, uri, onClose, title }: Fullscre
               {title ?? '사진 보기'}
             </Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.85}>
-              <Ionicons name="close" size={20} color="#64748b" />
+              <Ionicons name="close" size={20} color="#6b7684" />
             </TouchableOpacity>
           </View>
           <View style={styles.imageFrame}>
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 22,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     padding: 14,
     overflow: 'hidden',
   },
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
@@ -65,14 +65,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   imageFrame: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderRadius: 18,
     overflow: 'hidden',
   },

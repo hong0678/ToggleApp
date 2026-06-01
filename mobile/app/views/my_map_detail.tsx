@@ -44,7 +44,7 @@ function IncludedStoreCard({ store }: { store: StoreLookupItemResponse }) {
         {store.imageUrls[0] ? (
           <Image source={{ uri: resolveAssetUrl(store.imageUrls[0]) ?? undefined }} style={styles.placeThumbImage} />
         ) : (
-          <Ionicons name="storefront-outline" size={20} color="#0ea5a4" />
+          <Ionicons name="storefront-outline" size={20} color="#18a5a5" />
         )}
       </View>
       <View style={styles.placeBody}>
@@ -61,7 +61,7 @@ function IncludedPublicCard({ item }: { item: PublicInstitutionLookupItemRespons
   return (
     <View style={styles.placeCard}>
       <View style={[styles.placeThumb, styles.publicThumb]}>
-        <Ionicons name="information-circle-outline" size={20} color="#8b5cf6" />
+        <Ionicons name="information-circle-outline" size={20} color="#18a5a5" />
       </View>
       <View style={styles.placeBody}>
         <Text style={styles.placeName}>{item.name ?? '공공 장소'}</Text>
@@ -228,16 +228,16 @@ export default function MyMapDetailScreen() {
       <SafeAreaView style={styles.container}>
         {isLoading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color="#0ea5a4" />
+            <ActivityIndicator color="#18a5a5" />
           </View>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
             <View style={styles.headerRow}>
               <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.9}>
-                <Ionicons name="chevron-back" size={24} color="#0f172a" />
+                <Ionicons name="chevron-back" size={24} color="#f9fafb" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.shareButton} onPress={shareMap} activeOpacity={0.9}>
-                <Ionicons name="share-social-outline" size={18} color="#0ea5a4" />
+                <Ionicons name="share-social-outline" size={18} color="#18a5a5" />
               </TouchableOpacity>
             </View>
 
@@ -254,15 +254,15 @@ export default function MyMapDetailScreen() {
                 <Text style={styles.heroSubtitle}>{map?.description ?? '저장한 장소를 한눈에 정리해보세요'}</Text>
                 <View style={styles.heroMetaRow}>
                   <View style={styles.heroMetaPill}>
-                    <Ionicons name="bookmark-outline" size={13} color="#0ea5a4" />
+                    <Ionicons name="bookmark-outline" size={13} color="#18a5a5" />
                     <Text style={styles.heroMetaText}>장소 {placeCount}개</Text>
                   </View>
                   <View style={styles.heroMetaPill}>
-                    <Ionicons name="thumbs-up" size={13} color="#0ea5a4" />
+                    <Ionicons name="thumbs-up" size={13} color="#18a5a5" />
                     <Text style={styles.heroMetaText}>좋아요 {map?.likeCount ?? 0}</Text>
                   </View>
                   <View style={styles.heroMetaPill}>
-                    <Ionicons name={map?.isPublic ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color="#0ea5a4" />
+                    <Ionicons name={map?.isPublic ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color="#18a5a5" />
                     <Text style={styles.heroMetaText}>{map?.isPublic ? '공개' : '비공개'}</Text>
                   </View>
                 </View>
@@ -272,13 +272,13 @@ export default function MyMapDetailScreen() {
             <View style={styles.mapTitleRow}>
               <Text style={styles.mapTitle}>{map?.title ?? titleParam ?? '내 지도'}</Text>
               <TouchableOpacity style={styles.smallIconButton} onPress={openEditModal} activeOpacity={0.88}>
-                <Ionicons name="create-outline" size={17} color="#0ea5a4" />
+                <Ionicons name="create-outline" size={17} color="#18a5a5" />
               </TouchableOpacity>
             </View>
             <Text style={styles.mapAuthorText}>by 나</Text>
             <View style={styles.inlineMetaRow}>
               <View style={styles.inlineMetaItem}>
-                <Ionicons name="thumbs-up" size={15} color="#0ea5a4" />
+                <Ionicons name="thumbs-up" size={15} color="#18a5a5" />
                 <Text style={styles.inlineMetaText}>{map?.likeCount ?? 0}</Text>
               </View>
               <Text style={styles.inlineMetaText}>{placeCount}개 장소</Text>
@@ -291,7 +291,7 @@ export default function MyMapDetailScreen() {
 
             <TouchableOpacity style={styles.representativeAction} onPress={setRepresentativeImage} activeOpacity={0.9} disabled={isSavingImage}>
               <View style={styles.representativeActionLeft}>
-                <Ionicons name="image-outline" size={18} color="#0ea5a4" />
+                <Ionicons name="image-outline" size={18} color="#18a5a5" />
                 <View>
                   <Text style={styles.representativeActionTitle}>{coverImage ? '대표 이미지 변경' : '대표 이미지 설정'}</Text>
                   <Text style={styles.representativeActionText}>
@@ -299,7 +299,7 @@ export default function MyMapDetailScreen() {
                   </Text>
                 </View>
               </View>
-              {isSavingImage ? <ActivityIndicator size="small" color="#0ea5a4" /> : <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />}
+              {isSavingImage ? <ActivityIndicator size="small" color="#18a5a5" /> : <Ionicons name="chevron-forward" size={18} color="#18a5a5" />}
             </TouchableOpacity>
 
             <Text style={styles.sectionTitle}>포함된 장소</Text>
@@ -314,7 +314,7 @@ export default function MyMapDetailScreen() {
 
             {placeCount === 0 ? (
               <View style={styles.emptyPlacesCard}>
-                <Ionicons name="map-outline" size={28} color="#94a3b8" />
+                <Ionicons name="map-outline" size={28} color="#8b95a1" />
                 <Text style={styles.emptyPlacesTitle}>아직 담긴 장소가 없어요</Text>
                 <Text style={styles.emptyPlacesText}>저장한 장소에서 이 지도에 넣을 장소를 선택해보세요.</Text>
               </View>
@@ -322,15 +322,15 @@ export default function MyMapDetailScreen() {
 
             <View style={styles.bottomActionRow}>
               <TouchableOpacity style={styles.bottomActionButton} onPress={openEditModal} activeOpacity={0.9}>
-                <Ionicons name="create-outline" size={17} color="#0ea5a4" />
+                <Ionicons name="create-outline" size={17} color="#18a5a5" />
                 <Text style={styles.bottomActionText}>수정</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.bottomActionButton} onPress={() => router.push('/saved')} activeOpacity={0.9}>
-                <Ionicons name="bookmark-outline" size={17} color="#0ea5a4" />
+                <Ionicons name="bookmark-outline" size={17} color="#18a5a5" />
                 <Text style={styles.bottomActionText}>장소 추가</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.bottomActionButton} onPress={shareMap} activeOpacity={0.9}>
-                <Ionicons name="share-social-outline" size={17} color="#0ea5a4" />
+                <Ionicons name="share-social-outline" size={17} color="#18a5a5" />
                 <Text style={styles.bottomActionText}>공유하기</Text>
               </TouchableOpacity>
             </View>
@@ -349,7 +349,7 @@ export default function MyMapDetailScreen() {
                 }}
                 activeOpacity={0.9}
               >
-                <Ionicons name="map-outline" size={17} color="#0ea5a4" />
+                <Ionicons name="map-outline" size={17} color="#18a5a5" />
                 <Text style={styles.fullMapButtonText}>큰 지도에서 보기</Text>
               </TouchableOpacity>
           </ScrollView>
@@ -370,7 +370,7 @@ export default function MyMapDetailScreen() {
                   <Text style={styles.modalSubtitle}>공개 지도에는 이름과 설명이 함께 보여요.</Text>
                 </View>
                 <TouchableOpacity style={styles.modalCloseButton} onPress={() => setIsEditModalVisible(false)} activeOpacity={0.85}>
-                  <Ionicons name="close" size={20} color="#64748b" />
+                  <Ionicons name="close" size={20} color="#6b7684" />
                 </TouchableOpacity>
               </View>
 
@@ -379,7 +379,7 @@ export default function MyMapDetailScreen() {
                 value={titleDraft}
                 onChangeText={setTitleDraft}
                 placeholder="지도 이름"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#8b95a1"
                 style={styles.input}
                 maxLength={120}
               />
@@ -389,7 +389,7 @@ export default function MyMapDetailScreen() {
                 value={descriptionDraft}
                 onChangeText={setDescriptionDraft}
                 placeholder="지도 설명"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#8b95a1"
                 style={[styles.input, styles.textArea]}
                 multiline
                 maxLength={1000}
@@ -398,7 +398,7 @@ export default function MyMapDetailScreen() {
 
               <View style={styles.visibilityRow}>
                 <View style={styles.visibilityIcon}>
-                  <Ionicons name={isPublicDraft ? 'lock-open-outline' : 'lock-closed-outline'} size={19} color="#0ea5a4" />
+                  <Ionicons name={isPublicDraft ? 'lock-open-outline' : 'lock-closed-outline'} size={19} color="#18a5a5" />
                 </View>
                 <View style={styles.visibilityTextWrap}>
                   <Text style={styles.visibilityTitle}>{isPublicDraft ? '공개 지도' : '비공개 지도'}</Text>
@@ -410,7 +410,7 @@ export default function MyMapDetailScreen() {
                   value={isPublicDraft}
                   onValueChange={setIsPublicDraft}
                   trackColor={{ false: '#cbd5e1', true: '#99f6e4' }}
-                  thumbColor={isPublicDraft ? '#0ea5a4' : '#fff'}
+                  thumbColor={isPublicDraft ? '#18a5a5' : '#f9fafb'}
                 />
               </View>
 
@@ -420,7 +420,7 @@ export default function MyMapDetailScreen() {
                 disabled={isSavingMetadata}
                 activeOpacity={0.9}
               >
-                {isSavingMetadata ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
+                {isSavingMetadata ? <ActivityIndicator color="#f9fafb" /> : <Ionicons name="checkmark" size={18} color="#f9fafb" />}
                 <Text style={styles.saveMetadataButtonText}>저장</Text>
               </TouchableOpacity>
             </View>
@@ -434,7 +434,7 @@ export default function MyMapDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
   },
   loadingWrap: {
     flex: 1,
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -471,9 +471,9 @@ const styles = StyleSheet.create({
     minHeight: 260,
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     marginBottom: 16,
   },
   heroImage: {
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   },
   heroImageFallback: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -508,12 +508,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.58)',
   },
   heroEmptyTagText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 11,
     fontWeight: '900',
   },
   heroTitle: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 22,
     fontWeight: '900',
   },
@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   heroMetaText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 10,
     fontWeight: '900',
   },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   },
   mapTitle: {
     flex: 1,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 22,
     fontWeight: '900',
   },
@@ -560,12 +560,12 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapAuthorText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   inlineMetaText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -598,14 +598,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 14,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   primaryActionText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -613,16 +613,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   secondaryActionText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -631,9 +631,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -647,19 +647,19 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   representativeActionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 13,
     fontWeight: '900',
   },
   representativeActionText: {
     marginTop: 3,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 15,
     fontWeight: '600',
   },
   sectionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
     marginBottom: 10,
@@ -671,10 +671,10 @@ const styles = StyleSheet.create({
   placeCard: {
     flexDirection: 'row',
     gap: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     padding: 10,
     alignItems: 'center',
   },
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 12,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -699,13 +699,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   placeName: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   placeAddress: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '600',
@@ -714,20 +714,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     padding: 18,
     marginBottom: 18,
   },
   emptyPlacesTitle: {
     marginTop: 8,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   emptyPlacesText: {
     marginTop: 5,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '600',
@@ -742,23 +742,23 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   bottomActionText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '900',
   },
   fullMapButton: {
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   fullMapButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
   bottomSheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: 26,
@@ -799,13 +799,13 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   modalTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 20,
     fontWeight: '900',
   },
   modalSubtitle: {
     marginTop: 5,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '600',
@@ -814,12 +814,12 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   inputLabel: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '900',
     marginBottom: 7,
@@ -828,10 +828,10 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 14,
@@ -846,8 +846,8 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     padding: 13,
     marginBottom: 16,
   },
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -864,13 +864,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   visibilityTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   visibilityText: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 15,
     fontWeight: '600',
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
   saveMetadataButton: {
     height: 50,
     borderRadius: 15,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -888,7 +888,7 @@ const styles = StyleSheet.create({
     opacity: 0.62,
   },
   saveMetadataButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 15,
     fontWeight: '900',
   },

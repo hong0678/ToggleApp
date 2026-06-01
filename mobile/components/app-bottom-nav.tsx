@@ -43,7 +43,7 @@ export function AppBottomNav({ activeTab }: AppBottomNavProps) {
             }}
             activeOpacity={0.85}
           >
-            <Ionicons name={item.icon} size={24} color={isActive ? '#0ea5a4' : '#8f9bb3'} />
+            <Ionicons name={item.icon} size={24} color={isActive ? '#18a5a5' : '#8b95a1'} />
             <Text style={[styles.tabText, isActive ? styles.tabTextActive : null]}>{item.label}</Text>
           </TouchableOpacity>
         );
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 78,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     flexDirection: 'row',
     borderTopWidth: 1,
     borderColor: '#eceef3',
@@ -72,12 +72,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabText: {
-    color: '#8f9bb3',
+    color: '#8b95a1',
     fontSize: 11,
     marginTop: 4,
   },
   tabTextActive: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontWeight: 'bold',
   },
 });

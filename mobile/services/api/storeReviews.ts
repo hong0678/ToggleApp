@@ -3,7 +3,8 @@ import { apiClient } from './client';
 export type StoreReviewItem = {
   reviewId: number;
   storeId: number;
-  authorNickname: string;
+  displayName: string | null;
+  authorNickname?: string;
   rating: number;
   content: string;
   imageUrls: string[];
@@ -19,6 +20,15 @@ export type StoreReviewPageResponse = {
   totalPages: number;
 };
 
+export type StoreReviewSummaryResponse = {
+  averageRating: number | null;
+  reviewCount: number;
+};
+
+export type StoreReviewMineResponse = StoreReviewPageResponse & {
+  summary: StoreReviewSummaryResponse;
+};
+
 export type StoreReviewCreateRequest = {
   rating: number;
   content: string;
@@ -32,14 +42,20 @@ export type StoreReviewUpdateRequest = {
 };
 
 export const storeReviewsApi = {
+  async mine(page = 0, size = 20, sort = 'latest') {
+    return apiClient.request<StoreReviewMineResponse>(
+      `/api/v1/reviews/mine${apiClient.query({ page, size, sort })}`
+    );
+  },
+
   async list(storeId: number, page = 0, size = 20, sort = 'latest') {
     return apiClient.request<StoreReviewPageResponse>(
       `/api/v1/stores/${storeId}/reviews${apiClient.query({ page, size, sort })}`
     );
   },
 
-  async mine(storeId: number, page = 0, size = 20, sort = 'latest') {
-    return apiClient.request<StoreReviewPageResponse>(
+  async mineByStore(storeId: number, page = 0, size = 20, sort = 'latest') {
+    return apiClient.request<StoreReviewMineResponse>(
       `/api/v1/stores/${storeId}/reviews/mine${apiClient.query({ page, size, sort })}`
     );
   },

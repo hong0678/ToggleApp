@@ -35,7 +35,7 @@ function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: 
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>로그인이 필요해요</Text>
       <Text style={styles.gateSubtitle}>내 지도, 저장한 장소, 내정보 수정을 사용하려면 먼저 로그인해주세요.</Text>
@@ -62,13 +62,10 @@ function StatCard({
   label: string;
   tone?: 'teal' | 'pink' | 'violet';
 }) {
-  const isPink = tone === 'pink';
-  const isViolet = tone === 'violet';
-
   return (
     <View style={styles.statCard}>
-      <View style={[styles.statIconWrap, isPink && styles.statIconPink, isViolet && styles.statIconViolet]}>
-        <Ionicons name={icon} size={22} color={isPink ? '#ef4b7a' : isViolet ? '#8b5cf6' : '#0ea5a4'} />
+      <View style={styles.statIconWrap}>
+        <Ionicons name={icon} size={22} color="#18a5a5" />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -89,18 +86,18 @@ function MenuRow({
   tone?: 'teal' | 'pink' | 'violet' | 'red';
   onPress: () => void;
 }) {
-  const iconColor = tone === 'pink' ? '#ef4b7a' : tone === 'violet' ? '#8b5cf6' : tone === 'red' ? '#ef4444' : '#0ea5a4';
+  const iconColor = tone === 'red' ? '#ef4444' : '#18a5a5';
 
   return (
     <TouchableOpacity style={styles.menuRow} onPress={onPress} activeOpacity={0.86}>
-      <View style={[styles.menuIconWrap, tone === 'pink' && styles.menuIconPink, tone === 'violet' && styles.menuIconViolet, tone === 'red' && styles.menuIconRed]}>
+      <View style={[styles.menuIconWrap, tone === 'red' && styles.menuIconRed]}>
         <Ionicons name={icon} size={21} color={iconColor} />
       </View>
       <View style={styles.menuTextWrap}>
         <Text style={styles.menuTitle}>{title}</Text>
         <Text style={styles.menuSubtitle}>{subtitle}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#64748b" />
+      <Ionicons name="chevron-forward" size={18} color="#6b7684" />
     </TouchableOpacity>
   );
 }
@@ -330,7 +327,7 @@ export default function MyMapScreen() {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {isLoading ? (
               <View style={styles.loadingCard}>
-                <ActivityIndicator color="#0ea5a4" />
+                <ActivityIndicator color="#18a5a5" />
                 <Text style={styles.loadingText}>내 정보를 불러오는 중이에요</Text>
               </View>
             ) : !isLoggedIn ? (
@@ -344,8 +341,8 @@ export default function MyMapScreen() {
                   title="마이페이지"
                   subtitle="나의 활동과 설정을 한눈에 확인해요"
                   rightIcon="log-out-outline"
-                  rightIconColor="#0ea5a4"
-                  rightIconBackground="#e6fbfa"
+                  rightIconColor="#18a5a5"
+                  rightIconBackground="#edf8f8"
                   onRightPress={() => void handleLogout()}
                 />
 
@@ -367,7 +364,7 @@ export default function MyMapScreen() {
                         <Text style={styles.avatarLetter}>{(displayName || nicknameDraft || 'T').trim().charAt(0).toUpperCase()}</Text>
                       )}
                       <View style={styles.avatarEditBadge}>
-                        <Ionicons name="pencil" size={11} color="#0ea5a4" />
+                        <Ionicons name="pencil" size={11} color="#18a5a5" />
                       </View>
                     </TouchableOpacity>
                     <View style={styles.heroTextWrap}>
@@ -377,11 +374,11 @@ export default function MyMapScreen() {
                   </View>
                   <View style={styles.heroButtonRow}>
                     <TouchableOpacity style={styles.heroPrimaryButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
-                      <Ionicons name="map-outline" size={18} color="#fff" />
+                      <Ionicons name="map-outline" size={18} color="#f9fafb" />
                       <Text style={styles.heroPrimaryButtonText}>내 지도 보기</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.heroSecondaryButton} onPress={() => setIsInfoMenuVisible(true)} activeOpacity={0.9}>
-                      <Ionicons name="person-outline" size={18} color="#0ea5a4" />
+                      <Ionicons name="person-outline" size={18} color="#18a5a5" />
                       <Text style={styles.heroSecondaryButtonText}>프로필 수정</Text>
                     </TouchableOpacity>
                   </View>
@@ -415,7 +412,7 @@ export default function MyMapScreen() {
                     title="내가 좋아요한 지도"
                     subtitle="좋아요한 지도를 모아봤어요"
                     tone="pink"
-                    onPress={() => Alert.alert('준비 중', '좋아요한 지도 목록 화면은 준비 중이에요.')}
+                    onPress={() => router.push('/views/liked_maps')}
                   />
                   <View style={styles.menuDivider} />
                   <MenuRow
@@ -423,20 +420,20 @@ export default function MyMapScreen() {
                     title="리뷰 관리"
                     subtitle="내가 작성한 리뷰를 확인하고 수정해요"
                     tone="violet"
-                    onPress={() => Alert.alert('준비 중', '내 리뷰 관리 화면은 준비 중이에요.')}
+                    onPress={() => router.push('/views/review_management')}
                   />
                 </View>
 
                 {accountRole === 'OWNER' ? (
                   <TouchableOpacity style={styles.ownerCard} onPress={() => router.push('/views/owner_dashboard')} activeOpacity={0.9}>
                     <View style={styles.ownerIconWrap}>
-                      <Ionicons name="storefront-outline" size={24} color="#0ea5a4" />
+                      <Ionicons name="storefront-outline" size={24} color="#18a5a5" />
                     </View>
                     <View style={styles.ownerTextWrap}>
                       <Text style={styles.ownerTitle}>점주 페이지</Text>
                       <Text style={styles.ownerSubtitle}>매장 알림과 운영 상태를 바로 확인해요</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={19} color="#64748b" />
+                    <Ionicons name="chevron-forward" size={19} color="#6b7684" />
                   </TouchableOpacity>
                 ) : null}
 
@@ -471,7 +468,7 @@ export default function MyMapScreen() {
                   <Text style={styles.modalSubtitle}>수정할 항목을 선택해주세요.</Text>
                 </View>
                 <TouchableOpacity style={styles.modalCloseButton} onPress={() => setIsInfoMenuVisible(false)} activeOpacity={0.85}>
-                  <Ionicons name="close" size={20} color="#64748b" />
+                  <Ionicons name="close" size={20} color="#6b7684" />
                 </TouchableOpacity>
               </View>
               <View style={styles.menuCard}>
@@ -534,7 +531,7 @@ export default function MyMapScreen() {
                   </Text>
                 </View>
                 <TouchableOpacity style={styles.modalCloseButton} onPress={closeEditMode} activeOpacity={0.85}>
-                  <Ionicons name="close" size={20} color="#64748b" />
+                  <Ionicons name="close" size={20} color="#6b7684" />
                 </TouchableOpacity>
               </View>
 
@@ -544,7 +541,7 @@ export default function MyMapScreen() {
                     value={nicknameDraft}
                     onChangeText={setNicknameDraft}
                     placeholder="닉네임"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     style={styles.input}
                   />
                   <TouchableOpacity
@@ -553,7 +550,7 @@ export default function MyMapScreen() {
                     disabled={savingKey === 'nickname'}
                     activeOpacity={0.9}
                   >
-                    {savingKey === 'nickname' ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
+                    {savingKey === 'nickname' ? <ActivityIndicator color="#f9fafb" /> : <Ionicons name="checkmark" size={18} color="#f9fafb" />}
                     <Text style={styles.primaryButtonText}>닉네임 저장</Text>
                   </TouchableOpacity>
                 </>
@@ -565,7 +562,7 @@ export default function MyMapScreen() {
                     value={currentPassword}
                     onChangeText={setCurrentPassword}
                     placeholder="현재 비밀번호"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     secureTextEntry
                     style={styles.input}
                   />
@@ -573,7 +570,7 @@ export default function MyMapScreen() {
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="새 비밀번호"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     secureTextEntry
                     style={styles.input}
                   />
@@ -581,7 +578,7 @@ export default function MyMapScreen() {
                     value={newPasswordConfirm}
                     onChangeText={setNewPasswordConfirm}
                     placeholder="새 비밀번호 확인"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#8b95a1"
                     secureTextEntry
                     style={styles.input}
                   />
@@ -591,7 +588,7 @@ export default function MyMapScreen() {
                     disabled={savingKey === 'password'}
                     activeOpacity={0.9}
                   >
-                    {savingKey === 'password' ? <ActivityIndicator color="#fff" /> : <Ionicons name="lock-closed-outline" size={18} color="#fff" />}
+                    {savingKey === 'password' ? <ActivityIndicator color="#f9fafb" /> : <Ionicons name="lock-closed-outline" size={18} color="#f9fafb" />}
                     <Text style={styles.primaryButtonText}>비밀번호 변경</Text>
                   </TouchableOpacity>
                 </>
@@ -603,7 +600,7 @@ export default function MyMapScreen() {
                     {profileImageSource ? (
                       <Image source={{ uri: profileImageSource }} style={styles.imagePreviewPhoto} />
                     ) : (
-                      <Ionicons name="person-outline" size={22} color="#0ea5a4" />
+                      <Ionicons name="person-outline" size={22} color="#18a5a5" />
                     )}
                   </View>
                   <TouchableOpacity
@@ -612,7 +609,7 @@ export default function MyMapScreen() {
                     disabled={savingKey === 'image'}
                     activeOpacity={0.9}
                   >
-                    {savingKey === 'image' ? <ActivityIndicator color="#0ea5a4" /> : <Ionicons name="cloud-upload-outline" size={18} color="#0ea5a4" />}
+                    {savingKey === 'image' ? <ActivityIndicator color="#18a5a5" /> : <Ionicons name="cloud-upload-outline" size={18} color="#18a5a5" />}
                     <Text style={styles.outlineButtonText}>이미지 선택</Text>
                   </TouchableOpacity>
                 </View>
@@ -630,7 +627,7 @@ export default function MyMapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7fbfc',
+    backgroundColor: '#f2f4f6',
   },
   safeArea: {
     flex: 1,
@@ -641,14 +638,14 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
   pageHeroCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#d9eef0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -677,12 +674,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   pageHeroBrandTitle: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 20,
     fontWeight: '900',
   },
   pageHeroBrandSubtitle: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 10,
     fontWeight: '700',
   },
@@ -690,19 +687,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pageHeroTitle: {
     marginTop: 10,
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 26,
     fontWeight: '900',
   },
   pageHeroDescription: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -710,14 +707,14 @@ const styles = StyleSheet.create({
     minHeight: 180,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
   },
   loadingText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -725,12 +722,12 @@ const styles = StyleSheet.create({
     minHeight: 172,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#d9eef0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 15,
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.06,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -752,7 +749,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#9ee7ea',
+    backgroundColor: '#edf8f8',
   },
   artworkDotB: {
     position: 'absolute',
@@ -761,7 +758,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#bfeceb',
+    backgroundColor: '#edf8f8',
   },
   artworkLineA: {
     position: 'absolute',
@@ -769,7 +766,7 @@ const styles = StyleSheet.create({
     top: 28,
     width: 94,
     height: 1.5,
-    backgroundColor: '#d9f5f4',
+    backgroundColor: '#eef1f5',
     transform: [{ rotate: '18deg' }],
   },
   artworkLineB: {
@@ -778,7 +775,7 @@ const styles = StyleSheet.create({
     top: 44,
     width: 110,
     height: 1.5,
-    backgroundColor: '#d9f5f4',
+    backgroundColor: '#eef1f5',
     transform: [{ rotate: '35deg' }],
   },
   artworkPin: {
@@ -788,7 +785,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#d9f7f5',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -802,7 +799,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#5ed7dd',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -813,7 +810,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   avatarLetter: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 28,
     fontWeight: '900',
   },
@@ -824,9 +821,9 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -835,13 +832,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   heroName: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 17,
     fontWeight: '900',
   },
   heroSubtitle: {
     marginTop: 6,
-    color: '#475569',
+    color: '#6b7684',
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 19,
@@ -856,14 +853,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#19b7b8',
+    backgroundColor: '#18a5a5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   heroPrimaryButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 12,
     fontWeight: '900',
   },
@@ -872,15 +869,15 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#b7c0cf',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   heroSecondaryButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '900',
   },
@@ -891,14 +888,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTitle: {
     marginTop: 18,
     marginBottom: 9,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
   },
@@ -912,7 +909,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e3edf2',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
@@ -921,25 +918,19 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statIconPink: {
-    backgroundColor: '#fff1f4',
-  },
-  statIconViolet: {
-    backgroundColor: '#f3e8ff',
-  },
   statValue: {
     marginTop: 7,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 20,
     fontWeight: '900',
   },
   statLabel: {
     marginTop: 3,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '800',
     textAlign: 'center',
@@ -948,7 +939,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e3edf2',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
@@ -962,15 +953,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  menuIconPink: {
-    backgroundColor: '#fff1f4',
-  },
-  menuIconViolet: {
-    backgroundColor: '#f3e8ff',
   },
   menuIconRed: {
     backgroundColor: '#fee2e2',
@@ -980,13 +965,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   menuTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   menuSubtitle: {
     marginTop: 2,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '700',
     lineHeight: 16,
@@ -1000,8 +985,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#9de7e4',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -1012,7 +997,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1021,13 +1006,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   ownerTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   ownerSubtitle: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 17,
@@ -1039,7 +1024,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e3edf2',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     padding: 14,
   },
   editHeader: {
@@ -1052,7 +1037,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1069,7 +1054,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   editTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
   },
@@ -1080,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   editDescription: {
     marginTop: 3,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 17,
@@ -1089,9 +1074,9 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe7ec',
-    backgroundColor: '#f8fafc',
-    color: '#0f172a',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '700',
     paddingHorizontal: 14,
@@ -1100,14 +1085,14 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 48,
     borderRadius: 24,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   primaryButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -1116,15 +1101,15 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#81e4df',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   outlineButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -1143,7 +1128,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -1157,7 +1142,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#fecaca',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     padding: 14,
   },
   dangerButton: {
@@ -1165,7 +1150,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#fecaca',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1184,7 +1169,7 @@ const styles = StyleSheet.create({
   bottomSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    backgroundColor: '#f7fbfc',
+    backgroundColor: '#f2f4f6',
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 34 : 22,
@@ -1194,7 +1179,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#d8eef0',
+    backgroundColor: '#d1d6db',
     marginBottom: 18,
   },
   centerModalBackdrop: {
@@ -1208,7 +1193,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     borderRadius: 22,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     padding: 18,
   },
   modalHeader: {
@@ -1219,13 +1204,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   modalTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 21,
     fontWeight: '900',
   },
   modalSubtitle: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 19,
@@ -1234,15 +1219,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 18,
     paddingVertical: 20,
     marginTop: 14,
@@ -1251,19 +1236,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   gateTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 17,
     fontWeight: '900',
   },
   gateSubtitle: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     lineHeight: 19,
   },
@@ -1276,14 +1261,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gateSecondaryButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -1291,12 +1276,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gatePrimaryButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 14,
     fontWeight: '800',
   },

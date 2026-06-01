@@ -17,7 +17,7 @@ function LoginGatePanel({
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>사람들 지도를 보려면 로그인하세요</Text>
       <Text style={styles.gateSubtitle}>다른 사람들의 추천 장소와 코멘트를 확인해볼 수 있어요.</Text>
@@ -80,7 +80,7 @@ export default function SearchNicknameScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <LinearGradient colors={['#1e293b', '#312e81', '#4c1d95']} style={styles.container}>
+      <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
@@ -91,7 +91,7 @@ export default function SearchNicknameScreen() {
               router.replace('/');
             }
           }} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
+            <Ionicons name="chevron-back" size={28} color="#f9fafb" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>마이지도 검색</Text>
           <View style={{width: 28}} />
@@ -105,11 +105,11 @@ export default function SearchNicknameScreen() {
                 <Text style={styles.cardSubtitle}>닉네임으로 검색해서 저장한 장소 목록을 찾아볼 수 있어요.</Text>
 
                 <View style={styles.inputContainer}>
-                  <Ionicons name="search-outline" size={20} color="rgba(255, 255, 255, 0.7)" style={styles.inputIcon} />
+                  <Ionicons name="search-outline" size={20} color="#8b95a1" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="닉네임을 입력해주세요"
-                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                    placeholderTextColor="#8b95a1"
                     value={nickname}
                     onChangeText={setNickname}
                     autoCapitalize="none"
@@ -125,11 +125,11 @@ export default function SearchNicknameScreen() {
                   activeOpacity={0.85}
                 >
                   {isLoading ? (
-                    <ActivityIndicator color="#312e81" />
+                    <ActivityIndicator color="#18a5a5" />
                   ) : (
                     <>
                       <Text style={styles.primaryButtonText}>검색하기</Text>
-                      <Ionicons name="chevron-forward" size={20} color="#312e81" />
+                      <Ionicons name="chevron-forward" size={20} color="#18a5a5" />
                     </>
                   )}
                 </TouchableOpacity>
@@ -153,7 +153,7 @@ export default function SearchNicknameScreen() {
                         }
                       >
                         <View style={styles.resultAvatar}>
-                          <Ionicons name="person" size={22} color="#fff" />
+                          <Ionicons name="person" size={22} color="#f9fafb" />
                         </View>
                         <View style={styles.resultContent}>
                           <Text style={styles.resultNickname}>{item.nickname}</Text>
@@ -165,7 +165,7 @@ export default function SearchNicknameScreen() {
                           ) : null}
                           <Text style={styles.resultMeta}>저장 장소 {item.savedPlaceCount}개</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.48)" />
+                        <Ionicons name="chevron-forward" size={20} color="#8b95a1" />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -174,7 +174,7 @@ export default function SearchNicknameScreen() {
                     <Ionicons
                       name={hasSearched ? 'search-outline' : 'map-outline'}
                       size={54}
-                      color="rgba(255,255,255,0.3)"
+                      color="#8b95a1"
                     />
                     <Text style={styles.emptyStateText}>
                       {hasSearched ? '검색 결과가 없습니다.' : '닉네임을 검색해보세요.'}
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFF',
+    color: '#191f28',
   },
   content: {
     flex: 1,
@@ -230,37 +230,37 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: '#e5e8eb',
     marginBottom: 24,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.06,
     shadowRadius: 15,
     shadowOffset: { width: 0, height: 10 },
   },
   cardTitle: {
-    color: '#fff',
+    color: '#191f28',
     fontSize: 22,
     fontWeight: '800',
     marginBottom: 8,
   },
   cardSubtitle: {
-    color: 'rgba(255,255,255,0.62)',
+    color: '#6b7684',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 22,
   },
   gateCard: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    shadowColor: '#0f172a',
+    borderColor: '#e5e8eb',
+    shadowColor: '#191f28',
     shadowOpacity: 0.08,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -270,19 +270,19 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
   },
   gateTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 20,
     fontWeight: '800',
     lineHeight: 27,
   },
   gateSubtitle: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 14,
     lineHeight: 20,
     marginTop: 10,
@@ -297,13 +297,13 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#8bd8d6',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gateSecondaryButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -311,33 +311,33 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 50,
     borderRadius: 18,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gatePrimaryButtonText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 16,
     fontWeight: '800',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#eef1f5',
     borderRadius: 16,
     width: '100%',
     paddingHorizontal: 20,
     height: 56,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#e5e8eb',
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    color: '#FFF',
+    color: '#191f28',
     fontSize: 16,
   },
   resultList: {
@@ -347,9 +347,9 @@ const styles = StyleSheet.create({
   resultCard: {
     minHeight: 96,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: '#e5e8eb',
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(140,180,255,0.32)',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -368,24 +368,24 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   resultNickname: {
-    color: '#8cb4ff',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 4,
   },
   resultTitle: {
-    color: '#fff',
+    color: '#191f28',
     fontSize: 17,
     fontWeight: '800',
   },
   resultDescription: {
-    color: 'rgba(255,255,255,0.58)',
+    color: '#6b7684',
     fontSize: 13,
     lineHeight: 18,
     marginTop: 6,
   },
   resultMeta: {
-    color: 'rgba(255,255,255,0.5)',
+    color: '#8b95a1',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 8,
@@ -396,18 +396,18 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyStateText: {
-    color: 'rgba(255,255,255,0.8)',
+    color: '#191f28',
     marginTop: 20,
     fontSize: 17,
     fontWeight: '600',
   },
   emptyStateSubText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6b7684',
     marginTop: 10,
     fontSize: 13,
   },
   primaryButton: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 16,
     height: 56,
     alignItems: 'center',
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   primaryButtonText: {
-    color: '#312e81',
+    color: '#18a5a5',
     fontSize: 17,
     fontWeight: 'bold',
     marginRight: 6,

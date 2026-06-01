@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   StyleSheet,
@@ -11,10 +12,130 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { authApi, favoritesApi, myMapApi, tokenStore, type MeResponse } from '@/services/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MiniKakaoMapPreview } from '@/components/mini-kakao-map-preview';
+import { authApi, favoritesApi, myMapApi, publicMapsApi, storesApi, tokenStore, type MeResponse, type StoreLookupItemResponse } from '@/services/api';
 import type { MyMapResponse } from '@/services/api/myMap';
+import type { PublicMapListItemResponse } from '@/services/api/types';
+
+type PopularPlaceCardData = {
+  storeId: number;
+  title: string;
+  category: string;
+  distance: string;
+  distanceMeters: number | null;
+  walkingMinutes: number | null;
+  likes: string;
+  accent: string;
+  status: string;
+  phone: string | null;
+  imageUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+type PeopleMapCardData = {
+  mapId: number;
+  publicMapUuid: string;
+  nickname: string;
+  title: string;
+  likes: string;
+  accent: string;
+  profileImageUrl: string | null;
+};
+
+const ACCENT_COLORS = ['#e8f6f7', '#eef3ff', '#e7fbf7', '#ffe8e6', '#eef3ff', '#f6ecff'];
+const resolveAssetUrl = (url: string) => {
+  if (/^https?:\/\//i.test(url)) return url;
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
+  return `${baseUrl}${url}`;
+};
+
+const formatCategory = (value: string | null | undefined) => {
+  if (!value) return '장소';
+  const segments = value
+    .split('>')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return segments[segments.length - 1] ?? value;
+};
+
+const formatDistance = (meters: number | null | undefined) => {
+  if (typeof meters !== 'number' || Number.isNaN(meters)) return '거리 정보 없음';
+  if (meters < 1000) return `${Math.max(1, Math.round(meters))}m`;
+  if (meters < 10000) return `${(meters / 1000).toFixed(1)}km`;
+  return `${Math.round(meters / 1000)}km`;
+};
+
+const estimateWalkingMinutes = (meters: number | null | undefined) => {
+  if (typeof meters !== 'number' || Number.isNaN(meters)) return null;
+
+  const walkingSpeedMetersPerMinute = 80;
+  return Math.max(1, Math.round(meters / walkingSpeedMetersPerMinute));
+};
+
+const formatLikes = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '0';
+  return value.toLocaleString('ko-KR');
+};
+
+const formatStoreStatus = (store: StoreLookupItemResponse) => {
+  const liveStatus = store.liveBusinessStatus ?? store.businessStatus;
+  if (liveStatus === 'OPEN') return '영업중';
+  if (liveStatus === 'BREAK_TIME') return '브레이크타임';
+  if (liveStatus === 'CLOSED') return '영업종료';
+  if (liveStatus === 'TEMP_CLOSED') return '임시휴무';
+  if (liveStatus === 'EARLY_CLOSED') return '조기마감';
+  return store.operationalState ?? '상태 없음';
+};
+
+const calculateDistanceMeters = (
+  from: { latitude: number; longitude: number },
+  to: { latitude: number | null; longitude: number | null }
+) => {
+  if (typeof to.latitude !== 'number' || typeof to.longitude !== 'number') return null;
+
+  const earthRadiusMeters = 6_371_000;
+  const fromLat = (from.latitude * Math.PI) / 180;
+  const toLat = (to.latitude * Math.PI) / 180;
+  const deltaLat = ((to.latitude - from.latitude) * Math.PI) / 180;
+  const deltaLng = ((to.longitude - from.longitude) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusMeters * c;
+};
+
+const normalizePopularPlace = (
+  store: StoreLookupItemResponse,
+  index: number,
+  currentCoords: { latitude: number; longitude: number } | null
+): PopularPlaceCardData => {
+  const distanceMeters = currentCoords ? calculateDistanceMeters(currentCoords, store) : null;
+  const walkingMinutes = estimateWalkingMinutes(distanceMeters);
+
+  return {
+    storeId: store.storeId,
+    title: store.name,
+    category: formatCategory(store.categoryName),
+    distance: formatDistance(distanceMeters),
+    distanceMeters,
+    walkingMinutes,
+    likes: formatLikes(store.favoriteCount),
+    accent: ACCENT_COLORS[index % ACCENT_COLORS.length],
+    status: formatStoreStatus(store),
+    phone: store.phone,
+    imageUrl: store.imageUrls[0] ?? null,
+    latitude: store.latitude,
+    longitude: store.longitude,
+  };
+};
 
 function ShortcutCard({
   title,
@@ -32,13 +153,13 @@ function ShortcutCard({
   return (
     <TouchableOpacity style={[styles.shortcutCard, accentStyle]} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.shortcutIconWrap}>
-        <Ionicons name={icon} size={22} color="#0ea5a4" />
+        <Ionicons name={icon} size={22} color="#18a5a5" />
       </View>
       <View style={styles.shortcutTextWrap}>
         <Text style={styles.shortcutTitle} numberOfLines={1}>{title}</Text>
         <Text style={styles.shortcutSubtitle} numberOfLines={2}>{subtitle}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+      <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
     </TouchableOpacity>
   );
 }
@@ -59,13 +180,13 @@ function ActionCard({
   return (
     <TouchableOpacity style={[styles.actionCard, accentStyle]} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.actionIconWrap}>
-        <Ionicons name={icon} size={22} color="#0ea5a4" />
+        <Ionicons name={icon} size={22} color="#18a5a5" />
       </View>
       <View style={styles.actionTextWrap}>
         <Text style={styles.actionTitle} numberOfLines={1}>{title}</Text>
         <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+      <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
     </TouchableOpacity>
   );
 }
@@ -76,58 +197,74 @@ function PlaceCard({
   distance,
   likes,
   accent,
+  status,
+  imageUrl,
+  onPress,
 }: {
   title: string;
   category: string;
   distance: string;
   likes: string;
   accent: string;
+  status: string;
+  imageUrl: string | null;
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.placeCard}>
+    <TouchableOpacity style={styles.placeCard} onPress={onPress} activeOpacity={0.9}>
       <View style={[styles.placePhoto, { backgroundColor: accent }]}>
+        {imageUrl ? <Image source={{ uri: resolveAssetUrl(imageUrl) }} style={styles.placePhotoImage} /> : null}
+        <View style={styles.placePhotoOverlay} />
         <View style={styles.placeStatusPill}>
-          <Text style={styles.placeStatusText}>영업중</Text>
+          <Text style={styles.placeStatusText}>{status}</Text>
         </View>
       </View>
       <Text style={styles.placeTitle}>{title}</Text>
       <View style={styles.placeMetaRow}>
         <Text style={styles.placeMeta}>{category} · {distance}</Text>
         <View style={styles.placeLikesRow}>
-          <Ionicons name="heart-outline" size={14} color="#6b7280" />
+          <Ionicons name="heart-outline" size={14} color="#6b7684" />
           <Text style={styles.placeMeta}>{likes}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 function PeopleMapCard({
-  name,
+  nickname,
   title,
   likes,
   accent,
+  profileImageUrl,
+  onPress,
 }: {
-  name: string;
+  nickname: string;
   title: string;
   likes: string;
   accent: string;
+  profileImageUrl: string | null;
+  onPress: () => void;
 }) {
+  const imageUri = profileImageUrl ? resolveAssetUrl(profileImageUrl) : null;
+
   return (
-    <View style={styles.peopleCard}>
+    <TouchableOpacity style={styles.peopleCard} onPress={onPress} activeOpacity={0.9}>
       <View style={[styles.peoplePhoto, { backgroundColor: accent }]}>
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.peoplePhotoImage} /> : null}
+        <View style={styles.peoplePhotoOverlay} />
         <View style={styles.peopleAvatar}>
-          <Text style={styles.peopleAvatarText}>{name.slice(0, 1)}</Text>
+          <Text style={styles.peopleAvatarText}>{nickname.slice(0, 1)}</Text>
         </View>
       </View>
       <View style={styles.peopleCardBody}>
         <View style={styles.peopleNameRow}>
-          <Text style={styles.peopleName}>{name}</Text>
+          <Text style={styles.peopleName}>{nickname}</Text>
           <Text style={styles.peopleLikes}>좋아요 {likes}</Text>
         </View>
         <Text style={styles.peopleTitle} numberOfLines={1}>{title}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -137,6 +274,14 @@ export default function MainHomeScreen() {
   const [myMap, setMyMap] = useState<MyMapResponse | null>(null);
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [popularPlaces, setPopularPlaces] = useState<PopularPlaceCardData[]>([]);
+  const [popularPlacesLoading, setPopularPlacesLoading] = useState(true);
+  const [popularPlacesError, setPopularPlacesError] = useState<string | null>(null);
+  const [nearbyOpenPlaces, setNearbyOpenPlaces] = useState<PopularPlaceCardData[]>([]);
+  const [peopleMaps, setPeopleMaps] = useState<PeopleMapCardData[]>([]);
+  const [peopleMapsLoading, setPeopleMapsLoading] = useState(true);
+  const [peopleMapsError, setPeopleMapsError] = useState<string | null>(null);
+  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const loadHomeData = useCallback(async () => {
     const token = await tokenStore.getAccessToken();
@@ -164,15 +309,121 @@ export default function MainHomeScreen() {
     }
   }, []);
 
+  const loadPopularPlaces = useCallback(async () => {
+    setPopularPlacesLoading(true);
+    setPopularPlacesError(null);
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        throw new Error('위치 권한이 필요해요. 권한을 허용하면 주변 인기 장소를 보여드릴 수 있어요.');
+      }
+
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      const currentLocation =
+        lastKnown ??
+        (await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }));
+
+      const response = await storesApi.nearby(
+        currentLocation.coords.latitude,
+        currentLocation.coords.longitude,
+        5000,
+        50
+      );
+      setCurrentCoords({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      });
+
+      const nextPlaces = [...response.stores]
+        .sort((left, right) => {
+          const leftScore = (left.liveBusinessStatus === 'OPEN' ? 1 : 0) * 100000 + left.favoriteCount;
+          const rightScore = (right.liveBusinessStatus === 'OPEN' ? 1 : 0) * 100000 + right.favoriteCount;
+          return rightScore - leftScore;
+        })
+        .slice(0, 4)
+        .map((store, index) => normalizePopularPlace(store, index, {
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+        }));
+
+      setPopularPlaces(nextPlaces);
+
+      const nextNearbyOpenPlaces = [...response.stores]
+        .map((store, index) => normalizePopularPlace(store, index, {
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+        }))
+        .filter((place) => place.status === '영업중' && (place.walkingMinutes ?? Number.POSITIVE_INFINITY) <= 10)
+        .sort((left, right) => {
+          const leftMinutes = left.walkingMinutes ?? Number.POSITIVE_INFINITY;
+          const rightMinutes = right.walkingMinutes ?? Number.POSITIVE_INFINITY;
+
+          if (leftMinutes !== rightMinutes) return leftMinutes - rightMinutes;
+          const leftDistance = left.distanceMeters ?? Number.POSITIVE_INFINITY;
+          const rightDistance = right.distanceMeters ?? Number.POSITIVE_INFINITY;
+          if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+          return 0;
+        });
+
+      setNearbyOpenPlaces(nextNearbyOpenPlaces);
+    } catch (error) {
+      setPopularPlaces([]);
+      setNearbyOpenPlaces([]);
+      setCurrentCoords(null);
+      setPopularPlacesError(error instanceof Error ? error.message : '인기 장소를 불러오지 못했어요.');
+    } finally {
+      setPopularPlacesLoading(false);
+    }
+  }, []);
+
+  const loadPeopleMaps = useCallback(async () => {
+    setPeopleMapsLoading(true);
+    setPeopleMapsError(null);
+
+    try {
+      const response = await publicMapsApi.list({
+        sort: 'likes',
+        page: 0,
+        size: 6,
+      });
+
+      const nextPeopleMaps = response.content
+        .slice(0, 3)
+        .map((item: PublicMapListItemResponse, index) => ({
+          mapId: item.mapId,
+          publicMapUuid: item.publicMapUuid,
+          nickname: item.nickname,
+          title: item.title ?? '제목 없는 공개 지도',
+          likes: item.likeCount.toLocaleString('ko-KR'),
+          accent: ACCENT_COLORS[(index + 2) % ACCENT_COLORS.length],
+          profileImageUrl: item.profileImageUrl,
+        }));
+
+      setPeopleMaps(nextPeopleMaps);
+    } catch (error) {
+      setPeopleMaps([]);
+      setPeopleMapsError(error instanceof Error ? error.message : '사람들 지도를 불러오지 못했어요.');
+    } finally {
+      setPeopleMapsLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void loadHomeData();
-    }, [loadHomeData])
+      void loadPopularPlaces();
+      void loadPeopleMaps();
+    }, [loadHomeData, loadPopularPlaces, loadPeopleMaps])
   );
 
   const displayName = me?.displayName ?? me?.nickname ?? null;
   const savedPlacesCount = me?.favorites.stores.length ?? favoriteCount;
   const myMapCount = myMap?.stores.length ?? 0;
+  const nearbyOpenPlacesCount = nearbyOpenPlaces.length;
+  const nearbyOpenPlacesPreview = nearbyOpenPlaces.slice(0, 12);
   const submitHomeSearch = () => {
     const trimmedQuery = searchQuery.trim();
 
@@ -184,8 +435,43 @@ export default function MainHomeScreen() {
     router.push(`/map?query=${encodeURIComponent(trimmedQuery)}`);
   };
 
+  const openPopularPlace = useCallback(
+    (place: PopularPlaceCardData) => {
+      router.push({
+        pathname: '/views/store_detail',
+        params: {
+          storeId: String(place.storeId),
+          storeName: place.title,
+          storePhone: place.phone ?? '',
+        },
+      });
+    },
+    [router]
+  );
+
+  const openPeopleMap = useCallback(
+    (map: PeopleMapCardData) => {
+      router.push({
+        pathname: '/views/public_map_detail',
+        params: {
+          mapId: String(map.mapId),
+          uuid: map.publicMapUuid,
+          title: map.title,
+          nickname: map.nickname,
+        },
+      });
+    },
+    [router]
+  );
+
   return (
     <View style={styles.container}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['#ffffff', '#f8fafc', '#f3f7fb', '#eef3f8']}
+        locations={[0, 0.38, 0.74, 1]}
+        style={styles.pageBackdrop}
+      />
       <SafeAreaView style={styles.safeArea}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.heroShell}>
@@ -200,7 +486,7 @@ export default function MainHomeScreen() {
                 </View>
               </View>
               <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/my')} activeOpacity={0.85}>
-                <Ionicons name="person-outline" size={18} color="#0ea5a4" />
+                <Ionicons name="person-outline" size={18} color="#18a5a5" />
               </TouchableOpacity>
             </View>
 
@@ -212,11 +498,11 @@ export default function MainHomeScreen() {
             </View>
 
             <View style={styles.searchBar}>
-              <Ionicons name="search" size={22} color="#0ea5a4" />
+              <Ionicons name="search" size={22} color="#18a5a5" />
               <TextInput
                 style={styles.searchInput}
                 placeholder="카페, 음식점, 장소 검색"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#8b95a1"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 onSubmitEditing={submitHomeSearch}
@@ -224,7 +510,7 @@ export default function MainHomeScreen() {
                 blurOnSubmit={false}
               />
               <TouchableOpacity style={styles.searchSubmitButton} onPress={submitHomeSearch} activeOpacity={0.85}>
-                <Ionicons name="arrow-forward" size={18} color="#0ea5a4" />
+                <Ionicons name="arrow-forward" size={18} color="#18a5a5" />
               </TouchableOpacity>
             </View>
           </View>
@@ -272,45 +558,31 @@ export default function MainHomeScreen() {
 
           <View style={styles.mapCard}>
             <View style={styles.mapChip}>
-              <Ionicons name="radio-button-on-outline" size={14} color="#0ea5a4" />
+              <Ionicons name="radio-button-on-outline" size={14} color="#18a5a5" />
               <Text style={styles.mapChipText}>내 주변</Text>
             </View>
             <View style={styles.mapPreview}>
-              <Image source={require('@/assets/images/목지도.png')} style={styles.mapPreviewImage} />
-              <View style={styles.mapBackdropGlow} />
-              <View style={[styles.pin, styles.pinLeftTop]}>
-                <Ionicons name="heart" size={10} color="#ff4d74" />
-              </View>
-              <View style={[styles.pin, styles.pinLeftBottom]}>
-                <Ionicons name="heart" size={10} color="#ff4d74" />
-              </View>
-              <View style={[styles.pin, styles.pinCenter]}>
-                <View style={styles.centerDotOuter}>
-                  <View style={styles.centerDotInner} />
-                </View>
-              </View>
-              <View style={[styles.pin, styles.pinRightTop]}>
-                <Ionicons name="heart" size={10} color="#ff4d74" />
-              </View>
-              <View style={[styles.pin, styles.pinRightBottom]}>
-                <Ionicons name="heart" size={10} color="#ff4d74" />
-              </View>
-              <View style={[styles.pin, styles.pinUpperLeft]}>
-                <Ionicons name="heart" size={10} color="#ff4d74" />
-              </View>
-              <View style={[styles.pin, styles.pinLowerRight]}>
-                <Ionicons name="heart" size={10} color="#ff4d74" />
-              </View>
-              <View style={styles.mapHalo} />
+              <MiniKakaoMapPreview
+                height={168}
+                center={currentCoords}
+                places={nearbyOpenPlacesPreview
+                  .filter((place) => typeof place.latitude === 'number' && typeof place.longitude === 'number')
+                  .map((place) => ({
+                    id: String(place.storeId),
+                    name: place.title,
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                  }))}
+              />
             </View>
             <View style={styles.mapFooter}>
               <View>
-                <Text style={styles.mapFooterTitle}>지금 열린 곳 12개</Text>
+                <Text style={styles.mapFooterTitle}>지금 열린 곳 {nearbyOpenPlacesCount}개</Text>
                 <Text style={styles.mapFooterSub}>내 위치 기준 도보 10분 이내</Text>
               </View>
               <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/map')} activeOpacity={0.9}>
                 <Text style={styles.mapFooterButtonText}>지도 전체보기</Text>
-                <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+                <Ionicons name="chevron-forward" size={16} color="#18a5a5" />
               </TouchableOpacity>
             </View>
           </View>
@@ -320,33 +592,79 @@ export default function MainHomeScreen() {
               <Text style={styles.sectionEmoji}>🔥</Text>
               <Text style={styles.sectionTitle}>지금 인기 장소</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push('/list')}>
+            <TouchableOpacity onPress={() => router.push('/map')}>
               <Text style={styles.sectionMore}>더보기</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalCards}>
-            <PlaceCard title="라떼온스" category="카페" distance="160m" likes="124" accent="#e8f6f7" />
-            <PlaceCard title="이자카야 하루" category="일식" distance="240m" likes="98" accent="#fff3d8" />
-            <PlaceCard title="버거플랜트" category="양식" distance="310m" likes="76" accent="#e7fbf7" />
-            <PlaceCard title="무드 바" category="술집" distance="420m" likes="63" accent="#ffe8e6" />
-          </ScrollView>
+          {popularPlacesLoading ? (
+            <View style={styles.popularLoadingCard}>
+              <ActivityIndicator color="#18a5a5" />
+              <Text style={styles.popularLoadingText}>주변 인기 장소를 불러오는 중이에요</Text>
+            </View>
+          ) : popularPlacesError ? (
+            <View style={styles.popularErrorCard}>
+              <Ionicons name="location-outline" size={20} color="#18a5a5" />
+              <Text style={styles.popularErrorTitle}>인기 장소를 불러오지 못했어요</Text>
+              <Text style={styles.popularErrorText}>{popularPlacesError}</Text>
+              <TouchableOpacity style={styles.popularRetryButton} onPress={() => void loadPopularPlaces()} activeOpacity={0.9}>
+                <Text style={styles.popularRetryText}>다시 시도</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalCards}>
+              {popularPlaces.map((place) => (
+                <PlaceCard
+                  key={place.storeId}
+                  title={place.title}
+                  category={place.category}
+                  distance={place.distance}
+                  likes={place.likes}
+                  accent={place.accent}
+                  status={place.status}
+                  imageUrl={place.imageUrl}
+                  onPress={() => openPopularPlace(place)}
+                />
+              ))}
+            </ScrollView>
+          )}
 
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <Text style={styles.sectionEmoji}>👥</Text>
               <Text style={styles.sectionTitle}>사람들 지도</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push('/views/search_nickname')}>
+            <TouchableOpacity onPress={() => router.push('/list')}>
               <Text style={styles.sectionMore}>더보기</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.peopleCards}>
-            <PeopleMapCard name="현지" title="안양 카페 투어 ☕" likes="142" accent="#e8f6f7" />
-            <PeopleMapCard name="지민" title="데이트 코스 추천 💗" likes="98" accent="#eef3ff" />
-            <PeopleMapCard name="민수" title="혼밥 맛집 리스트" likes="76" accent="#fff4e1" />
-          </ScrollView>
+          {peopleMapsLoading ? (
+            <View style={styles.peopleLoadingCard}>
+              <ActivityIndicator color="#18a5a5" />
+              <Text style={styles.peopleLoadingText}>사람들 지도를 불러오는 중이에요</Text>
+            </View>
+          ) : peopleMapsError ? (
+            <View style={styles.peopleErrorCard}>
+              <Ionicons name="people-outline" size={20} color="#18a5a5" />
+              <Text style={styles.peopleErrorTitle}>사람들 지도를 불러오지 못했어요</Text>
+              <Text style={styles.peopleErrorText}>{peopleMapsError}</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.peopleCards}>
+              {peopleMaps.map((map) => (
+                <PeopleMapCard
+                  key={map.publicMapUuid}
+                  nickname={map.nickname}
+                  title={map.title}
+                  likes={map.likes}
+                  accent={map.accent}
+                  profileImageUrl={map.profileImageUrl}
+                  onPress={() => openPeopleMap(map)}
+                />
+              ))}
+            </ScrollView>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -354,7 +672,10 @@ export default function MainHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7fbfc' },
+  container: { flex: 1, backgroundColor: '#f7f9fc' },
+  pageBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
   safeArea: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 18,
@@ -363,20 +684,20 @@ const styles = StyleSheet.create({
   },
   heroShell: {
     position: 'relative',
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#dbeff0',
-    minHeight: 214,
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 12,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    minHeight: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    overflow: 'visible',
   },
   topRow: {
     position: 'relative',
@@ -385,7 +706,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 2,
   },
   brand: {
     flexDirection: 'row',
@@ -402,14 +723,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brandTitle: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: 0,
   },
   brandSubtitle: {
     marginTop: 2,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -417,7 +738,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -430,39 +751,39 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 30,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#191f28',
   },
   heroAccent: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
   },
   heroSubtitle: {
     marginTop: 6,
     fontSize: 13,
-    color: '#64748b',
+    color: '#6b7684',
     lineHeight: 18,
   },
   searchBar: {
     position: 'relative',
     zIndex: 2,
-    marginTop: 14,
+    marginTop: 8,
     height: 58,
     borderRadius: 29,
-    borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: '#ffffff',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
+    shadowColor: '#cbd5e1',
+    shadowOpacity: 0.08,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
     marginHorizontal: 12,
-    color: '#0f172a',
+    color: '#8b95a1',
     fontSize: 15,
     fontWeight: '600',
     paddingVertical: 0,
@@ -471,7 +792,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -492,16 +813,16 @@ const styles = StyleSheet.create({
     minHeight: 96,
     justifyContent: 'center',
   },
-  shortcutA: { backgroundColor: '#e8f8f7', borderColor: '#8dd9d7' },
-  shortcutB: { backgroundColor: '#fff3e4', borderColor: '#f8d5a6' },
-  shortcutC: { backgroundColor: '#f2fbfa', borderColor: '#dbeff0' },
-  shortcutD: { backgroundColor: '#f7fbff', borderColor: '#dbeff0' },
+  shortcutA: { backgroundColor: '#f9fafb', borderColor: '#e5e8eb' },
+  shortcutB: { backgroundColor: '#f9fafb', borderColor: '#e5e8eb' },
+  shortcutC: { backgroundColor: '#f9fafb', borderColor: '#e5e8eb' },
+  shortcutD: { backgroundColor: '#f2f4f6', borderColor: '#e5e8eb' },
   ownerAction: { marginTop: 4, marginBottom: 14 },
   shortcutIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -513,13 +834,13 @@ const styles = StyleSheet.create({
   shortcutTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#191f28',
     marginBottom: 2,
   },
   shortcutSubtitle: {
     fontSize: 11,
     lineHeight: 14,
-    color: '#64748b',
+    color: '#6b7684',
   },
   actionCard: {
     position: 'relative',
@@ -531,8 +852,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     marginBottom: 16,
   },
   actionIconWrap: {
@@ -541,20 +862,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   actionTextWrap: {
     flex: 1,
     minWidth: 0,
   },
   actionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   actionSubtitle: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 16,
   },
@@ -563,9 +884,9 @@ const styles = StyleSheet.create({
     zIndex: 2,
     marginTop: 18,
     borderRadius: 24,
-    backgroundColor: '#f7fbff',
+    backgroundColor: '#f2f4f6',
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
   },
   mapChip: {
@@ -573,7 +894,7 @@ const styles = StyleSheet.create({
     left: 14,
     top: 14,
     zIndex: 2,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -582,13 +903,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   mapChipText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '800',
   },
   mapPreview: {
-    height: 180,
-    backgroundColor: '#eef7f7',
+    height: 168,
+    backgroundColor: '#eef1f5',
     overflow: 'hidden',
   },
   mapPreviewImage: {
@@ -606,10 +927,10 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
@@ -626,7 +947,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -634,9 +955,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#f9fafb',
   },
   mapHalo: {
     position: 'absolute',
@@ -655,16 +976,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
   mapFooterTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   mapFooterSub: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
   },
   mapFooterButton: {
@@ -674,10 +995,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   mapFooterButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -699,12 +1020,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   sectionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '900',
   },
   sectionMore: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -714,6 +1035,98 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 6,
   },
+  popularLoadingCard: {
+    position: 'relative',
+    zIndex: 2,
+    minHeight: 160,
+    borderRadius: 24,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  popularLoadingText: {
+    color: '#6b7684',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  popularErrorCard: {
+    position: 'relative',
+    zIndex: 2,
+    borderRadius: 24,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    alignItems: 'flex-start',
+  },
+  popularErrorTitle: {
+    marginTop: 10,
+    color: '#191f28',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  popularErrorText: {
+    marginTop: 6,
+    color: '#6b7684',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  popularRetryButton: {
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor: '#edf8f8',
+  },
+  popularRetryText: {
+    color: '#18a5a5',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  peopleLoadingCard: {
+    position: 'relative',
+    zIndex: 2,
+    minHeight: 150,
+    borderRadius: 24,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  peopleLoadingText: {
+    color: '#6b7684',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  peopleErrorCard: {
+    position: 'relative',
+    zIndex: 2,
+    borderRadius: 24,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    alignItems: 'flex-start',
+  },
+  peopleErrorTitle: {
+    marginTop: 10,
+    color: '#191f28',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  peopleErrorText: {
+    marginTop: 6,
+    color: '#6b7684',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   peopleCards: {
     position: 'relative',
     zIndex: 2,
@@ -721,51 +1134,61 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   placeCard: {
-    width: 150,
-    borderRadius: 16,
-    backgroundColor: '#fff',
+    width: 138,
+    borderRadius: 18,
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
   placePhoto: {
-    height: 96,
-    padding: 10,
+    height: 102,
+    padding: 8,
+  },
+  placePhotoImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  placePhotoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   placeStatusPill: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(249,250,251,0.88)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   placeStatusText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   placeTitle: {
-    color: '#0f172a',
-    fontSize: 15,
+    color: '#191f28',
+    fontSize: 14,
     fontWeight: '900',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingTop: 10,
   },
   placeMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   placeMeta: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -775,39 +1198,52 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   peopleCard: {
-    width: 176,
-    borderRadius: 16,
-    backgroundColor: '#fff',
+    width: 138,
+    borderRadius: 18,
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
   peoplePhoto: {
-    height: 96,
-    padding: 10,
+    height: 102,
+    padding: 8,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  peoplePhotoImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  peoplePhotoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(249,250,251,0.12)',
   },
   peopleAvatar: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(249,250,251,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   peopleAvatarText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '900',
   },
   peopleCardBody: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingTop: 10,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   peopleNameRow: {
     flexDirection: 'row',
@@ -817,18 +1253,18 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   peopleName: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '900',
   },
   peopleLikes: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '700',
   },
   peopleTitle: {
-    color: '#0f172a',
-    fontSize: 15,
+    color: '#191f28',
+    fontSize: 14,
     fontWeight: '800',
   },
 });

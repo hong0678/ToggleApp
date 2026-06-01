@@ -24,7 +24,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>당일 로그는 로그인 후 확인할 수 있어요</Text>
       <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 신청, 매장 상태, 종료 요청을 한 화면에서 확인할 수 있어요.</Text>
@@ -49,7 +49,7 @@ function SectionHeader({ title, count, onRefresh }: { title: string; count: stri
       </View>
       {onRefresh ? (
         <TouchableOpacity style={styles.refreshButton} onPress={onRefresh} activeOpacity={0.85}>
-          <Ionicons name="refresh" size={16} color="#0ea5a4" />
+          <Ionicons name="refresh" size={16} color="#18a5a5" />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -191,7 +191,7 @@ export default function OwnerDailyLogScreen() {
   });
 
   return (
-    <LinearGradient colors={['#1e293b', '#312e81', '#4c1d95']} style={styles.container}>
+    <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity
@@ -199,14 +199,14 @@ export default function OwnerDailyLogScreen() {
             style={styles.backButton}
             activeOpacity={0.8}
           >
-            <Ionicons name="chevron-back" size={28} color="#fff" />
+            <Ionicons name="chevron-back" size={28} color="#f9fafb" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>당일 로그</Text>
             <Text style={styles.headerSubTitle}>오늘의 신청과 연결된 매장 상태를 한 번에 봐요</Text>
           </View>
           <TouchableOpacity onPress={() => void load()} style={styles.headerAction} activeOpacity={0.8} disabled={isRefreshing}>
-            {isRefreshing ? <ActivityIndicator color="#fff" /> : <Ionicons name="refresh" size={22} color="#fff" />}
+            {isRefreshing ? <ActivityIndicator color="#18a5a5" /> : <Ionicons name="refresh" size={22} color="#18a5a5" />}
           </TouchableOpacity>
         </View>
 
@@ -215,14 +215,14 @@ export default function OwnerDailyLogScreen() {
             <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
           ) : isLoading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#18a5a5" />
               <Text style={styles.loadingText}>당일 로그를 불러오는 중...</Text>
             </View>
           ) : (
             <>
               <View style={styles.heroCard}>
                 <View style={styles.heroBadge}>
-                  <Ionicons name="today-outline" size={14} color="#0ea5a4" />
+                  <Ionicons name="today-outline" size={14} color="#18a5a5" />
                   <Text style={styles.heroBadgeText}>{todayLabel}</Text>
                 </View>
                 <Text style={styles.heroTitle}>오늘 점주 활동을 모아봤어요</Text>
@@ -314,157 +314,157 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 8 },
   headerAction: { padding: 8 },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: '#fff' },
-  headerSubTitle: { marginTop: 3, color: 'rgba(255,255,255,0.72)', fontSize: 12, lineHeight: 16 },
+  headerTitle: { fontSize: 20, fontWeight: '900', color: '#191f28' },
+  headerSubTitle: { marginTop: 3, color: '#6b7684', fontSize: 12, lineHeight: 16 },
   scrollContent: { padding: 20, paddingBottom: 34, gap: 14 },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
   gateIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
   gateSecondaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
-  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gateSecondaryButtonText: { color: '#18a5a5', fontSize: 15, fontWeight: '800' },
   gatePrimaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
-  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   loadingCard: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: '#e5e8eb',
   },
-  loadingText: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 10 },
+  loadingText: { color: '#6b7684', fontSize: 13, marginTop: 10 },
   heroCard: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: '#e5e8eb',
   },
   heroBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: 12,
   },
-  heroBadgeText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
-  heroTitle: { fontSize: 20, fontWeight: '900', color: '#fff', marginBottom: 8 },
-  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.78)', lineHeight: 18 },
+  heroBadgeText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
+  heroTitle: { fontSize: 20, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  heroSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statusPill: {
     flexBasis: '48%',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#f9fafb',
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: '#e5e8eb',
   },
-  statusLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '800' },
-  statusValue: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 6 },
+  statusLabel: { color: '#6b7684', fontSize: 12, fontWeight: '800' },
+  statusValue: { color: '#191f28', fontSize: 18, fontWeight: '900', marginTop: 6 },
   sectionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { color: '#0f172a', fontSize: 16, fontWeight: '900' },
-  sectionCount: { color: '#64748b', fontSize: 12, marginTop: 3, fontWeight: '700' },
+  sectionTitle: { color: '#191f28', fontSize: 16, fontWeight: '900' },
+  sectionCount: { color: '#6b7684', fontSize: 12, marginTop: 3, fontWeight: '700' },
   refreshButton: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   listGap: { gap: 10 },
   rowCard: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
   },
   rowHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  rowTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
-  rowSub: { color: '#64748b', fontSize: 12, marginTop: 4 },
+  rowTitle: { color: '#191f28', fontSize: 15, fontWeight: '900' },
+  rowSub: { color: '#6b7684', fontSize: 12, marginTop: 4 },
   rowBadge: {
     borderRadius: 999,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  rowBadgeText: { color: '#0ea5a4', fontSize: 11, fontWeight: '800' },
-  rowMeta: { marginTop: 6, color: '#334155', fontSize: 12, lineHeight: 18 },
+  rowBadgeText: { color: '#18a5a5', fontSize: 11, fontWeight: '800' },
+  rowMeta: { marginTop: 6, color: '#4e5968', fontSize: 12, lineHeight: 18 },
   rejectReason: { marginTop: 8, color: '#dc2626', fontSize: 12, lineHeight: 18, fontWeight: '700' },
   storeChipRow: { gap: 10, paddingBottom: 4 },
   storeChip: {
     minWidth: 120,
     borderRadius: 16,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   storeChipActive: {
-    borderColor: '#0ea5a4',
-    backgroundColor: '#eefafa',
+    borderColor: '#18a5a5',
+    backgroundColor: '#eef1f5',
   },
-  storeChipName: { color: '#0f172a', fontSize: 13, fontWeight: '800' },
-  storeChipNameActive: { color: '#0ea5a4' },
-  storeChipStatus: { color: '#64748b', fontSize: 11, marginTop: 4, fontWeight: '700' },
-  storeChipStatusActive: { color: '#0ea5a4' },
+  storeChipName: { color: '#191f28', fontSize: 13, fontWeight: '800' },
+  storeChipNameActive: { color: '#18a5a5' },
+  storeChipStatus: { color: '#6b7684', fontSize: 11, marginTop: 4, fontWeight: '700' },
+  storeChipStatusActive: { color: '#18a5a5' },
   detailBox: {
     marginTop: 12,
     borderRadius: 18,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     padding: 14,
   },
-  detailTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
-  detailText: { marginTop: 4, color: '#334155', fontSize: 12, lineHeight: 18 },
-  emptyText: { color: '#64748b', fontSize: 13, lineHeight: 18 },
+  detailTitle: { color: '#191f28', fontSize: 15, fontWeight: '900' },
+  detailText: { marginTop: 4, color: '#4e5968', fontSize: 12, lineHeight: 18 },
+  emptyText: { color: '#6b7684', fontSize: 13, lineHeight: 18 },
 });

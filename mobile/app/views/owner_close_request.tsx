@@ -22,7 +22,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>운영 종료 요청은 로그인 후 가능해요</Text>
       <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 매장별 종료 요청을 남길 수 있어요.</Text>
@@ -135,7 +135,7 @@ export default function OwnerCloseRequestScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
-            <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
+            <Ionicons name="chevron-back" size={24} color="#18a5a5" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>운영 종료 요청</Text>
@@ -147,12 +147,12 @@ export default function OwnerCloseRequestScreen() {
           <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator color="#0ea5a4" />
+            <ActivityIndicator color="#18a5a5" />
             <Text style={styles.loadingText}>매장 정보를 불러오는 중...</Text>
           </View>
         ) : stores.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="close-circle-outline" size={28} color="#94a3b8" />
+            <Ionicons name="close-circle-outline" size={28} color="#8b95a1" />
             <Text style={styles.emptyTitle}>연결된 매장이 없어요</Text>
             <Text style={styles.emptySubtitle}>매장 등록이 승인되면 운영 종료 요청을 보낼 수 있어요.</Text>
           </View>
@@ -174,7 +174,7 @@ export default function OwnerCloseRequestScreen() {
                   value={reason}
                   onChangeText={setReason}
                   placeholder="예: 재정비를 위해 잠시 문을 닫습니다."
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#8b95a1"
                   multiline
                 />
               </View>
@@ -186,17 +186,17 @@ export default function OwnerCloseRequestScreen() {
                   value={effectiveAt}
                   onChangeText={setEffectiveAt}
                   placeholder="예: 2026-05-10 18:00"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#8b95a1"
                 />
               </View>
 
               <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.9} disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#f9fafb" />
                 ) : (
                   <>
                     <Text style={styles.primaryButtonText}>종료 요청하기</Text>
-                    <Ionicons name="chevron-forward" size={18} color="#fff" />
+                    <Ionicons name="chevron-forward" size={18} color="#f9fafb" />
                   </>
                 )}
               </TouchableOpacity>
@@ -214,127 +214,127 @@ export default function OwnerCloseRequestScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7fbff' },
+  container: { flex: 1, backgroundColor: '#f2f4f6' },
   scrollContent: { padding: 20, paddingBottom: 32 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   backButton: { paddingTop: 4, paddingRight: 4 },
   headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
-  headerSubtitle: { marginTop: 6, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: '#191f28' },
+  headerSubtitle: { marginTop: 6, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
   gateIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
   gateSecondaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
-  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gateSecondaryButtonText: { color: '#18a5a5', fontSize: 15, fontWeight: '800' },
   gatePrimaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
-  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   loadingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  loadingText: { color: '#6b7684', fontSize: 13, fontWeight: '600' },
   emptyCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginTop: 10 },
-  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#191f28', marginTop: 10 },
+  emptySubtitle: { fontSize: 13, color: '#6b7684', textAlign: 'center', marginTop: 8, lineHeight: 18 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     marginBottom: 12,
   },
-  sectionTitle: { fontSize: 15, fontWeight: '900', color: '#0f172a', marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '900', color: '#191f28', marginBottom: 12 },
   storeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   storeChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   storeChipActive: {
-    borderColor: '#0ea5a4',
-    backgroundColor: '#eefafa',
+    borderColor: '#18a5a5',
+    backgroundColor: '#eef1f5',
   },
-  storeChipText: { color: '#334155', fontSize: 13, fontWeight: '700' },
-  storeChipTextActive: { color: '#0ea5a4' },
+  storeChipText: { color: '#4e5968', fontSize: 13, fontWeight: '700' },
+  storeChipTextActive: { color: '#18a5a5' },
   inputBlock: { marginBottom: 14 },
-  fieldLabel: { color: '#0f172a', fontSize: 13, fontWeight: '800', marginBottom: 8 },
+  fieldLabel: { color: '#191f28', fontSize: 13, fontWeight: '800', marginBottom: 8 },
   input: {
     height: 50,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
-    color: '#0f172a',
+    color: '#191f28',
   },
   textArea: {
     minHeight: 90,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#0f172a',
+    color: '#191f28',
     textAlignVertical: 'top',
   },
   primaryButton: {
     marginTop: 4,
     height: 54,
     borderRadius: 16,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
   },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  latestText: { color: '#334155', fontSize: 13, lineHeight: 20 },
+  primaryButtonText: { color: '#f9fafb', fontSize: 16, fontWeight: '800' },
+  latestText: { color: '#4e5968', fontSize: 13, lineHeight: 20 },
 });

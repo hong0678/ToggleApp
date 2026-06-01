@@ -57,7 +57,7 @@ function StarSelector({
         const active = value <= rating;
         return (
           <TouchableOpacity key={value} style={styles.starButton} onPress={() => onChange(value)} activeOpacity={0.85}>
-            <Ionicons name={active ? 'star' : 'star-outline'} size={22} color={active ? '#f59e0b' : '#94a3b8'} />
+            <Ionicons name={active ? 'star' : 'star-outline'} size={22} color={active ? '#f59e0b' : '#8b95a1'} />
           </TouchableOpacity>
         );
       })}
@@ -108,7 +108,7 @@ function ReviewCard({
       <View style={styles.reviewCardTop}>
         <View style={styles.authorWrap}>
           <Text style={styles.authorLabel}>작성자</Text>
-          <Text style={styles.authorName}>{item.authorNickname}</Text>
+          <Text style={styles.authorName}>{item.displayName ?? item.authorNickname ?? '작성자'}</Text>
           <View style={styles.ratingWrap}>
             {[1, 2, 3, 4, 5].map((value) => (
               <Ionicons key={value} name={value <= item.rating ? 'star' : 'star-outline'} size={14} color="#f59e0b" />
@@ -182,7 +182,7 @@ export default function StoreReviewsScreen() {
       const [storeResponse, publicResponse, mineResponse] = await Promise.all([
         storesApi.listByIds([storeId]),
         storeReviewsApi.list(storeId),
-        token ? storeReviewsApi.mine(storeId) : Promise.resolve(null),
+        token ? storeReviewsApi.mineByStore(storeId) : Promise.resolve(null),
       ]);
 
       setStore(storeResponse.stores[0] ?? null);
@@ -342,7 +342,7 @@ export default function StoreReviewsScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.85}>
-              <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
+              <Ionicons name="chevron-back" size={24} color="#18a5a5" />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
               <Text style={styles.headerTitle}>리뷰 보기</Text>
@@ -359,7 +359,7 @@ export default function StoreReviewsScreen() {
                 <Text style={styles.metaText}>{averageRating}</Text>
               </View>
               <View style={styles.metaPill}>
-                <Ionicons name="chatbubble-outline" size={14} color="#0ea5a4" />
+                <Ionicons name="chatbubble-outline" size={14} color="#18a5a5" />
                 <Text style={styles.metaText}>{publicReviews.length}개 리뷰</Text>
               </View>
             </View>
@@ -367,7 +367,7 @@ export default function StoreReviewsScreen() {
 
           {isLoading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color="#0ea5a4" />
+              <ActivityIndicator color="#18a5a5" />
               <Text style={styles.loadingText}>리뷰를 불러오는 중...</Text>
             </View>
           ) : (
@@ -412,17 +412,17 @@ export default function StoreReviewsScreen() {
                       value={draft.content}
                       onChangeText={(content) => setDraft((current) => ({ ...current, content }))}
                       placeholder="이 매장에 대한 리뷰를 적어주세요."
-                      placeholderTextColor="#94a3b8"
+                      placeholderTextColor="#8b95a1"
                       multiline
                     />
 
                     <View style={styles.uploadRow}>
                       <TouchableOpacity style={styles.uploadButton} onPress={() => void handlePickImage()} activeOpacity={0.9}>
                         {isUploading ? (
-                          <ActivityIndicator color="#0ea5a4" />
+                          <ActivityIndicator color="#18a5a5" />
                         ) : (
                           <>
-                            <Ionicons name="image-outline" size={16} color="#0ea5a4" />
+                            <Ionicons name="image-outline" size={16} color="#18a5a5" />
                             <Text style={styles.uploadButtonText}>사진 추가</Text>
                           </>
                         )}
@@ -441,7 +441,7 @@ export default function StoreReviewsScreen() {
                     />
 
                     <TouchableOpacity style={styles.primaryButton} onPress={() => void handleSubmit()} activeOpacity={0.9} disabled={isSubmitting}>
-                      {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{selectedReviewId ? '리뷰 수정' : '리뷰 등록'}</Text>}
+                      {isSubmitting ? <ActivityIndicator color="#f9fafb" /> : <Text style={styles.primaryButtonText}>{selectedReviewId ? '리뷰 수정' : '리뷰 등록'}</Text>}
                     </TouchableOpacity>
                   </>
                 )}
@@ -499,7 +499,7 @@ export default function StoreReviewsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7fbfc' },
+  container: { flex: 1, backgroundColor: '#f2f4f6' },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 28 : 34,
@@ -508,49 +508,49 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 18 },
   backButton: { paddingTop: 10, paddingRight: 10, paddingBottom: 10 },
   headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
-  headerSubtitle: { marginTop: 6, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: '#191f28' },
+  headerSubtitle: { marginTop: 6, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   heroCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     padding: 18,
     marginBottom: 12,
   },
-  storeName: { fontSize: 22, fontWeight: '900', color: '#0f172a' },
-  storeAddress: { marginTop: 8, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  storeName: { fontSize: 22, fontWeight: '900', color: '#191f28' },
+  storeAddress: { marginTop: 8, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   metaRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
   metaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  metaText: { color: '#0f172a', fontSize: 12, fontWeight: '800' },
+  metaText: { color: '#191f28', fontSize: 12, fontWeight: '800' },
   loadingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  loadingText: { color: '#6b7684', fontSize: 13, fontWeight: '600' },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     padding: 18,
     marginBottom: 12,
   },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#0f172a', marginBottom: 12 },
-  fieldLabel: { fontSize: 13, fontWeight: '800', color: '#334155', marginTop: 8, marginBottom: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#191f28', marginBottom: 12 },
+  fieldLabel: { fontSize: 13, fontWeight: '800', color: '#4e5968', marginTop: 8, marginBottom: 8 },
   starRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
   starButton: {
     width: 34,
@@ -558,19 +558,19 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
   contentInput: {
     minHeight: 120,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#0f172a',
+    color: '#191f28',
     textAlignVertical: 'top',
   },
   uploadRow: { marginTop: 12, gap: 8 },
@@ -581,123 +581,123 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
+    borderColor: '#edf8f8',
+    backgroundColor: '#eef1f5',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  uploadButtonText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
-  uploadHint: { color: '#64748b', fontSize: 12, lineHeight: 16 },
+  uploadButtonText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
+  uploadHint: { color: '#6b7684', fontSize: 12, lineHeight: 16 },
   imageChipRow: { gap: 8, marginTop: 10 },
   imageChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  imageChipText: { flex: 1, color: '#334155', fontSize: 12 },
+  imageChipText: { flex: 1, color: '#4e5968', fontSize: 12 },
   primaryButton: {
     height: 52,
     borderRadius: 16,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 14,
   },
-  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  primaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   cancelEditButton: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#fca5a5',
-    backgroundColor: '#fff1f2',
+    backgroundColor: '#f9fafb',
   },
   cancelEditText: { color: '#ef4444', fontSize: 12, fontWeight: '800' },
   loginCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     padding: 16,
   },
-  loginTitle: { fontSize: 15, fontWeight: '900', color: '#0f172a' },
-  loginSubtitle: { marginTop: 6, fontSize: 13, color: '#64748b', lineHeight: 18 },
+  loginTitle: { fontSize: 15, fontWeight: '900', color: '#191f28' },
+  loginSubtitle: { marginTop: 6, fontSize: 13, color: '#6b7684', lineHeight: 18 },
   loginButtons: { flexDirection: 'row', gap: 10, marginTop: 14 },
   loginSecondaryButton: {
     flex: 1,
     height: 44,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#fff',
+    borderColor: '#edf8f8',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loginSecondaryButtonText: { color: '#0ea5a4', fontSize: 13, fontWeight: '800' },
+  loginSecondaryButtonText: { color: '#18a5a5', fontSize: 13, fontWeight: '800' },
   loginPrimaryButton: {
     flex: 1,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loginPrimaryButtonText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  loginPrimaryButtonText: { color: '#f9fafb', fontSize: 13, fontWeight: '800' },
   reviewList: { gap: 12 },
   reviewCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     padding: 14,
   },
   reviewCardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   authorWrap: { flex: 1, gap: 6 },
-  authorLabel: { color: '#64748b', fontSize: 10, fontWeight: '800' },
-  authorName: { color: '#0f172a', fontSize: 14, fontWeight: '900' },
+  authorLabel: { color: '#6b7684', fontSize: 10, fontWeight: '800' },
+  authorName: { color: '#191f28', fontSize: 14, fontWeight: '900' },
   ratingWrap: { flexDirection: 'row', gap: 2 },
   mineBadge: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
     fontWeight: '900',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
     overflow: 'hidden',
   },
-  reviewContent: { marginTop: 10, color: '#334155', fontSize: 13, lineHeight: 19 },
+  reviewContent: { marginTop: 10, color: '#4e5968', fontSize: 13, lineHeight: 19 },
   reviewImageRow: { gap: 8, marginTop: 12 },
   reviewImageCard: {
     width: 92,
     height: 92,
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#e5e8eb',
   },
   reviewImage: { width: '100%', height: '100%' },
   reviewFooter: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  reviewMeta: { color: '#64748b', fontSize: 12 },
+  reviewMeta: { color: '#6b7684', fontSize: 12 },
   reviewActions: { flexDirection: 'row', gap: 8 },
   actionPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#fff',
+    borderColor: '#edf8f8',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  actionPillText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
+  actionPillText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
   deletePill: {
     borderColor: '#fca5a5',
-    backgroundColor: '#fff1f2',
+    backgroundColor: '#f9fafb',
   },
   deletePillText: { color: '#ef4444' },
-  emptyText: { color: '#64748b', fontSize: 13, lineHeight: 18 },
+  emptyText: { color: '#6b7684', fontSize: 13, lineHeight: 18 },
 });

@@ -36,9 +36,7 @@ export const publicMapsApi = {
   },
 
   async getLikes(mapId: number) {
-    return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`, {
-      auth: false,
-    });
+    return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`);
   },
 
   async like(mapId: number) {

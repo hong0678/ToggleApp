@@ -32,7 +32,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>실시간 상태 관리는 로그인 후 가능해요</Text>
       <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 연결된 매장의 영업 상태를 바꿀 수 있어요.</Text>
@@ -69,7 +69,7 @@ function StoreCard({
     <View style={styles.card}>
       <View style={styles.cardTopRow}>
         <View style={styles.storeBadge}>
-          <Ionicons name="storefront-outline" size={16} color="#0ea5a4" />
+          <Ionicons name="storefront-outline" size={16} color="#18a5a5" />
           <Text style={styles.storeBadgeText}>{store.categoryName ?? '카테고리 없음'}</Text>
         </View>
         <View style={styles.statusPill}>
@@ -102,7 +102,7 @@ function StoreCard({
                 <Text style={[styles.statusButtonLabel, active ? styles.statusButtonLabelActive : null]}>{option.label}</Text>
                 {active ? (
                   <View style={styles.savedBadge}>
-                    <Ionicons name="checkmark" size={12} color="#0ea5a4" />
+                    <Ionicons name="checkmark" size={12} color="#18a5a5" />
                     <Text style={styles.savedBadgeText}>저장됨</Text>
                   </View>
                 ) : null}
@@ -115,7 +115,7 @@ function StoreCard({
 
       <View style={styles.noticeBox}>
         <View style={styles.noticeBoxHeader}>
-          <Ionicons name="chatbubble-outline" size={16} color="#0ea5a4" />
+          <Ionicons name="chatbubble-outline" size={16} color="#18a5a5" />
           <Text style={styles.noticeLabel}>안내 문구</Text>
         </View>
         <TextInput
@@ -123,7 +123,7 @@ function StoreCard({
           value={comment}
           onChangeText={setComment}
           placeholder="예: 재료 소진으로 잠시 닫아요"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor="#8b95a1"
           multiline
         />
         <TouchableOpacity
@@ -263,7 +263,7 @@ export default function OwnerStatusManageScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
-            <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
+            <Ionicons name="chevron-back" size={24} color="#18a5a5" />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>실시간 상태 관리</Text>
@@ -275,12 +275,12 @@ export default function OwnerStatusManageScreen() {
           <GatePanel onLogin={() => router.replace('/views/owner_login')} onSignup={() => router.replace('/views/owner_signup')} />
         ) : isLoading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator color="#0ea5a4" />
+            <ActivityIndicator color="#18a5a5" />
             <Text style={styles.loadingText}>매장 정보를 불러오는 중...</Text>
           </View>
         ) : stores.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="storefront-outline" size={28} color="#94a3b8" />
+            <Ionicons name="storefront-outline" size={28} color="#8b95a1" />
             <Text style={styles.emptyTitle}>연결된 매장이 없어요</Text>
             <Text style={styles.emptySubtitle}>매장 등록 신청 후 점주 매장이 연결되면 상태를 관리할 수 있어요.</Text>
           </View>
@@ -309,111 +309,111 @@ export default function OwnerStatusManageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7fbff' },
+  container: { flex: 1, backgroundColor: '#f2f4f6' },
   scrollContent: { padding: 20, paddingBottom: 32 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   backButton: { paddingTop: 4, paddingRight: 4 },
   headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
-  headerSubtitle: { marginTop: 6, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: '#191f28' },
+  headerSubtitle: { marginTop: 6, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
   gateIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
   gateSecondaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
-  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gateSecondaryButtonText: { color: '#18a5a5', fontSize: 15, fontWeight: '800' },
   gatePrimaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
-  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   loadingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  loadingText: { color: '#6b7684', fontSize: 13, fontWeight: '600' },
   emptyCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginTop: 10 },
-  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#191f28', marginTop: 10 },
+  emptySubtitle: { fontSize: 13, color: '#6b7684', textAlign: 'center', marginTop: 8, lineHeight: 18 },
   list: { gap: 12 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
   cardTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   storeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  storeBadgeText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
+  storeBadgeText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#eef1f5',
   },
-  statusPillText: { color: '#334155', fontSize: 12, fontWeight: '800' },
-  storeName: { fontSize: 19, fontWeight: '900', color: '#0f172a', marginTop: 12 },
-  storeAddress: { marginTop: 8, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  statusPillText: { color: '#4e5968', fontSize: 12, fontWeight: '800' },
+  storeName: { fontSize: 19, fontWeight: '900', color: '#191f28', marginTop: 12 },
+  storeAddress: { marginTop: 8, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   statusButtons: { gap: 10, marginTop: 14 },
   statusButton: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   statusButtonActive: {
-    borderColor: '#0ea5a4',
-    backgroundColor: '#e6fbfa',
+    borderColor: '#18a5a5',
+    backgroundColor: '#edf8f8',
   },
   statusButtonHeader: {
     flexDirection: 'row',
@@ -422,9 +422,9 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 4,
   },
-  statusButtonLabel: { color: '#0f172a', fontSize: 15, fontWeight: '800', marginBottom: 4 },
-  statusButtonLabelActive: { color: '#0ea5a4' },
-  statusButtonSub: { color: '#64748b', fontSize: 12 },
+  statusButtonLabel: { color: '#191f28', fontSize: 15, fontWeight: '800', marginBottom: 4 },
+  statusButtonLabelActive: { color: '#18a5a5' },
+  statusButtonSub: { color: '#6b7684', fontSize: 12 },
   statusButtonSubActive: { color: '#0f766e' },
   savedBadge: {
     flexDirection: 'row',
@@ -433,48 +433,48 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#99f6e4',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  savedBadgeText: { color: '#0ea5a4', fontSize: 11, fontWeight: '900' },
+  savedBadgeText: { color: '#18a5a5', fontSize: 11, fontWeight: '900' },
   noticeBox: {
     marginTop: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#eefafa',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#eef1f5',
     padding: 14,
   },
   noticeBoxHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  noticeLabel: { color: '#0f172a', fontSize: 13, fontWeight: '800' },
+  noticeLabel: { color: '#191f28', fontSize: 13, fontWeight: '800' },
   noticeInput: {
     minHeight: 72,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0f172a',
+    color: '#191f28',
     textAlignVertical: 'top',
   },
   noticeButton: {
     marginTop: 10,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noticeButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  noticeButtonText: { color: '#f9fafb', fontSize: 14, fontWeight: '800' },
   unlinkButton: {
     marginTop: 12,
     height: 44,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#fecaca',
-    backgroundColor: '#fff7f7',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',

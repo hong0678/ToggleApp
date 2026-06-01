@@ -20,7 +20,7 @@ function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: 
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>신청 현황을 보려면 로그인하세요</Text>
       <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 신청 상태와 심사 결과를 확인할 수 있어요.</Text>
@@ -50,19 +50,19 @@ function ApplicationCard({ item }: { item: OwnerApplicationSummaryResponse }) {
       </View>
 
       <View style={styles.infoRow}>
-        <Ionicons name="person-outline" size={16} color="#94a3b8" />
+        <Ionicons name="person-outline" size={16} color="#8b95a1" />
         <Text style={styles.infoText} numberOfLines={1}>{item.ownerNickname || item.ownerEmail}</Text>
       </View>
       <View style={styles.infoRow}>
-        <Ionicons name="location-outline" size={16} color="#94a3b8" />
+        <Ionicons name="location-outline" size={16} color="#8b95a1" />
         <Text style={styles.infoText} numberOfLines={2}>{item.businessAddressRaw}</Text>
       </View>
       <View style={styles.infoRow}>
-        <Ionicons name="calendar-outline" size={16} color="#94a3b8" />
+        <Ionicons name="calendar-outline" size={16} color="#8b95a1" />
         <Text style={styles.infoText}>신청: {item.submittedAt}</Text>
       </View>
       <View style={styles.infoRow}>
-        <Ionicons name="checkmark-circle-outline" size={16} color="#94a3b8" />
+        <Ionicons name="checkmark-circle-outline" size={16} color="#8b95a1" />
         <Text style={styles.infoText}>
           사업자 {item.businessVerificationStatus} · 지도 {item.mapVerificationStatus}
         </Text>
@@ -120,22 +120,22 @@ export default function OwnerRegisterStatusScreen() {
   }, []);
 
   return (
-    <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
+    <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
-            <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
+            <Ionicons name="chevron-back" size={24} color="#18a5a5" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>신청 현황</Text>
           <TouchableOpacity onPress={() => router.replace('/views/owner_login')} style={styles.headerAction} activeOpacity={0.8}>
-            <Ionicons name="person-outline" size={20} color="#0ea5a4" />
+            <Ionicons name="person-outline" size={20} color="#18a5a5" />
           </TouchableOpacity>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.heroCard}>
             <View style={styles.heroBadge}>
-              <Ionicons name="list-outline" size={14} color="#0ea5a4" />
+              <Ionicons name="list-outline" size={14} color="#18a5a5" />
               <Text style={styles.heroBadgeText}>Owner</Text>
             </View>
             <Text style={styles.heroTitle}>등록 신청을 한눈에 확인해요</Text>
@@ -149,12 +149,12 @@ export default function OwnerRegisterStatusScreen() {
             />
           ) : isLoading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color="#0ea5a4" />
+              <ActivityIndicator color="#18a5a5" />
               <Text style={styles.loadingText}>신청 현황을 불러오는 중...</Text>
             </View>
           ) : items.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="document-text-outline" size={28} color="#94a3b8" />
+              <Ionicons name="document-text-outline" size={28} color="#8b95a1" />
               <Text style={styles.emptyTitle}>신청 내역이 없어요</Text>
               <Text style={styles.emptySubtitle}>매장 등록 신청을 먼저 진행하면 여기서 확인할 수 있어요.</Text>
               <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/views/owner_store_register')} activeOpacity={0.9}>
@@ -185,15 +185,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   backButton: { padding: 6 },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#191f28' },
   headerAction: { padding: 6 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
   heroCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     marginBottom: 16,
   },
   heroBadge: {
@@ -201,108 +201,108 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: 12,
   },
-  heroBadgeText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
-  heroTitle: { fontSize: 20, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  heroSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  heroBadgeText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
+  heroTitle: { fontSize: 20, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  heroSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     marginTop: 8,
   },
   gateIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
   gateSecondaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
-  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gateSecondaryButtonText: { color: '#18a5a5', fontSize: 15, fontWeight: '800' },
   gatePrimaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
-  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   loadingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  loadingText: { color: '#6b7684', fontSize: 13, fontWeight: '600' },
   emptyCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginTop: 10 },
-  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#191f28', marginTop: 10 },
+  emptySubtitle: { fontSize: 13, color: '#6b7684', textAlign: 'center', marginTop: 8, lineHeight: 18 },
   primaryButton: {
     marginTop: 16,
     height: 48,
     borderRadius: 16,
     paddingHorizontal: 18,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  primaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   list: { gap: 12 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
   },
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  storeName: { fontSize: 17, fontWeight: '900', color: '#0f172a', flex: 1 },
-  metaText: { marginTop: 4, color: '#64748b', fontSize: 12 },
+  storeName: { fontSize: 17, fontWeight: '900', color: '#191f28', flex: 1 },
+  metaText: { marginTop: 4, color: '#6b7684', fontSize: 12 },
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
   },
-  statusPillText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
+  statusPillText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10 },
   infoText: { flex: 1, color: '#475569', fontSize: 13, lineHeight: 18 },
   rejectBox: {
     marginTop: 14,
     borderRadius: 14,
-    backgroundColor: '#fff7f7',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
     borderColor: '#fecaca',
     padding: 12,

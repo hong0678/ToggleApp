@@ -25,14 +25,14 @@ type StatusTone = {
 };
 
 const STATUS_TONES: Record<string, StatusTone> = {
-  SUCCESS: { backgroundColor: '#e6fbfa', color: '#0ea5a4', borderColor: '#bfeceb' },
+  SUCCESS: { backgroundColor: '#edf8f8', color: '#18a5a5', borderColor: '#edf8f8' },
   FAILED: { backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' },
   PENDING: { backgroundColor: '#fef3c7', color: '#b45309', borderColor: '#fde68a' },
   UNDER_REVIEW: { backgroundColor: '#e0f2fe', color: '#0284c7', borderColor: '#bae6fd' },
-  APPROVED: { backgroundColor: '#e6fbfa', color: '#0ea5a4', borderColor: '#bfeceb' },
+  APPROVED: { backgroundColor: '#edf8f8', color: '#18a5a5', borderColor: '#edf8f8' },
   REJECTED: { backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' },
   AUTO_VERIFICATION_FAILED: { backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' },
-  AUTO_VERIFICATION_UNAVAILABLE: { backgroundColor: '#f3f4f6', color: '#64748b', borderColor: '#e2e8f0' },
+  AUTO_VERIFICATION_UNAVAILABLE: { backgroundColor: '#f3f4f6', color: '#6b7684', borderColor: '#e5e8eb' },
 };
 
 function statusTone(status: string | null | undefined): StatusTone {
@@ -155,7 +155,7 @@ function ApplicationCard({
               disabled={Boolean(isApproving)}
             >
               {isApproving ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#f9fafb" />
               ) : (
                 <Text style={styles.primaryButtonText}>매장 등록</Text>
               )}
@@ -312,10 +312,10 @@ export default function AdminOwnerApplicationsScreen() {
           <View style={styles.hero}>
             <View style={styles.heroTopRow}>
               <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
-                <Ionicons name="chevron-back" size={24} color="#0ea5a4" />
+                <Ionicons name="chevron-back" size={24} color="#18a5a5" />
               </TouchableOpacity>
               <TouchableOpacity onPress={loadApplications} style={styles.refreshButton} activeOpacity={0.85}>
-                <Ionicons name="refresh" size={18} color="#0ea5a4" />
+                <Ionicons name="refresh" size={18} color="#18a5a5" />
               </TouchableOpacity>
             </View>
             <Text style={styles.title}>관리자 신청 검토</Text>
@@ -343,7 +343,7 @@ export default function AdminOwnerApplicationsScreen() {
 
           {isLoading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color="#0ea5a4" />
+              <ActivityIndicator color="#18a5a5" />
             </View>
           ) : applications.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -431,7 +431,7 @@ export default function AdminOwnerApplicationsScreen() {
 
               {isDetailLoading ? (
                 <View style={styles.loadingDetailBox}>
-                  <ActivityIndicator color="#0ea5a4" />
+                  <ActivityIndicator color="#18a5a5" />
                 </View>
               ) : selectedDetail ? (
                 <>
@@ -477,7 +477,7 @@ export default function AdminOwnerApplicationsScreen() {
                       disabled={isApproving === selectedApplication.applicationId}
                     >
                       {isApproving === selectedApplication.applicationId ? (
-                        <ActivityIndicator color="#fff" />
+                        <ActivityIndicator color="#f9fafb" />
                       ) : (
                         <Text style={styles.primaryButtonText}>매장 등록</Text>
                       )}
@@ -510,13 +510,13 @@ export default function AdminOwnerApplicationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7fbfc' },
+  container: { flex: 1, backgroundColor: '#f2f4f6' },
   scrollContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 32 },
   hero: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     padding: 16,
     marginBottom: 16,
   },
@@ -531,43 +531,43 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
-  subtitle: { marginTop: 6, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  title: { fontSize: 24, fontWeight: '900', color: '#191f28' },
+  subtitle: { marginTop: 6, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   summaryRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   summaryCard: {
     flex: 1,
     borderRadius: 18,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     padding: 12,
   },
-  summaryValue: { fontSize: 20, fontWeight: '900', color: '#0f172a' },
-  summaryLabel: { marginTop: 4, fontSize: 12, fontWeight: '700', color: '#64748b' },
+  summaryValue: { fontSize: 20, fontWeight: '900', color: '#191f28' },
+  summaryLabel: { marginTop: 4, fontSize: 12, fontWeight: '700', color: '#6b7684' },
   loadingCard: {
     padding: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     marginBottom: 16,
   },
   emptyCard: {
     padding: 24,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     marginBottom: 16,
   },
-  emptyTitle: { color: '#0f172a', fontSize: 16, fontWeight: '900', marginBottom: 6 },
-  emptyText: { color: '#64748b', fontSize: 13, lineHeight: 18 },
+  emptyTitle: { color: '#191f28', fontSize: 16, fontWeight: '900', marginBottom: 6 },
+  emptyText: { color: '#6b7684', fontSize: 13, lineHeight: 18 },
   sectionBlocks: { gap: 16, marginBottom: 16 },
   sectionTabs: {
     flexDirection: 'row',
@@ -579,58 +579,58 @@ const styles = StyleSheet.create({
     minHeight: 42,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTabActive: {
-    borderColor: '#0ea5a4',
-    backgroundColor: '#e6fbfa',
+    borderColor: '#18a5a5',
+    backgroundColor: '#edf8f8',
   },
   sectionTabText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '800',
   },
   sectionTabTextActive: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
   },
   listSection: { gap: 12, marginBottom: 16 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   applicationCard: {
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     padding: 16,
   },
   applicationCardRegistered: {
     backgroundColor: '#f8fffe',
   },
   applicationCardSelected: {
-    borderColor: '#0ea5a4',
+    borderColor: '#18a5a5',
     backgroundColor: '#f8fffe',
   },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   cardTitleWrap: { flex: 1 },
-  storeName: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  ownerName: { marginTop: 4, color: '#64748b', fontSize: 12, fontWeight: '700' },
+  storeName: { color: '#191f28', fontSize: 18, fontWeight: '900' },
+  ownerName: { marginTop: 4, color: '#6b7684', fontSize: 12, fontWeight: '700' },
   cardTag: {
     borderRadius: 999,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   cardTagRegistered: {
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     borderColor: '#9ee7e4',
   },
-  cardTagText: { color: '#0ea5a4', fontSize: 11, fontWeight: '800' },
+  cardTagText: { color: '#18a5a5', fontSize: 11, fontWeight: '800' },
   cardTagRegisteredText: { color: '#059669', fontSize: 11, fontWeight: '800' },
-  metaText: { marginTop: 12, color: '#334155', fontSize: 13, lineHeight: 18 },
+  metaText: { marginTop: 12, color: '#4e5968', fontSize: 13, lineHeight: 18 },
   statusRow: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
   statusPill: {
     minWidth: 112,
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  statusPillApproved: { backgroundColor: '#e6fbfa', borderColor: '#bfeceb' },
+  statusPillApproved: { backgroundColor: '#edf8f8', borderColor: '#edf8f8' },
   statusLabel: { fontSize: 11, fontWeight: '800' },
   statusValue: { marginTop: 4, fontSize: 13, fontWeight: '900' },
   cardFooterRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
@@ -650,28 +650,28 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#cfe8e8',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryButtonText: { color: '#0ea5a4', fontSize: 14, fontWeight: '800' },
+  secondaryButtonText: { color: '#18a5a5', fontSize: 14, fontWeight: '800' },
   primaryButton: {
     flex: 1,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonDisabled: { opacity: 0.55 },
-  primaryButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  primaryButtonText: { color: '#f9fafb', fontSize: 14, fontWeight: '800' },
   registeredButton: {
     flex: 1,
     height: 44,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#9ee7e4',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#fff1f2',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
     borderColor: '#fecaca',
     alignItems: 'center',
@@ -689,49 +689,49 @@ const styles = StyleSheet.create({
   dangerButtonText: { color: '#dc2626', fontSize: 14, fontWeight: '800' },
   detailCard: {
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     padding: 16,
     marginBottom: 20,
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  sectionTitle: { color: '#0f172a', fontSize: 16, fontWeight: '900' },
-  sectionMore: { color: '#64748b', fontSize: 12, fontWeight: '700' },
-  detailTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  detailText: { marginTop: 4, color: '#64748b', fontSize: 13 },
+  sectionTitle: { color: '#191f28', fontSize: 16, fontWeight: '900' },
+  sectionMore: { color: '#6b7684', fontSize: 12, fontWeight: '700' },
+  detailTitle: { color: '#191f28', fontSize: 18, fontWeight: '900' },
+  detailText: { marginTop: 4, color: '#6b7684', fontSize: 13 },
   urlBox: {
     marginTop: 14,
     borderRadius: 16,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     padding: 14,
   },
-  urlTitle: { color: '#0f172a', fontSize: 14, fontWeight: '900', marginBottom: 6 },
-  urlText: { color: '#334155', fontSize: 13, lineHeight: 18 },
+  urlTitle: { color: '#191f28', fontSize: 14, fontWeight: '900', marginBottom: 6 },
+  urlText: { color: '#4e5968', fontSize: 13, lineHeight: 18 },
   urlButton: {
     marginTop: 10,
     alignSelf: 'flex-start',
     borderRadius: 12,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  urlButtonText: { color: '#0ea5a4', fontSize: 13, fontWeight: '800' },
+  urlButtonText: { color: '#18a5a5', fontSize: 13, fontWeight: '800' },
   historyCard: {
     marginTop: 12,
     borderRadius: 16,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     padding: 14,
   },
   historyBody: { gap: 6 },
-  historyStatus: { color: '#0f172a', fontSize: 13, fontWeight: '800' },
-  historyMessage: { color: '#64748b', fontSize: 12, lineHeight: 17 },
+  historyStatus: { color: '#191f28', fontSize: 13, fontWeight: '800' },
+  historyMessage: { color: '#6b7684', fontSize: 12, lineHeight: 17 },
   loadingDetailBox: {
     marginTop: 14,
     paddingVertical: 18,

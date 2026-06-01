@@ -16,7 +16,7 @@ function GatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () =>
   return (
     <View style={styles.gateCard}>
       <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#0ea5a4" />
+        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
       </View>
       <Text style={styles.gateTitle}>점주 대시보드는 로그인 후 볼 수 있어요</Text>
       <Text style={styles.gateSubtitle}>점주 계정으로 로그인하면 신청 현황, 연결된 매장, 상태 관리 메뉴를 볼 수 있어요.</Text>
@@ -49,7 +49,7 @@ function StoreChip({
         </Text>
         {active ? (
           <View style={styles.storeChipSelected}>
-            <Ionicons name="checkmark" size={12} color="#0ea5a4" />
+            <Ionicons name="checkmark" size={12} color="#18a5a5" />
           </View>
         ) : null}
       </View>
@@ -153,25 +153,25 @@ export default function OwnerDashboardScreen() {
     (selectedStoreId ? (`${path}?storeId=${selectedStoreId}` as Href) : path);
 
   return (
-    <LinearGradient colors={['#f7fbff', '#eefafa', '#ffffff']} style={styles.container}>
+    <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.push('/')} style={styles.headerIconButton} activeOpacity={0.8}>
-            <Ionicons name="home-outline" size={24} color="#0ea5a4" />
+            <Ionicons name="home-outline" size={24} color="#18a5a5" />
           </TouchableOpacity>
           <View style={styles.headerBrand}>
             <Image source={require('@/assets/images/mainLogo.png')} style={styles.logo} />
             <Text style={styles.headerLabel}>Owner Dashboard</Text>
           </View>
           <TouchableOpacity onPress={() => void handleLogout()} style={styles.headerIconButton} activeOpacity={0.8}>
-            <Ionicons name="log-out-outline" size={24} color="#0ea5a4" />
+            <Ionicons name="log-out-outline" size={24} color="#18a5a5" />
           </TouchableOpacity>
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {isLoading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color="#0ea5a4" />
+              <ActivityIndicator color="#18a5a5" />
               <Text style={styles.loadingText}>점주 정보를 불러오는 중...</Text>
             </View>
           ) : !isLoggedIn ? (
@@ -191,7 +191,7 @@ export default function OwnerDashboardScreen() {
                     onPress={() => router.push('/views/owner_register_status')}
                     activeOpacity={0.9}
                   >
-                    <Ionicons name="list-outline" size={14} color="#0ea5a4" />
+                    <Ionicons name="list-outline" size={14} color="#18a5a5" />
                     <Text style={styles.heroBadgeText}>{stats.applications.length}건 신청</Text>
                   </TouchableOpacity>
                 </View>
@@ -243,7 +243,7 @@ export default function OwnerDashboardScreen() {
                         onPress={() => router.push(managementRoute(item.route))}
                         activeOpacity={0.9}
                       >
-                        <Ionicons name={item.icon} size={20} color="#0ea5a4" />
+                        <Ionicons name={item.icon} size={20} color="#18a5a5" />
                         <Text style={styles.managementButtonText}>{item.title}</Text>
                       </TouchableOpacity>
                     );
@@ -267,7 +267,7 @@ export default function OwnerDashboardScreen() {
                       onPress={() => router.push(item.route)}
                       activeOpacity={0.9}
                     >
-                      <Ionicons name={item.icon} size={20} color="#0ea5a4" />
+                      <Ionicons name={item.icon} size={20} color="#18a5a5" />
                       <Text style={styles.managementButtonText}>{item.title}</Text>
                     </TouchableOpacity>
                   ))}
@@ -330,14 +330,14 @@ const styles = StyleSheet.create({
   headerIconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logo: { width: 90, height: 28, resizeMode: 'contain' },
-  headerLabel: { color: '#64748b', fontSize: 12, fontWeight: '700' },
+  headerLabel: { color: '#6b7684', fontSize: 12, fontWeight: '700' },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
   heroCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     marginBottom: 14,
   },
   heroHeader: {
@@ -347,105 +347,105 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroLabel: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 6,
   },
-  heroTitle: { color: '#0f172a', fontSize: 22, fontWeight: '900' },
+  heroTitle: { color: '#191f28', fontSize: 22, fontWeight: '900' },
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
+    borderColor: '#edf8f8',
+    backgroundColor: '#eef1f5',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  heroBadgeText: { color: '#0ea5a4', fontSize: 12, fontWeight: '800' },
-  heroSubtitle: { marginTop: 10, color: '#64748b', fontSize: 13, lineHeight: 18 },
+  heroBadgeText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
+  heroSubtitle: { marginTop: 10, color: '#6b7684', fontSize: 13, lineHeight: 18 },
   loadingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
-  loadingText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  loadingText: { color: '#6b7684', fontSize: 13, fontWeight: '600' },
   gateCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
   },
   gateIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#eefafa',
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  gateTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
-  gateSubtitle: { fontSize: 13, color: '#64748b', lineHeight: 18 },
+  gateTitle: { fontSize: 18, fontWeight: '900', color: '#191f28', marginBottom: 8 },
+  gateSubtitle: { fontSize: 13, color: '#6b7684', lineHeight: 18 },
   gateButtons: { flexDirection: 'row', gap: 10, marginTop: 18 },
   gateSecondaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bfeceb',
+    borderColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
-  gateSecondaryButtonText: { color: '#0ea5a4', fontSize: 15, fontWeight: '800' },
+  gateSecondaryButtonText: { color: '#18a5a5', fontSize: 15, fontWeight: '800' },
   gatePrimaryButton: {
     flex: 1,
     height: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
   },
-  gatePrimaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  gatePrimaryButtonText: { color: '#f9fafb', fontSize: 15, fontWeight: '800' },
   storeSelectorCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     marginBottom: 14,
   },
   storeChipRow: { gap: 10, paddingTop: 10, paddingRight: 4 },
   storeChipActive: {
-    borderColor: '#0ea5a4',
+    borderColor: '#18a5a5',
     backgroundColor: '#e9fffd',
   },
-  storeChipNameActive: { color: '#0ea5a4' },
-  storeChipStatusActive: { color: '#0ea5a4' },
-  storeChipAddressActive: { color: '#0ea5a4' },
+  storeChipNameActive: { color: '#18a5a5' },
+  storeChipStatusActive: { color: '#18a5a5' },
+  storeChipAddressActive: { color: '#18a5a5' },
   featureCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     marginBottom: 12,
   },
   featureHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  featureTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
-  featureLink: { color: '#0ea5a4', fontSize: 13, fontWeight: '800' },
-  featureName: { color: '#0f172a', fontSize: 19, fontWeight: '900' },
-  featureMeta: { color: '#334155', fontSize: 13, marginTop: 8, lineHeight: 18 },
-  featureSub: { color: '#64748b', fontSize: 12, marginTop: 6 },
+  featureTitle: { color: '#191f28', fontSize: 15, fontWeight: '900' },
+  featureLink: { color: '#18a5a5', fontSize: 13, fontWeight: '800' },
+  featureName: { color: '#191f28', fontSize: 19, fontWeight: '900' },
+  featureMeta: { color: '#4e5968', fontSize: 13, marginTop: 8, lineHeight: 18 },
+  featureSub: { color: '#6b7684', fontSize: 12, marginTop: 6 },
   managementGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -455,8 +455,8 @@ const styles = StyleSheet.create({
     width: '48%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
+    borderColor: '#edf8f8',
+    backgroundColor: '#eef1f5',
     paddingVertical: 14,
     paddingHorizontal: 12,
     alignItems: 'center',
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
   },
   managementButtonDisabled: { opacity: 0.45 },
   managementButtonText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 13,
     fontWeight: '800',
     textAlign: 'center',
@@ -474,8 +474,8 @@ const styles = StyleSheet.create({
     width: '31%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#bfeceb',
-    backgroundColor: '#eefafa',
+    borderColor: '#edf8f8',
+    backgroundColor: '#eef1f5',
     paddingVertical: 14,
     paddingHorizontal: 12,
     alignItems: 'center',
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   },
   managementHint: {
     marginTop: 10,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
   },
@@ -493,8 +493,8 @@ const styles = StyleSheet.create({
     width: 200,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginRight: 2,
@@ -506,9 +506,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
-  storeChipName: { color: '#0f172a', fontSize: 14, fontWeight: '800', flex: 1 },
-  storeChipStatus: { color: '#64748b', fontSize: 12, marginTop: 4, fontWeight: '700' },
-  storeChipAddress: { color: '#94a3b8', fontSize: 11, marginTop: 6, lineHeight: 15 },
+  storeChipName: { color: '#191f28', fontSize: 14, fontWeight: '800', flex: 1 },
+  storeChipStatus: { color: '#6b7684', fontSize: 12, marginTop: 4, fontWeight: '700' },
+  storeChipAddress: { color: '#8b95a1', fontSize: 11, marginTop: 6, lineHeight: 15 },
 });

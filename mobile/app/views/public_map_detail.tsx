@@ -48,7 +48,7 @@ function IncludedStoreCard({
           {store.imageUrls[0] ? (
             <Image source={{ uri: resolveAssetUrl(store.imageUrls[0]) ?? undefined }} style={styles.placeThumbImage} />
           ) : (
-            <Ionicons name="storefront-outline" size={20} color="#0ea5a4" />
+            <Ionicons name="storefront-outline" size={20} color="#18a5a5" />
           )}
         </View>
         <View style={styles.placeTextWrap}>
@@ -77,7 +77,7 @@ function IncludedPublicCard({
     <View style={styles.placeCard}>
       <View style={styles.placeHeader}>
         <View style={[styles.placeThumb, styles.publicThumb]}>
-          <Ionicons name="information-circle-outline" size={20} color="#8b5cf6" />
+          <Ionicons name="information-circle-outline" size={20} color="#18a5a5" />
         </View>
         <View style={styles.placeTextWrap}>
           <Text style={styles.placeName}>{publicInstitution.name ?? '공공 장소'}</Text>
@@ -258,21 +258,21 @@ export default function PublicMapDetailScreen() {
       <SafeAreaView style={styles.container}>
         {isLoading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color="#0ea5a4" />
+            <ActivityIndicator color="#18a5a5" />
           </View>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
             <View style={styles.headerRow}>
               <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.9}>
-                <Ionicons name="chevron-back" size={24} color="#0f172a" />
+                <Ionicons name="chevron-back" size={24} color="#f9fafb" />
               </TouchableOpacity>
               <View style={styles.headerActions}>
                 <TouchableOpacity style={styles.headerActionButton} onPress={toggleLike} activeOpacity={0.9}>
-                  <Ionicons name={likedByMe ? 'thumbs-up' : 'thumbs-up-outline'} size={18} color="#0ea5a4" />
+                  <Ionicons name={likedByMe ? 'thumbs-up' : 'thumbs-up-outline'} size={18} color="#18a5a5" />
                   <Text style={styles.headerActionText}>{formatCount(likeCount)}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerActionButton} onPress={shareMap} activeOpacity={0.9}>
-                  <Ionicons name="share-social-outline" size={18} color="#0ea5a4" />
+                  <Ionicons name="share-social-outline" size={18} color="#18a5a5" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -289,11 +289,11 @@ export default function PublicMapDetailScreen() {
                 {detail?.description ? <Text style={styles.heroDescription}>{detail.description}</Text> : null}
                 <View style={styles.heroMetaRow}>
                   <View style={styles.heroMetaPill}>
-                    <Ionicons name="map-outline" size={14} color="#0ea5a4" />
+                    <Ionicons name="map-outline" size={14} color="#18a5a5" />
                     <Text style={styles.heroMetaText}>장소 {placeCount}개</Text>
                   </View>
                   <View style={styles.heroMetaPill}>
-                    <Ionicons name="thumbs-up" size={14} color="#0ea5a4" />
+                    <Ionicons name="thumbs-up" size={14} color="#18a5a5" />
                     <Text style={styles.heroMetaText}>따봉 {formatCount(likeCount)}</Text>
                   </View>
                 </View>
@@ -306,11 +306,11 @@ export default function PublicMapDetailScreen() {
 
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.primaryAction} onPress={toggleLike} activeOpacity={0.9} disabled={isTogglingLike}>
-                {isTogglingLike ? <ActivityIndicator color="#fff" /> : <Ionicons name={likedByMe ? 'thumbs-up' : 'thumbs-up-outline'} size={16} color="#fff" />}
+                {isTogglingLike ? <ActivityIndicator color="#f9fafb" /> : <Ionicons name={likedByMe ? 'thumbs-up' : 'thumbs-up-outline'} size={16} color="#f9fafb" />}
                 <Text style={styles.primaryActionText}>{likedByMe ? '따봉 취소' : '따봉'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.secondaryAction} onPress={saveAllPlaces} activeOpacity={0.9} disabled={isSavingAll}>
-                {isSavingAll ? <ActivityIndicator color="#0ea5a4" /> : <Ionicons name="bookmark-outline" size={16} color="#0ea5a4" />}
+                {isSavingAll ? <ActivityIndicator color="#18a5a5" /> : <Ionicons name="bookmark-outline" size={16} color="#18a5a5" />}
                 <Text style={styles.secondaryActionText}>내 지도에 저장</Text>
               </TouchableOpacity>
             </View>
@@ -350,7 +350,7 @@ export default function PublicMapDetailScreen() {
 
             {!isLoggedIn ? (
               <View style={styles.loginHintCard}>
-                <Ionicons name="lock-closed-outline" size={18} color="#0ea5a4" />
+                <Ionicons name="lock-closed-outline" size={18} color="#18a5a5" />
                 <Text style={styles.loginHintText}>로그인하면 좋아요와 내 지도 저장을 사용할 수 있어요.</Text>
               </View>
             ) : null}
@@ -364,7 +364,7 @@ export default function PublicMapDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f9fafb',
   },
   loadingWrap: {
     flex: 1,
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -397,15 +397,15 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   headerActionText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '900',
   },
@@ -413,9 +413,9 @@ const styles = StyleSheet.create({
     minHeight: 360,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     marginBottom: 16,
   },
   heroImage: {
@@ -435,13 +435,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 14,
     top: 14,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   heroBadgeText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.42)',
   },
   heroTitle: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 24,
     fontWeight: '900',
   },
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   heroMetaText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -503,14 +503,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   primaryActionText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -518,16 +518,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: '#e5e8eb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   secondaryActionText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -538,12 +538,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '900',
   },
   sectionCount: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -552,10 +552,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   placeCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     padding: 12,
   },
   placeHeader: {
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 14,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -584,20 +584,20 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   placeName: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
   },
   placeAddress: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '600',
   },
   placeMeta: {
     marginTop: 6,
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -605,12 +605,12 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: 12,
     borderRadius: 17,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -620,13 +620,13 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     borderWidth: 1,
     borderColor: '#c6f0ee',
   },
   loginHintText: {
     flex: 1,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -642,26 +642,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   publicSortChipActive: {
-    backgroundColor: '#0ea5a4',
-    borderColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
+    borderColor: '#18a5a5',
   },
   publicSortText: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '900',
   },
   publicSortTextActive: {
-    color: '#fff',
+    color: '#f9fafb',
   },
   publicTotalText: {
     marginLeft: 'auto',
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -679,15 +679,15 @@ const styles = StyleSheet.create({
   publicGridCard: {
     width: '48.5%',
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
     paddingBottom: 10,
   },
   publicGridImageWrap: {
     height: 136,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     position: 'relative',
   },
   publicGridImage: {
@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   publicGridBadge: {
     position: 'absolute',
@@ -713,14 +713,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.48)',
   },
   publicGridBadgeText: {
-    color: '#fff',
+    color: '#f9fafb',
     fontSize: 11,
     fontWeight: '900',
   },
   publicGridTitle: {
     marginTop: 10,
     paddingHorizontal: 10,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
     lineHeight: 18,
@@ -728,37 +728,37 @@ const styles = StyleSheet.create({
   publicGridAuthor: {
     marginTop: 4,
     paddingHorizontal: 10,
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 11,
     fontWeight: '800',
   },
   publicGridDescription: {
     marginTop: 6,
     paddingHorizontal: 10,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 15,
   },
   emptyState: {
     minHeight: 190,
     borderRadius: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e8eb',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 22,
   },
   emptyTitle: {
     marginTop: 10,
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
     textAlign: 'center',
   },
   emptyText: {
     marginTop: 8,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',

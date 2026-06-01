@@ -456,7 +456,7 @@
 //       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
 //         <View style={styles.searchContainer}>
 //           <TouchableOpacity onPress={() => router.back()} style={styles.menuButton}>
-//             <Ionicons name="chevron-back" size={24} color="#fff" />
+//             <Ionicons name="chevron-back" size={24} color="#f9fafb" />
 //           </TouchableOpacity>
 
 //           <View style={styles.searchInputBox}>
@@ -475,7 +475,7 @@
 //               activeOpacity={0.8}
 //               style={styles.searchActionButton}
 //             >
-//               <Ionicons name="arrow-forward" size={16} color="#fff" />
+//               <Ionicons name="arrow-forward" size={16} color="#f9fafb" />
 //             </TouchableOpacity>
 //           </View>
 //         </View>
@@ -510,7 +510,7 @@
 //             style={styles.searchThisAreaButton}
 //             onPress={() => performSearch({ currentArea: true })}
 //           >
-//             <Ionicons name="reload" size={16} color="#fff" style={{ marginRight: 6 }} />
+//             <Ionicons name="reload" size={16} color="#f9fafb" style={{ marginRight: 6 }} />
 //             <Text style={styles.searchThisAreaText}>현 지도에서 검색</Text>
 //           </TouchableOpacity>
 //         </View>
@@ -530,7 +530,7 @@
 //             performSearch({ currentArea: true });
 //           }}
 //         >
-//           <MaterialIcons name="my-location" size={24} color="#fff" />
+//           <MaterialIcons name="my-location" size={24} color="#f9fafb" />
 //         </TouchableOpacity>
 //       </SafeAreaView>
 
@@ -567,7 +567,7 @@
 //                 <View style={styles.cardHeader}>
 //                   <Text style={styles.storeName}>{place.name}</Text>
 //                   <TouchableOpacity>
-//                     <Ionicons name="heart-outline" size={24} color="#fff" />
+//                     <Ionicons name="heart-outline" size={24} color="#f9fafb" />
 //                   </TouchableOpacity>
 //                 </View>
 
@@ -636,7 +636,7 @@
 //   },
 //   searchTextInput: {
 //     flex: 1,
-//     color: '#fff',
+//     color: '#f9fafb',
 //     fontSize: 15,
 //     paddingVertical: 0,
 //   },
@@ -657,8 +657,8 @@
 //     backgroundColor: '#555',
 //   },
 //   filterPillActive: { backgroundColor: '#86a0ff' },
-//   filterText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-//   filterTextActive: { color: '#fff' },
+//   filterText: { color: '#f9fafb', fontSize: 13, fontWeight: '600' },
+//   filterTextActive: { color: '#f9fafb' },
 //   searchThisAreaContainer: { alignItems: 'center', marginTop: 16 },
 //   searchThisAreaButton: {
 //     flexDirection: 'row',
@@ -673,7 +673,7 @@
 //     shadowRadius: 4,
 //     elevation: 3,
 //   },
-//   searchThisAreaText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+//   searchThisAreaText: { color: '#f9fafb', fontSize: 14, fontWeight: '600' },
 //   gpsButton: {
 //     position: 'absolute',
 //     right: 16,
@@ -725,7 +725,7 @@
 //   bottomSheetTitle: {
 //     fontSize: 18,
 //     fontWeight: 'bold',
-//     color: '#fff',
+//     color: '#f9fafb',
 //     marginRight: 12,
 //   },
 //   openOnlyBadge: {
@@ -745,7 +745,7 @@
 //     justifyContent: 'center',
 //   },
 //   emptyStateTitle: {
-//     color: '#fff',
+//     color: '#f9fafb',
 //     fontSize: 18,
 //     fontWeight: '800',
 //     marginBottom: 8,
@@ -771,7 +771,7 @@
 //     alignItems: 'center',
 //     marginBottom: 12,
 //   },
-//   storeName: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+//   storeName: { fontSize: 20, fontWeight: 'bold', color: '#f9fafb' },
 //   categoryBadge: {
 //     backgroundColor: 'rgba(255,255,255,0.1)',
 //     alignSelf: 'flex-start',
@@ -780,7 +780,7 @@
 //     borderRadius: 6,
 //     marginBottom: 16,
 //   },
-//   categoryText: { color: '#8cb4ff', fontSize: 12 },
+//   categoryText: { color: '#18a5a5', fontSize: 12 },
 //   statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
 //   statusBadge: {
 //     backgroundColor: '#00e676',
@@ -789,7 +789,7 @@
 //     borderRadius: 12,
 //     marginRight: 8,
 //   },
-//   statusText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+//   statusText: { color: '#f9fafb', fontSize: 12, fontWeight: 'bold' },
 //   statusUpdateText: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
 //   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
 //   infoText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, marginLeft: 8 },
@@ -807,6 +807,6 @@
 //     paddingBottom: Platform.OS === 'ios' ? 25 : 10,
 //   },
 //   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-//   tabText: { color: '#8f9bb3', fontSize: 11, marginTop: 4 },
-//   tabTextActive: { color: '#fff', fontWeight: 'bold' },
+//   tabText: { color: '#8b95a1', fontSize: 11, marginTop: 4 },
+//   tabTextActive: { color: '#f9fafb', fontWeight: 'bold' },
 // });

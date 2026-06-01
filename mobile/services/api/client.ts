@@ -28,6 +28,8 @@ export type DetailedApiResponse<T> = {
   } | null;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -111,6 +113,46 @@ const toQueryString = (params: Record<string, unknown>) => {
   return serialized ? `?${serialized}` : '';
 };
 
+const isRecord = (value: unknown): value is UnknownRecord => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const getStringField = (value: unknown, keys: string[]) => {
+  if (!isRecord(value)) return null;
+
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+};
+
+const getDetailedError = (value: unknown) => {
+  if (!isRecord(value)) return null;
+
+  const nestedError = isRecord(value.error) ? value.error : null;
+  const code =
+    getStringField(nestedError ?? value, ['code', 'errorCode', 'error_code']) ??
+    'API_ERROR';
+
+  const message =
+    getStringField(nestedError ?? value, ['message', 'detail', 'error_description', 'errorMessage']) ??
+    getStringField(value, ['message', 'detail', 'error_description', 'errorMessage']) ??
+    null;
+
+  if (!message && !nestedError) {
+    return null;
+  }
+
+  return {
+    code,
+    message: message ?? '요청을 처리하지 못했습니다.',
+  };
+};
+
 const parseDetailedResponse = async <T>(response: Response): Promise<DetailedApiResponse<T>> => {
   const text = await response.text();
   let parsed: ApiResponse<T> | T | string | null = null;
@@ -125,34 +167,42 @@ const parseDetailedResponse = async <T>(response: Response): Promise<DetailedApi
 
   if (parsed && typeof parsed === 'object' && 'success' in parsed) {
     const apiResponse = parsed as ApiResponse<T>;
+    const extractedError = apiResponse.error ?? getDetailedError(apiResponse);
 
     return {
       status: response.status,
       success: Boolean(apiResponse.success),
       data: apiResponse.data ?? null,
-      error: apiResponse.error
+      error: extractedError
         ? {
-            code: apiResponse.error.code ?? 'API_ERROR',
-            message: apiResponse.error.message ?? '요청을 처리하지 못했습니다.',
+            code: extractedError.code ?? 'API_ERROR',
+            message: extractedError.message ?? '요청을 처리하지 못했습니다.',
           }
         : null,
     };
   }
 
   if (!response.ok) {
+    const extractedError = getDetailedError(parsed);
+
     return {
       status: response.status,
       success: false,
       data: null,
-      error: typeof parsed === 'string' && parsed.trim()
+      error: extractedError
         ? {
-            code: 'HTTP_ERROR',
-            message: parsed.trim(),
+            code: extractedError.code ?? 'HTTP_ERROR',
+            message: extractedError.message ?? '요청을 처리하지 못했습니다.',
           }
-        : {
-            code: 'HTTP_ERROR',
-            message: '요청을 처리하지 못했습니다.',
-          },
+        : typeof parsed === 'string' && parsed.trim()
+          ? {
+              code: 'HTTP_ERROR',
+              message: parsed.trim(),
+            }
+          : {
+              code: 'HTTP_ERROR',
+              message: '요청을 처리하지 못했습니다.',
+            },
     };
   }
 

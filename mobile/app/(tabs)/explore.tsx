@@ -26,13 +26,13 @@ function ActionCard({
   return (
     <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.actionIconWrap}>
-        <Ionicons name={icon} size={22} color="#0ea5a4" />
+        <Ionicons name={icon} size={22} color="#18a5a5" />
       </View>
       <View style={styles.actionTextWrap}>
         <Text style={styles.actionTitle}>{title}</Text>
         <Text style={styles.actionSubtitle}>{subtitle}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#0ea5a4" />
+      <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
     </TouchableOpacity>
   );
 }
@@ -54,7 +54,7 @@ export default function ExploreScreen() {
                 </View>
               </View>
               <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/my')} activeOpacity={0.85}>
-                <Ionicons name="compass-outline" size={18} color="#0ea5a4" />
+                <Ionicons name="compass-outline" size={18} color="#18a5a5" />
               </TouchableOpacity>
             </View>
 
@@ -69,7 +69,7 @@ export default function ExploreScreen() {
           <View style={styles.quickRow}>
             <TouchableOpacity style={[styles.quickCard, styles.quickCardA]} onPress={() => router.push('/map')} activeOpacity={0.9}>
               <View style={styles.quickIconCircle}>
-                <Ionicons name="location-outline" size={23} color="#0ea5a4" />
+                <Ionicons name="location-outline" size={23} color="#18a5a5" />
               </View>
               <Text style={styles.quickTitle}>지금 열린 곳</Text>
               <Text style={styles.quickSubtitleSmall}>내 주변에서 바로 확인해요</Text>
@@ -86,7 +86,7 @@ export default function ExploreScreen() {
 
           <View style={styles.mapCard}>
             <View style={styles.mapChip}>
-              <Ionicons name="radio-button-on-outline" size={14} color="#0ea5a4" />
+              <Ionicons name="radio-button-on-outline" size={14} color="#18a5a5" />
               <Text style={styles.mapChipText}>지금 인기</Text>
             </View>
             <View style={styles.mapPreview}>
@@ -112,14 +112,14 @@ export default function ExploreScreen() {
               </View>
               <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/list')} activeOpacity={0.9}>
                 <Text style={styles.mapFooterButtonText}>마이지도 보기</Text>
-                <Ionicons name="chevron-forward" size={16} color="#0ea5a4" />
+                <Ionicons name="chevron-forward" size={16} color="#18a5a5" />
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <Ionicons name="flame-outline" size={18} color="#0ea5a4" />
+              <Ionicons name="flame-outline" size={18} color="#18a5a5" />
               <Text style={styles.sectionTitle}>지금 인기 장소</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/list')}>
@@ -149,7 +149,7 @@ export default function ExploreScreen() {
 
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <Ionicons name="construct-outline" size={18} color="#0ea5a4" />
+              <Ionicons name="construct-outline" size={18} color="#18a5a5" />
               <Text style={styles.sectionTitle}>연결된 API</Text>
             </View>
             <Text style={styles.sectionMore}>테스트</Text>
@@ -170,7 +170,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7fbfc',
+    backgroundColor: '#f2f4f6',
   },
   safeArea: {
     flex: 1,
@@ -181,14 +181,14 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
   },
   heroShell: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#dbeff0',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 12,
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.05,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
@@ -216,13 +216,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brandTitle: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 24,
     fontWeight: '900',
   },
   brandSubtitle: {
     marginTop: 2,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -241,15 +241,15 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 30,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#191f28',
   },
   heroAccent: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
   },
   heroSubtitle: {
     marginTop: 6,
     fontSize: 13,
-    color: '#64748b',
+    color: '#6b7684',
     lineHeight: 18,
   },
   quickRow: {
@@ -264,33 +264,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     minHeight: 112,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
   quickCardA: {
-    borderColor: '#8dd9d7',
-    backgroundColor: '#e8f8f7',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
   },
   quickCardB: {
-    borderColor: '#f8d5a6',
-    backgroundColor: '#fff3e4',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
   },
   quickIconCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
   quickTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 13,
     fontWeight: '900',
   },
   quickSubtitleSmall: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '600',
@@ -298,9 +298,9 @@ const styles = StyleSheet.create({
   mapCard: {
     marginTop: 16,
     borderRadius: 24,
-    backgroundColor: '#f7fbff',
+    backgroundColor: '#f2f4f6',
     borderWidth: 1,
-    borderColor: '#eef2f7',
+    borderColor: '#e5e8eb',
     overflow: 'hidden',
   },
   mapChip: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     left: 14,
     top: 14,
     zIndex: 2,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -317,13 +317,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   mapChipText: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 12,
     fontWeight: '800',
   },
   mapPreview: {
     height: 180,
-    backgroundColor: '#eef7f7',
+    backgroundColor: '#eef1f5',
     overflow: 'hidden',
   },
   mapPreviewImage: {
@@ -341,10 +341,10 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0f172a',
+    shadowColor: '#191f28',
     shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -365,9 +365,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#0ea5a4',
+    backgroundColor: '#18a5a5',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#f9fafb',
   },
   mapHalo: {
     position: 'absolute',
@@ -386,16 +386,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
   },
   mapFooterTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '900',
   },
   mapFooterSub: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
   },
   mapFooterButton: {
@@ -405,10 +405,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   mapFooterButtonText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -425,20 +425,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '900',
   },
   sectionMore: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 13,
     fontWeight: '800',
   },
   listCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e6eef1',
+    borderColor: '#e5e8eb',
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
@@ -451,15 +451,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   listBadgeWarm: {
-    backgroundColor: '#fff3e4',
+    backgroundColor: '#f9fafb',
   },
   listBadgeText: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -468,18 +468,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   listTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 15,
     fontWeight: '900',
   },
   listSubtitle: {
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     marginTop: 3,
     lineHeight: 16,
   },
   listLike: {
-    color: '#0ea5a4',
+    color: '#18a5a5',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -491,8 +491,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#dbeff0',
-    backgroundColor: '#fff',
+    borderColor: '#e5e8eb',
+    backgroundColor: '#f9fafb',
   },
   actionIconWrap: {
     width: 40,
@@ -500,26 +500,26 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e6fbfa',
+    backgroundColor: '#edf8f8',
   },
   actionTextWrap: {
     flex: 1,
     minWidth: 0,
   },
   actionTitle: {
-    color: '#0f172a',
+    color: '#191f28',
     fontSize: 14,
     fontWeight: '900',
   },
   actionSubtitle: {
     marginTop: 4,
-    color: '#64748b',
+    color: '#6b7684',
     fontSize: 12,
     lineHeight: 16,
   },
   listDivider: {
     height: 1,
-    backgroundColor: '#eef2f7',
+    backgroundColor: '#e5e8eb',
     marginVertical: 12,
   },
 });
