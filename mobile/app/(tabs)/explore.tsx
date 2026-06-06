@@ -170,7 +170,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
   },
   safeArea: {
     flex: 1,
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   mapCard: {
     marginTop: 16,
     borderRadius: 24,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     borderWidth: 1,
     borderColor: '#e5e8eb',
     overflow: 'hidden',

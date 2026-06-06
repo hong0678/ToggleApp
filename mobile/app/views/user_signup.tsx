@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, Link } from 'expo-router';
+import { useLocalSearchParams, useRouter, Link } from 'expo-router';
+import { useSafeBack } from '@/components/use-safe-back';
 import { authApi } from '@/services/api';
 
 const { width } = Dimensions.get('window');
@@ -23,6 +24,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function UserSignupScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnToParam = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const goBack = useSafeBack('/views/user_login');
   const [role, setRole] = useState<'user' | 'owner'>('user');
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
@@ -50,8 +54,7 @@ export default function UserSignupScreen() {
     normalizedPasswordConfirm.length > 0 && normalizedPassword !== normalizedPasswordConfirm
       ? '비밀번호가 서로 일치하지 않습니다.'
       : '';
-  const hasInlineErrors = Boolean(nicknameError || emailError || passwordError || passwordConfirmError);
-  const canSubmit = !isSubmitting && !hasInlineErrors;
+  const canSubmit = !isSubmitting && !nicknameError && !emailError && !passwordError && !passwordConfirmError;
 
   const handleRoleChange = (newRole: 'user' | 'owner') => {
     setRole(newRole);
@@ -85,7 +88,11 @@ export default function UserSignupScreen() {
         role: 'USER',
       });
       Alert.alert('가입 완료', '로그인 화면에서 방금 만든 계정으로 로그인해주세요.');
-      router.replace('/views/user_login');
+      router.replace(
+        returnToParam
+          ? { pathname: '/views/user_login', params: { returnTo: returnToParam } }
+          : '/views/user_login'
+      );
     } catch (error) {
       Alert.alert('가입 실패', error instanceof Error ? error.message : '회원가입 중 문제가 발생했습니다.');
     } finally {
@@ -96,7 +103,7 @@ export default function UserSignupScreen() {
   return (
     <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={28} color="#18a5a5" />
         </TouchableOpacity>
 
@@ -160,7 +167,14 @@ export default function UserSignupScreen() {
               )}
             </TouchableOpacity>
 
-            <Link href="/views/user_login" asChild>
+            <Link
+              href={
+                returnToParam
+                  ? { pathname: '/views/user_login', params: { returnTo: returnToParam } }
+                  : '/views/user_login'
+              }
+              asChild
+            >
               <TouchableOpacity style={styles.guestLink}>
                 <Text style={styles.guestLinkText}>이미 계정이 있으신가요? 로그인하기</Text>
               </TouchableOpacity>

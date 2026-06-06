@@ -21,10 +21,11 @@ import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { AppBottomNav } from '@/components/app-bottom-nav';
-import { ApiClientError, favoritesApi, myMapApi, storesApi, tokenStore, userMapsApi } from '@/services/api';
+import { useSafeBack } from '@/components/use-safe-back';
+import { ApiClientError, favoritesApi, myMapApi, publicInstitutionsApi, publicMapsApi, storesApi, tokenStore, userMapsApi } from '@/services/api';
 import { mapCache } from '@/services/mapCache';
 import { CATEGORY_KEYWORDS, CATEGORY_OPTIONS, type CategoryOption } from '@/services/placeCategories';
-import type { StoreLookupItemResponse } from '@/services/api/types';
+import type { PublicInstitutionLookupItemResponse, StoreLookupItemResponse } from '@/services/api/types';
 
 const { height: windowHeight } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
@@ -56,6 +57,16 @@ const normalizeRegisteredStoreAsPlace = (store: StoreLookupItemResponse): KakaoP
   phone: store.phone ?? '',
   latitude: store.latitude,
   longitude: store.longitude,
+});
+
+const normalizePublicInstitutionAsPlace = (item: PublicInstitutionLookupItemResponse): KakaoPlacePreview => ({
+  id: `PUBLIC_${item.id}`,
+  name: item.name ?? '공공 장소',
+  category: '공공 장소',
+  address: item.address ?? '',
+  phone: '',
+  latitude: item.latitude ?? 0,
+  longitude: item.longitude ?? 0,
 });
 
 const toKakaoRenderablePlace = (place: KakaoPlacePreview) => ({
@@ -162,10 +173,24 @@ const isNotFoundError = (error: unknown) => error instanceof ApiClientError && e
 
 export default function MapAroundScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/my');
   const pathname = usePathname();
-  const params = useLocalSearchParams<{ query?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    query?: string | string[];
+    mapId?: string | string[];
+    mapTitle?: string | string[];
+    publicMapUuid?: string | string[];
+    publicMapTitle?: string | string[];
+    mapNickname?: string | string[];
+  }>();
   const searchParam = Array.isArray(params.query) ? params.query[0] : params.query;
+  const mapIdParam = Array.isArray(params.mapId) ? params.mapId[0] : params.mapId;
+  const mapTitleParam = Array.isArray(params.mapTitle) ? params.mapTitle[0] : params.mapTitle;
+  const publicMapUuidParam = Array.isArray(params.publicMapUuid) ? params.publicMapUuid[0] : params.publicMapUuid;
+  const publicMapTitleParam = Array.isArray(params.publicMapTitle) ? params.publicMapTitle[0] : params.publicMapTitle;
   const initialSearchQuery = (searchParam ?? '').trim();
+  const isPublicMapMode = Boolean(publicMapUuidParam);
+  const isDetailMapMode = Boolean(mapIdParam || publicMapUuidParam);
   const showInternalTabBar = pathname !== '/map';
   const sheetBottomOffset = showInternalTabBar ? BOTTOM_NAV_HEIGHT : 0;
   const defaultSheetHeight = Math.min(windowHeight * 0.54, windowHeight - sheetBottomOffset - 12);
@@ -202,9 +227,12 @@ export default function MapAroundScreen() {
   const [registeredStoreIdsByExternalPlaceId, setRegisteredStoreIdsByExternalPlaceId] = useState<Record<string, number>>({});
   const [registeredStoreDetailsByExternalPlaceId, setRegisteredStoreDetailsByExternalPlaceId] = useState<Record<string, StoreLookupItemResponse>>({});
   const [myMapStoreIds, setMyMapStoreIds] = useState<number[]>([]);
+  const [myMapPlaces, setMyMapPlaces] = useState<KakaoPlacePreview[]>([]);
+  const [myMapLoading, setMyMapLoading] = useState(false);
+  const [myMapLabel, setMyMapLabel] = useState<string>(mapTitleParam?.trim() || publicMapTitleParam?.trim() || '내 지도');
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [activePlaceForMapPicker, setActivePlaceForMapPicker] = useState<KakaoPlacePreview | null>(null);
-  const [mapCollections, setMapCollections] = useState<Array<{ mapId: number; title: string; storeCount: number }>>([]);
+  const [mapCollections, setMapCollections] = useState<{ mapId: number; title: string; storeCount: number }[]>([]);
   const [activePlaceMapIds, setActivePlaceMapIds] = useState<number[]>([]);
   const [isLoadingMaps, setIsLoadingMaps] = useState(false);
   const [isCreatingMap, setIsCreatingMap] = useState(false);
@@ -625,6 +653,142 @@ export default function MapAroundScreen() {
   );
 
   useEffect(() => {
+    if (!mapIdParam && !publicMapUuidParam) {
+      setMyMapPlaces([]);
+      setMyMapLoading(false);
+      setMyMapLabel(mapTitleParam?.trim() || publicMapTitleParam?.trim() || '내 지도');
+      return;
+    }
+
+    let active = true;
+
+    const loadMyMapPlaces = async () => {
+      try {
+        setMyMapLoading(true);
+        if (publicMapUuidParam) {
+          const mapDetail = await publicMapsApi.get(publicMapUuidParam);
+          if (!active) return;
+
+          const loadedTitle = mapTitleParam?.trim() || publicMapTitleParam?.trim() || mapDetail.title || '공개 지도';
+          setMyMapLabel(loadedTitle);
+
+          const storeIds = mapDetail.stores ?? [];
+          const publicInstitutionIds = mapDetail.publics ?? [];
+
+          const [storeResponse, publicResponse] = await Promise.all([
+            storeIds.length > 0
+              ? storesApi.listByIds(storeIds)
+              : Promise.resolve({ stores: [] } as { stores: StoreLookupItemResponse[] }),
+            publicInstitutionIds.length > 0
+              ? publicInstitutionsApi.getByIds(publicInstitutionIds)
+              : Promise.resolve({ institutions: [] } as { institutions: PublicInstitutionLookupItemResponse[] }),
+          ]);
+          if (!active) return;
+
+          const storePlaces = (storeResponse.stores ?? []).map(normalizeRegisteredStoreAsPlace);
+          const publicPlaces = (publicResponse.institutions ?? [])
+            .filter((item): item is PublicInstitutionLookupItemResponse & { latitude: number; longitude: number } => (
+              typeof item.latitude === 'number' && typeof item.longitude === 'number'
+            ))
+            .map(normalizePublicInstitutionAsPlace);
+          const nextPlaces = [...storePlaces, ...publicPlaces];
+          setMyMapPlaces(nextPlaces);
+
+          const storeIdMap = storePlaces.reduce<Record<string, number>>((acc, place, index) => {
+            const store = storeResponse.stores[index];
+            if (store) {
+              acc[place.id] = store.storeId;
+            }
+            return acc;
+          }, {});
+          setRegisteredStoreIdsByExternalPlaceId(storeIdMap);
+          setRegisteredStoreDetailsByExternalPlaceId(
+            storeResponse.stores.reduce<Record<string, StoreLookupItemResponse>>((acc, store) => {
+              acc[getStorePlaceId(store)] = store;
+              return acc;
+            }, {})
+          );
+          setMyMapStoreIds([]);
+        } else {
+          const mapDetail = await userMapsApi.get(Number(mapIdParam));
+          if (!active) return;
+
+          const loadedTitle = mapTitleParam?.trim() || mapDetail.map.title || '내 지도';
+          setMyMapLabel(loadedTitle);
+
+          const storeIds = mapDetail.stores ?? [];
+          const publicInstitutionIds = mapDetail.publicInstitutions ?? [];
+
+          const [storeResponse, publicResponse] = await Promise.all([
+            storeIds.length > 0
+              ? storesApi.listByIds(storeIds)
+              : Promise.resolve({ stores: [] } as { stores: StoreLookupItemResponse[] }),
+            publicInstitutionIds.length > 0
+              ? publicInstitutionsApi.getByIds(publicInstitutionIds)
+              : Promise.resolve({ institutions: [] } as { institutions: PublicInstitutionLookupItemResponse[] }),
+          ]);
+          if (!active) return;
+
+          const storePlaces = (storeResponse.stores ?? []).map(normalizeRegisteredStoreAsPlace);
+          const publicPlaces = (publicResponse.institutions ?? [])
+            .filter((item): item is PublicInstitutionLookupItemResponse & { latitude: number; longitude: number } => (
+              typeof item.latitude === 'number' && typeof item.longitude === 'number'
+            ))
+            .map(normalizePublicInstitutionAsPlace);
+          const nextPlaces = [...storePlaces, ...publicPlaces];
+          setMyMapPlaces(nextPlaces);
+
+          const storeIdMap = storePlaces.reduce<Record<string, number>>((acc, place, index) => {
+            const store = storeResponse.stores[index];
+            if (store) {
+              acc[place.id] = store.storeId;
+            }
+            return acc;
+          }, {});
+          setRegisteredStoreIdsByExternalPlaceId(storeIdMap);
+          setRegisteredStoreDetailsByExternalPlaceId(
+            storeResponse.stores.reduce<Record<string, StoreLookupItemResponse>>((acc, store) => {
+              acc[getStorePlaceId(store)] = store;
+              return acc;
+            }, {})
+          );
+          setMyMapStoreIds(storeIds);
+        }
+      } catch {
+        if (!active) return;
+        setMyMapPlaces([]);
+      } finally {
+        if (!active) return;
+        setMyMapLoading(false);
+      }
+    };
+
+    void loadMyMapPlaces();
+
+    return () => {
+      active = false;
+    };
+  }, [mapIdParam, mapTitleParam, publicMapTitleParam, publicMapUuidParam]);
+
+  useEffect(() => {
+    if (!isMapReady || !isDetailMapMode || myMapPlaces.length === 0) return;
+
+    const limit = Math.max(myMapPlaces.length, 100);
+    webViewRef.current?.injectJavaScript(`
+      if (window.setVisiblePlacesLimit) {
+        window.setVisiblePlacesLimit(${limit});
+      }
+      if (window.setRegisteredStoreIds) {
+        window.setRegisteredStoreIds(${JSON.stringify(registeredStoreIdsByExternalPlaceId)});
+      }
+      if (window.renderPlacesFromApp) {
+        window.renderPlacesFromApp(${JSON.stringify(myMapPlaces.map(toKakaoRenderablePlace))}, ${JSON.stringify(myMapLabel)}, null);
+      }
+      true;
+    `);
+  }, [isDetailMapMode, isMapReady, myMapLabel, myMapPlaces, registeredStoreIdsByExternalPlaceId]);
+
+  useEffect(() => {
     if (!initialSearchQuery || !isMapReady) return;
 
     setMapSearchQuery(initialSearchQuery);
@@ -1028,6 +1192,7 @@ export default function MapAroundScreen() {
           }
 
           function updateSearchRadiusFromMap(shouldNotifyApp) {
+            if (fixedMapMode) return searchRadiusMeters;
             if (!map || !window.kakao) return searchRadiusMeters;
 
             var bounds = map.getBounds();
@@ -1125,6 +1290,13 @@ export default function MapAroundScreen() {
           }
 
           function drawSearchRadiusCircle(center) {
+            if (fixedMapMode) {
+              if (searchRadiusCircle) {
+                searchRadiusCircle.setMap(null);
+                searchRadiusCircle = null;
+              }
+              return;
+            }
             if (!map || !window.kakao || !center) return;
 
             if (searchRadiusCircle) {
@@ -1181,6 +1353,8 @@ export default function MapAroundScreen() {
             });
           }
 
+          var fixedMapMode = ${JSON.stringify(isDetailMapMode)};
+
           function renderPlaces(places, shouldFitMap, shouldPostPlaces) {
             clearPlaceMarkers();
             lastRenderedPlaces = Array.isArray(places) ? places.slice() : [];
@@ -1233,6 +1407,16 @@ export default function MapAroundScreen() {
           }
 
           window.renderPlacesFromApp = function(places, label, categoryCode) {
+            if (fixedMapMode) {
+              activeCategoryLabel = label || activeCategoryLabel || '전체';
+              activeCategoryCode = categoryCode || null;
+              activeKeywordQuery = '';
+              pendingKeywordQuery = '';
+              if (!map || !window.kakao || !Array.isArray(places)) return;
+              renderPlaces(places, true, false);
+              return;
+            }
+
             activeCategoryLabel = label || activeCategoryLabel || '전체';
             activeCategoryCode = categoryCode || null;
             activeKeywordQuery = '';
@@ -1299,6 +1483,14 @@ export default function MapAroundScreen() {
           }
 
           function createSearchOptions() {
+            if (fixedMapMode) {
+              return {
+                location: map.getCenter ? new kakao.maps.LatLng(map.getCenter().getLat(), map.getCenter().getLng()) : null,
+                sort: kakao.maps.services.SortBy.DISTANCE,
+                radius: searchRadiusMeters,
+                size: 15
+              };
+            }
             var center = map.getCenter();
             updateSearchRadiusFromMap(false);
             drawSearchRadiusCircle(center);
@@ -1311,6 +1503,7 @@ export default function MapAroundScreen() {
           }
 
           window.searchPlacesByKeyword = function(query) {
+            if (fixedMapMode) return;
             activeKeywordQuery = (query || '').trim();
             pendingKeywordQuery = activeKeywordQuery;
             activeCategoryLabel = activeKeywordQuery || '전체';
@@ -1332,6 +1525,7 @@ export default function MapAroundScreen() {
           };
 
           window.searchPlacesByCategory = function(label, categoryCode) {
+            if (fixedMapMode) return;
             activeKeywordQuery = '';
             pendingKeywordQuery = '';
             activeCategoryLabel = label || '전체';
@@ -1366,6 +1560,7 @@ export default function MapAroundScreen() {
           };
 
           window.searchPlacesInCurrentMap = function() {
+            if (fixedMapMode) return;
             if (!map || !placesService || !window.kakao) return;
 
             updateSearchRadiusFromMap(true);
@@ -1402,6 +1597,7 @@ export default function MapAroundScreen() {
           };
 
           window.moveToCurrentLocation = function(lat, lng) {
+            if (fixedMapMode) return;
             pendingCurrentLocation = { lat: lat, lng: lng };
 
             if (!map || !window.kakao) return;
@@ -1452,17 +1648,22 @@ export default function MapAroundScreen() {
                 map.setDraggable(true);
                 map.setZoomable(true);
                 placesService = new kakao.maps.services.Places();
-                updateSearchRadiusFromMap();
+                if (!fixedMapMode) {
+                  updateSearchRadiusFromMap();
+                }
 
                 map.addListener('dragend', scheduleViewportSearch);
                 map.addListener('zoom_changed', scheduleViewportSearch);
                 map.addListener('idle', function() {
+                  if (fixedMapMode) return;
                   if (isViewportSyncSuppressed()) return;
                   updateSearchRadiusFromMap(true);
                 });
 
                 if (pendingCurrentLocation) {
                   window.moveToCurrentLocation(pendingCurrentLocation.lat, pendingCurrentLocation.lng);
+                } else if (fixedMapMode) {
+                  postToApp({ type: 'map-ready' });
                 } else if (pendingKeywordQuery) {
                   window.searchPlacesByKeyword(pendingKeywordQuery);
                 } else {
@@ -1517,68 +1718,93 @@ export default function MapAroundScreen() {
 
       {/* 2. Top UI Overlays: parent containers pass empty-area touches down to the WebView map. */}
       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
-        {/* Search Bar */}
-        <View style={styles.searchContainer} pointerEvents="box-none">
-          <TouchableOpacity onPress={() => setIsCategoryMenuOpen(true)} style={styles.menuButton}>
-            <Ionicons name="menu" size={24} color="#f9fafb" />
-          </TouchableOpacity>
-          <View style={styles.searchInputBox}>
-            <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
-            <TextInput
-              style={styles.searchTextInput}
-              value={mapSearchQuery}
-              onChangeText={setMapSearchQuery}
-              onSubmitEditing={submitMapSearch}
-              placeholder="장소, 버스, 지하철, 주소 검색"
-              placeholderTextColor="#8b95a1"
-              returnKeyType="search"
-            />
+        {isDetailMapMode ? (
+          <View style={styles.myMapBanner} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.myMapBackButton}
+              onPress={goBack}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chevron-back" size={22} color="#18a5a5" />
+            </TouchableOpacity>
+            <View style={styles.myMapBannerTextWrap}>
+              <Text style={styles.myMapBannerTitle} numberOfLines={1}>
+                {myMapLabel}
+              </Text>
+              <Text style={styles.myMapBannerSubtitle}>
+                {isPublicMapMode ? '공개 지도에 담긴 장소만 보여줘요' : '내 지도에 담긴 장소만 보여줘요'}
+              </Text>
+            </View>
+            <View style={styles.myMapBannerCount}>
+              <Text style={styles.myMapBannerCountText}>{myMapPlaces.length}개</Text>
+            </View>
           </View>
-        </View>
-
-        {/* Filter Pills */}
-        <View style={styles.filterWrapper} pointerEvents="box-none">
-          <ScrollView
-            pointerEvents="auto"
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled={true}
-            directionalLockEnabled={true}
-            alwaysBounceHorizontal={false}
-            scrollEventThrottle={16}
-            style={styles.filterScrollView}
-            contentContainerStyle={styles.filterScroll}
-          >
-            {categories.map((filter, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.filterPill,
-                  activeFilter === filter.label ? styles.filterPillActive : null
-                ]}
-                onPress={() => selectCategory(filter)}
-              >
-                <Text style={[
-                  styles.filterText,
-                  activeFilter === filter.label ? styles.filterTextActive : null
-                ]}>{filter.label}</Text>
+        ) : (
+          <>
+            {/* Search Bar */}
+            <View style={styles.searchContainer} pointerEvents="box-none">
+              <TouchableOpacity onPress={() => setIsCategoryMenuOpen(true)} style={styles.menuButton}>
+                <Ionicons name="menu" size={24} color="#f9fafb" />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+              <View style={styles.searchInputBox}>
+                <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  style={styles.searchTextInput}
+                  value={mapSearchQuery}
+                  onChangeText={setMapSearchQuery}
+                  onSubmitEditing={submitMapSearch}
+                  placeholder="장소, 버스, 지하철, 주소 검색"
+                  placeholderTextColor="#8b95a1"
+                  returnKeyType="search"
+                />
+              </View>
+            </View>
 
-        {/* Search This Area Button */}
-        <View style={styles.searchThisAreaContainer} pointerEvents="box-none">
-          <TouchableOpacity style={styles.searchThisAreaButton} onPress={searchCurrentMapArea}>
-            <Ionicons name="reload" size={16} color="#18a5a5" style={{ marginRight: 6 }} />
-            <Text style={styles.searchThisAreaText}>현 지도에서 검색 · 반경 {searchRadiusLabel}</Text>
-          </TouchableOpacity>
-        </View>
+            {/* Filter Pills */}
+            <View style={styles.filterWrapper} pointerEvents="box-none">
+              <ScrollView
+                pointerEvents="auto"
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                directionalLockEnabled={true}
+                alwaysBounceHorizontal={false}
+                scrollEventThrottle={16}
+                style={styles.filterScrollView}
+                contentContainerStyle={styles.filterScroll}
+              >
+                {categories.map((filter, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.filterPill,
+                      activeFilter === filter.label ? styles.filterPillActive : null
+                    ]}
+                    onPress={() => selectCategory(filter)}
+                  >
+                    <Text style={[
+                      styles.filterText,
+                      activeFilter === filter.label ? styles.filterTextActive : null
+                    ]}>{filter.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
-        {/* GPS Button */}
-        <TouchableOpacity style={styles.gpsButton} onPress={() => moveToCurrentLocation(true, true)}>
-          <MaterialIcons name="my-location" size={24} color="#f9fafb" />
-        </TouchableOpacity>
+            {/* Search This Area Button */}
+            <View style={styles.searchThisAreaContainer} pointerEvents="box-none">
+              <TouchableOpacity style={styles.searchThisAreaButton} onPress={searchCurrentMapArea}>
+                <Ionicons name="reload" size={16} color="#18a5a5" style={{ marginRight: 6 }} />
+                <Text style={styles.searchThisAreaText}>현 지도에서 검색 · 반경 {searchRadiusLabel}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* GPS Button */}
+            <TouchableOpacity style={styles.gpsButton} onPress={() => moveToCurrentLocation(true, true)}>
+              <MaterialIcons name="my-location" size={24} color="#f9fafb" />
+            </TouchableOpacity>
+          </>
+        )}
       </SafeAreaView>
 
       {isCategoryMenuOpen ? (
@@ -1629,19 +1855,99 @@ export default function MapAroundScreen() {
           }}
         >
           <View style={styles.headerLeft}>
-            <Text style={styles.bottomSheetTitle}>주변 추천 장소</Text>
+            <Text style={styles.bottomSheetTitle}>{isDetailMapMode ? myMapLabel : '주변 추천 장소'}</Text>
           </View>
           <View style={styles.bottomSheetHeaderRight}>
-            <TouchableOpacity style={styles.listViewButton} onPress={() => router.push('/list')} activeOpacity={0.85}>
-              <Ionicons name="map-outline" size={14} color="#18a5a5" />
-              <Text style={styles.listViewButtonText}>마이지도</Text>
-            </TouchableOpacity>
-            <Text style={styles.viewAllText}>{isSheetExpanded ? '접기' : '펼치기'}</Text>
+            {isDetailMapMode ? (
+              <Text style={styles.viewAllText}>{myMapPlaces.length}개</Text>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.listViewButton} onPress={() => router.push('/list')} activeOpacity={0.85}>
+                  <Ionicons name="map-outline" size={14} color="#18a5a5" />
+                  <Text style={styles.listViewButtonText}>마이지도</Text>
+                </TouchableOpacity>
+                <Text style={styles.viewAllText}>{isSheetExpanded ? '접기' : '펼치기'}</Text>
+              </>
+            )}
           </View>
         </TouchableOpacity>
 
         {isSheetExpanded ? (
           <>
+            {isDetailMapMode ? (
+              <>
+                <View style={styles.myMapSummaryRow}>
+                  <Text style={styles.myMapSummaryText}>{myMapPlaces.length}개 장소</Text>
+                  <Text style={styles.myMapSummaryHint}>
+                    {isPublicMapMode ? '공개 지도의 장소를 한눈에 확인해보세요.' : '내 지도에 담긴 장소만 표시'}
+                  </Text>
+                </View>
+
+                <ScrollView
+                  ref={cardScrollRef}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  alwaysBounceVertical={false}
+                  overScrollMode="never"
+                  style={styles.cardScroll}
+                  contentContainerStyle={styles.cardScrollContent}
+                >
+                  {myMapLoading ? (
+                    <Text style={styles.emptyText}>지도를 불러오는 중...</Text>
+                  ) : myMapPlaces.length === 0 ? (
+                    <Text style={styles.emptyText}>이 지도에 담긴 장소가 없어요.</Text>
+                  ) : (
+                    myMapPlaces.map((place) => {
+                      const resolvedStoreId = registeredStoreIdsByExternalPlaceId[place.id] ?? favoriteStoreIdByExternalPlaceId[place.id] ?? null;
+                      const isRegisteredStore = Boolean(resolvedStoreId);
+
+                      return (
+                        <TouchableOpacity
+                          key={place.id}
+                          style={styles.myMapPlaceCard}
+                          activeOpacity={0.9}
+                          onPress={() => {
+                            if (!isRegisteredStore || !resolvedStoreId) {
+                              Alert.alert('공공 장소', '공공 기관은 상세 페이지가 없어요.');
+                              return;
+                            }
+
+                            router.push({
+                              pathname: '/views/store_detail',
+                              params: {
+                                storeId: String(resolvedStoreId),
+                                storeName: place.name,
+                                storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
+                              },
+                            });
+                          }}
+                        >
+                          <View style={styles.myMapPlaceIconWrap}>
+                            <Ionicons
+                              name={isRegisteredStore ? 'storefront-outline' : 'information-circle-outline'}
+                              size={18}
+                              color="#18a5a5"
+                            />
+                          </View>
+                          <View style={styles.myMapPlaceBody}>
+                            <Text style={styles.myMapPlaceName} numberOfLines={1}>
+                              {place.name}
+                            </Text>
+                            <Text style={styles.myMapPlaceCategory} numberOfLines={1}>
+                              {place.category}
+                            </Text>
+                            <Text style={styles.myMapPlaceAddress} numberOfLines={2}>
+                              {place.address || '주소 정보 없음'}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </>
+            ) : (
+              <>
             <TouchableOpacity
               style={styles.mapSortButton}
               activeOpacity={0.85}
@@ -1886,7 +2192,9 @@ export default function MapAroundScreen() {
               )}
             </ScrollView>
           </>
-        ) : null}
+        )}
+      </>
+    ) : null}
       </Animated.View>
 
       <Modal
@@ -2002,7 +2310,7 @@ export default function MapAroundScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
   },
   mapPlaceholder: {
     ...StyleSheet.absoluteFillObject,
@@ -2039,6 +2347,63 @@ const styles = StyleSheet.create({
     width: '100%',
     zIndex: 10,
     paddingTop: Platform.OS === 'android' ? 12 : 0,
+  },
+  myMapBanner: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    minHeight: 56,
+    borderRadius: 20,
+    backgroundColor: 'rgba(249, 250, 251, 0.96)',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#191f28',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  myMapBackButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#edf8f8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  myMapBannerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  myMapBannerTitle: {
+    color: '#191f28',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  myMapBannerSubtitle: {
+    marginTop: 2,
+    color: '#6b7684',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  myMapBannerCount: {
+    minWidth: 48,
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#edf8f8',
+    marginLeft: 10,
+  },
+  myMapBannerCountText: {
+    color: '#18a5a5',
+    fontSize: 12,
+    fontWeight: '900',
   },
   searchContainer: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 0, alignItems: 'center' },
   menuButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#18a5a5', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
@@ -2208,7 +2573,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e5e8eb',
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     paddingHorizontal: 18,
     marginBottom: 10,
     flexDirection: 'row',
@@ -2328,6 +2693,68 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   emptyText: { color: '#6b7684', fontSize: 14, fontWeight: '600', paddingVertical: 20, textAlign: 'center' },
+  myMapSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  myMapSummaryText: {
+    color: '#191f28',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  myMapSummaryHint: {
+    color: '#6b7684',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  myMapPlaceCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    shadowColor: '#191f28',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 1,
+  },
+  myMapPlaceIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#edf8f8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myMapPlaceBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  myMapPlaceName: {
+    color: '#191f28',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  myMapPlaceCategory: {
+    marginTop: 3,
+    color: '#18a5a5',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  myMapPlaceAddress: {
+    marginTop: 4,
+    color: '#6b7684',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
   storeCard: { backgroundColor: '#f9fafb', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e8eb', marginBottom: 10, shadowColor: '#191f28', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   storeName: { fontSize: 17, fontWeight: 'bold', color: '#191f28' },
@@ -2458,7 +2885,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mapPickerOption: {
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e5e8eb',

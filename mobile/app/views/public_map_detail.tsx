@@ -17,6 +17,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 
 import { MiniKakaoMapPreview, type MiniKakaoMapPlace } from '@/components/mini-kakao-map-preview';
+import { useSafeBack } from '@/components/use-safe-back';
 import { myMapApi, publicInstitutionsApi, publicMapsApi, storesApi, tokenStore, type MapLikeResponse, type PublicInstitutionLookupItemResponse, type StoreLookupItemResponse, type UserPublicMapResponse } from '@/services/api';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
@@ -99,6 +100,7 @@ function IncludedPublicCard({
 
 export default function PublicMapDetailScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/saved');
   const params = useLocalSearchParams<{
     mapId?: string | string[];
     uuid?: string | string[];
@@ -125,19 +127,40 @@ export default function PublicMapDetailScreen() {
   const nickname = nicknameParam?.trim() || detail?.nickname || '작성자';
   const coverImage = resolveAssetUrl(detail?.profileImageUrl ?? null);
   const publicMapUuid = detail?.publicMapUuid || uuidParam || '';
+  const loginReturnPath = Linking.createURL('/views/public_map_detail', {
+    isTripleSlashed: true,
+    queryParams: {
+    ...(mapId ? { mapId: String(mapId) } : {}),
+    ...(uuidParam ? { uuid: uuidParam } : {}),
+    ...(titleParam?.trim() ? { title: titleParam.trim() } : {}),
+    ...(nicknameParam?.trim() ? { nickname: nicknameParam.trim() } : {}),
+    },
+  });
 
   const load = useCallback(async () => {
-    if (!uuidParam) {
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     try {
       const token = await tokenStore.getAccessToken();
       setIsLoggedIn(Boolean(token));
 
-      const mapDetail = await publicMapsApi.get(uuidParam);
+      if (!token) {
+        router.replace({
+          pathname: '/views/user_login',
+          params: {
+            returnTo: loginReturnPath,
+          },
+        });
+        return;
+      }
+
+      if (!uuidParam && !mapId) {
+        setIsLoading(false);
+        return;
+      }
+
+      const mapDetail = uuidParam
+        ? await publicMapsApi.get(uuidParam)
+        : await publicMapsApi.getByMapId(mapId as number);
       setDetail(mapDetail);
 
       const [storeResponse, publicResponse, likesResponse] = await Promise.all([
@@ -151,11 +174,11 @@ export default function PublicMapDetailScreen() {
       setLikeState(likesResponse);
     } catch (error) {
       Alert.alert('공개 지도', error instanceof Error ? error.message : '공개 지도를 불러오지 못했어요.');
-      router.back();
+      goBack();
     } finally {
       setIsLoading(false);
     }
-  }, [mapId, router, uuidParam]);
+  }, [goBack, loginReturnPath, mapId, router, uuidParam]);
 
   useEffect(() => {
     void load();
@@ -220,6 +243,19 @@ export default function PublicMapDetailScreen() {
     }
   }, [publics, router, stores]);
 
+  const openLargeMap = useCallback(() => {
+    router.push({
+      pathname: '/map',
+      params: {
+        publicMapUuid,
+        mapId: mapId ? String(mapId) : '',
+        mapTitle: title,
+        publicMapTitle: title,
+        mapNickname: nickname,
+      },
+    });
+  }, [mapId, nickname, publicMapUuid, router, title]);
+
   const shareMap = useCallback(async () => {
     if (!publicMapUuid) {
       Alert.alert('공유 실패', '공유할 공개 지도 링크를 만들지 못했어요.');
@@ -227,7 +263,9 @@ export default function PublicMapDetailScreen() {
     }
 
     const shareUrl = Linking.createURL('/views/public_map_detail', {
+      isTripleSlashed: true,
       queryParams: {
+        mapId: mapId ? String(mapId) : '',
         uuid: publicMapUuid,
         title,
         nickname,
@@ -250,7 +288,7 @@ export default function PublicMapDetailScreen() {
     } catch {
       // ignore
     }
-  }, [nickname, publicMapUuid, title]);
+  }, [mapId, nickname, publicMapUuid, title]);
 
   return (
     <>
@@ -263,7 +301,7 @@ export default function PublicMapDetailScreen() {
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
             <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.9}>
+              <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.9}>
                 <Ionicons name="chevron-back" size={24} color="#f9fafb" />
               </TouchableOpacity>
               <View style={styles.headerActions}>
@@ -314,6 +352,11 @@ export default function PublicMapDetailScreen() {
                 <Text style={styles.secondaryActionText}>내 지도에 저장</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity style={styles.largeMapButton} onPress={openLargeMap} activeOpacity={0.9}>
+              <Ionicons name="map-outline" size={18} color="#18a5a5" />
+              <Text style={styles.largeMapButtonText}>큰 지도에서 보기</Text>
+            </TouchableOpacity>
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>포함된 장소</Text>
@@ -529,6 +572,23 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     color: '#18a5a5',
     fontSize: 13,
+    fontWeight: '900',
+  },
+  largeMapButton: {
+    marginBottom: 16,
+    height: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d8f0f0',
+    backgroundColor: '#edf8f8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  largeMapButtonText: {
+    color: '#18a5a5',
+    fontSize: 15,
     fontWeight: '900',
   },
   sectionHeader: {

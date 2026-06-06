@@ -13,9 +13,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { PageHero } from '@/components/page-hero';
+import { getTabScreenContentStyle } from '@/components/screen-layout';
 import { publicMapsApi, tokenStore, type MapLikeResponse, type PublicMapListItemResponse } from '@/services/api';
 
 type LikedMapItem = PublicMapListItemResponse & {
@@ -112,6 +114,7 @@ export default function LikedMapsScreen() {
   const router = useRouter();
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
+  const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -205,7 +208,10 @@ export default function LikedMapsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, getTabScreenContentStyle(insets)]}
+          >
             {isLoading ? (
               <View style={styles.loadingCard}>
                 <ActivityIndicator color="#18a5a5" />
@@ -275,11 +281,7 @@ export default function LikedMapsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f8fb' },
   safeArea: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 26,
-  },
+  scrollContent: { paddingHorizontal: 18 },
   loadingCard: {
     marginTop: 28,
     minHeight: 180,

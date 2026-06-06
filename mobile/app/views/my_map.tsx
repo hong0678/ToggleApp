@@ -17,10 +17,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
+import { LoginGatePanel } from '@/components/login-gate-panel';
 import { PageHero } from '@/components/page-hero';
+import { getTabScreenContentStyle } from '@/components/screen-layout';
 import { ApiClientError, authApi, tokenStore, userMapsApi } from '@/services/api';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
@@ -30,26 +33,6 @@ const resolveAssetUrl = (value?: string | null) => {
   if (/^https?:\/\//i.test(value)) return value;
   return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
 };
-
-function LoginGatePanel({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
-  return (
-    <View style={styles.gateCard}>
-      <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
-      </View>
-      <Text style={styles.gateTitle}>로그인이 필요해요</Text>
-      <Text style={styles.gateSubtitle}>내 지도, 저장한 장소, 내정보 수정을 사용하려면 먼저 로그인해주세요.</Text>
-      <View style={styles.gateButtons}>
-        <TouchableOpacity style={styles.gateSecondaryButton} onPress={onLogin} activeOpacity={0.9}>
-          <Text style={styles.gateSecondaryButtonText}>로그인</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.gatePrimaryButton} onPress={onSignup} activeOpacity={0.9}>
-          <Text style={styles.gatePrimaryButtonText}>회원가입</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
 
 function StatCard({
   icon,
@@ -108,6 +91,7 @@ export default function MyMapScreen() {
   const router = useRouter();
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
+  const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -324,17 +308,22 @@ export default function MyMapScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, getTabScreenContentStyle(insets)]}
+          >
             {isLoading ? (
               <View style={styles.loadingCard}>
                 <ActivityIndicator color="#18a5a5" />
                 <Text style={styles.loadingText}>내 정보를 불러오는 중이에요</Text>
               </View>
             ) : !isLoggedIn ? (
-            <LoginGatePanel
+              <LoginGatePanel
+                title="마이페이지를 보려면 로그인하세요"
+                subtitle="나의 활동과 설정을 이어서 확인할 수 있어요."
                 onLogin={() => router.replace('/views/user_login')}
                 onSignup={() => router.replace('/views/user_signup')}
-            />
+              />
             ) : (
               <>
                 <PageHero
@@ -627,15 +616,13 @@ export default function MyMapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
   },
   safeArea: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 18,
-    paddingBottom: 110,
+    paddingHorizontal: 18,
   },
   pageHeroCard: {
     backgroundColor: '#f9fafb',
@@ -1169,7 +1156,7 @@ const styles = StyleSheet.create({
   bottomSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 34 : 22,
@@ -1222,67 +1209,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  gateCard: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#e5e8eb',
-    paddingHorizontal: 18,
-    paddingVertical: 20,
-    marginTop: 14,
-  },
-  gateIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#edf8f8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  gateTitle: {
-    color: '#191f28',
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  gateSubtitle: {
-    marginTop: 6,
-    color: '#6b7684',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  gateButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
-  },
-  gateSecondaryButton: {
-    flex: 1,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#edf8f8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gateSecondaryButtonText: {
-    color: '#18a5a5',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  gatePrimaryButton: {
-    flex: 1,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#18a5a5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gatePrimaryButtonText: {
-    color: '#f9fafb',
-    fontSize: 14,
-    fontWeight: '800',
   },
 });

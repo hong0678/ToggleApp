@@ -510,7 +510,7 @@ export default function AdminOwnerApplicationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f4f6' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   scrollContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 32 },
   hero: {
     backgroundColor: '#f9fafb',

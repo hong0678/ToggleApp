@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OwnerStorePicker } from '@/components/owner-store-picker';
 import { useSafeBack } from '@/components/use-safe-back';
+import { getScreenContentStyle } from '@/components/screen-layout';
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerLinkedStoreResponse } from '@/services/api/owner';
 
@@ -181,6 +183,7 @@ function StoreCard({
 export default function OwnerStatusManageScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/views/owner_dashboard');
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ storeId?: string | string[] }>();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -260,7 +263,10 @@ export default function OwnerStatusManageScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, getScreenContentStyle(insets)]}
+      >
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#18a5a5" />
@@ -309,8 +315,8 @@ export default function OwnerStatusManageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f4f6' },
-  scrollContent: { padding: 20, paddingBottom: 32 },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
+  scrollContent: { paddingHorizontal: 18 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   backButton: { paddingTop: 4, paddingRight: 4 },
   headerCopy: { flex: 1 },

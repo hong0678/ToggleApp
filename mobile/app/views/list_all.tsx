@@ -17,9 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { PageHero } from '@/components/page-hero';
+import { getTabScreenContentStyle } from '@/components/screen-layout';
 import {
   authApi,
   publicMapsApi,
@@ -187,6 +189,7 @@ export default function ListAllScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const showInternalTabBar = pathname !== '/list';
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<ViewMode>('mine');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -404,7 +407,10 @@ export default function ListAllScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.content, getTabScreenContentStyle(insets)]}
+        >
           <PageHero
             title={heroTitle}
             subtitle={heroSubtitle}
@@ -725,8 +731,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 112,
   },
   header: {
     flexDirection: 'row',
@@ -879,7 +883,7 @@ const styles = StyleSheet.create({
   mapCard: {
     marginBottom: 14,
     borderRadius: 14,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     borderWidth: 1,
     borderColor: '#e5e8eb',
     overflow: 'hidden',

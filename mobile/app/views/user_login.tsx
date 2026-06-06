@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, Link } from 'expo-router';
+import { useLocalSearchParams, useRouter, Link } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useSafeBack } from '@/components/use-safe-back';
 import { ApiClientError, authApi } from '@/services/api';
 
@@ -24,11 +25,31 @@ const { width } = Dimensions.get('window');
 export default function UserLoginScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/');
+  const params = useLocalSearchParams() as { returnTo?: string | string[] };
+  const returnToParam = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const [role, setRole] = useState<'user' | 'owner'>('user');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const buildReturnTarget = (rawReturnTo?: string) => {
+    if (!rawReturnTo || !rawReturnTo.startsWith('/')) return null;
+
+    const [pathname, queryString] = rawReturnTo.split('?');
+    const params: Record<string, string> = {};
+    if (queryString) {
+      const searchParams = new URLSearchParams(queryString);
+      searchParams.forEach((value, key) => {
+        params[key] = value;
+      });
+    }
+
+    return {
+      pathname,
+      params,
+    } as const;
+  };
 
   const handleRoleChange = (newRole: 'user' | 'owner') => {
     setRole(newRole);
@@ -53,6 +74,17 @@ export default function UserLoginScreen() {
 
       if (response.user.role === 'OWNER') {
         router.replace('/views/owner_dashboard');
+        return;
+      }
+
+      const returnTarget = buildReturnTarget(returnToParam);
+      if (returnToParam && returnToParam.includes('://')) {
+        await Linking.openURL(returnToParam);
+        return;
+      }
+
+      if (returnTarget) {
+        router.replace(returnTarget as never);
         return;
       }
 

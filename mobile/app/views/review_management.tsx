@@ -15,11 +15,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { PageHero } from '@/components/page-hero';
-import { storesApi, storeReviewsApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
-import type { StoreReviewItem, StoreReviewMineResponse } from '@/services/api/storeReviews';
+import { getTabScreenContentStyle } from '@/components/screen-layout';
+import { storeReviewsApi, tokenStore } from '@/services/api';
+import type { StoreReviewItem, StoreReviewMinePageResponse } from '@/services/api/storeReviews';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
 
@@ -89,7 +91,8 @@ const EMPTY_DRAFT: ReviewDraft = {
 };
 
 type ReviewedStore = {
-  store: StoreLookupItemResponse;
+  storeId: number;
+  storeName: string;
   reviews: StoreReviewItem[];
 };
 
@@ -99,26 +102,20 @@ function StoreChip({
   reviewCount,
   onPress,
 }: {
-  store: StoreLookupItemResponse;
+  store: ReviewedStore;
   selected: boolean;
   reviewCount: number;
   onPress: () => void;
 }) {
-  const imageUri = resolveAssetUrl(store.imageUrls[0]);
-
   return (
     <TouchableOpacity style={[styles.storeChip, selected ? styles.storeChipActive : null]} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.storeChipTop}>
         <View style={styles.storeThumb}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.storeThumbImage} />
-          ) : (
-            <Ionicons name="storefront-outline" size={18} color="#18a5a5" />
-          )}
+          <Ionicons name="storefront-outline" size={18} color="#18a5a5" />
         </View>
         <View style={styles.storeChipTextWrap}>
           <Text style={styles.storeName} numberOfLines={1}>
-            {store.name}
+            {store.storeName}
           </Text>
           <Text style={styles.storeMeta} numberOfLines={1}>
             리뷰 {reviewCount}개
@@ -193,10 +190,12 @@ export default function ReviewManagementScreen() {
   const router = useRouter();
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
+  const returnTo = '/views/review_management';
+  const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [reviewResponse, setReviewResponse] = useState<StoreReviewMineResponse | null>(null);
+  const [reviewResponse, setReviewResponse] = useState<StoreReviewMinePageResponse | null>(null);
   const [reviewedStores, setReviewedStores] = useState<ReviewedStore[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [storeLoading, setStoreLoading] = useState(false);
@@ -206,15 +205,20 @@ export default function ReviewManagementScreen() {
   const [savingReview, setSavingReview] = useState(false);
 
   const selectedStore = useMemo(
-    () => reviewedStores.find((item) => item.store.storeId === selectedStoreId) ?? null,
+    () => reviewedStores.find((item) => item.storeId === selectedStoreId) ?? null,
     [reviewedStores, selectedStoreId]
   );
   const allReviews = reviewResponse?.content ?? [];
   const visibleReviews = selectedStore?.reviews ?? allReviews;
   const storeNameById = useMemo(
-    () => new Map(reviewedStores.map((item) => [item.store.storeId, item.store.name])),
+    () => new Map(reviewedStores.map((item) => [item.storeId, item.storeName])),
     [reviewedStores]
   );
+
+  const summaryCount = allReviews.length;
+  const averageRating = allReviews.length
+    ? allReviews.reduce((sum, review) => sum + review.rating, 0) / allReviews.length
+    : null;
 
   const closePreview = useCallback(() => setPreviewImageUrl(null), []);
 
@@ -234,7 +238,7 @@ export default function ReviewManagementScreen() {
     setIsLoggedIn(true);
 
     try {
-      const response = await storeReviewsApi.mine(0, 200, 'latest');
+      const response = await storeReviewsApi.mine(0, 200);
       setReviewResponse(response);
 
       const storeIds = Array.from(new Set(response.content.map((review) => review.storeId)));
@@ -244,26 +248,22 @@ export default function ReviewManagementScreen() {
         return;
       }
 
-      try {
-        const storeResponse = await storesApi.listByIds(storeIds);
-        const storeMap = new Map(storeResponse.stores.map((store) => [store.storeId, store]));
+      const grouped = Array.from(
+        response.content.reduce((map, review) => {
+          const current = map.get(review.storeId) ?? {
+            storeId: review.storeId,
+            storeName: review.storeName ?? `장소 #${review.storeId}`,
+            reviews: [],
+          };
 
-        const grouped = storeIds
-          .map((storeId) => {
-            const store = storeMap.get(storeId);
-            if (!store) return null;
-            const reviews = response.content.filter((review) => review.storeId === storeId);
-            return { store, reviews };
-          })
-          .filter((item): item is ReviewedStore => Boolean(item));
+          current.reviews.push(review);
+          map.set(review.storeId, current);
+          return map;
+        }, new Map<number, ReviewedStore>()).values()
+      );
 
-        setReviewedStores(grouped);
-        setSelectedStoreId((current) => current ?? grouped[0]?.store.storeId ?? null);
-      } catch (storeError) {
-        setReviewedStores([]);
-        setSelectedStoreId(null);
-        console.warn('Failed to load reviewed store metadata:', storeError);
-      }
+      setReviewedStores(grouped);
+      setSelectedStoreId((current) => current ?? grouped[0]?.storeId ?? null);
     } catch (error) {
       setReviewResponse(null);
       setReviewedStores([]);
@@ -279,33 +279,29 @@ export default function ReviewManagementScreen() {
 
     setStoreLoading(true);
     try {
-      const response = await storeReviewsApi.mine(0, 200, 'latest');
+      const response = await storeReviewsApi.mine(0, 200);
       setReviewResponse(response);
 
-      const storeIds = Array.from(new Set(response.content.map((review) => review.storeId)));
-      if (storeIds.length === 0) {
+      const grouped = Array.from(
+        response.content.reduce((map, review) => {
+          const current = map.get(review.storeId) ?? {
+            storeId: review.storeId,
+            storeName: review.storeName ?? `장소 #${review.storeId}`,
+            reviews: [],
+          };
+
+          current.reviews.push(review);
+          map.set(review.storeId, current);
+          return map;
+        }, new Map<number, ReviewedStore>()).values()
+      );
+
+      if (grouped.length === 0) {
         setReviewedStores([]);
         return;
       }
 
-      try {
-        const storeResponse = await storesApi.listByIds(storeIds);
-        const storeMap = new Map(storeResponse.stores.map((store) => [store.storeId, store]));
-
-        const grouped = storeIds
-          .map((storeId) => {
-            const store = storeMap.get(storeId);
-            if (!store) return null;
-            const reviews = response.content.filter((review) => review.storeId === storeId);
-            return { store, reviews };
-          })
-          .filter((item): item is ReviewedStore => Boolean(item));
-
-        setReviewedStores(grouped);
-      } catch (storeError) {
-        setReviewedStores([]);
-        console.warn('Failed to refresh reviewed store metadata:', storeError);
-      }
+      setReviewedStores(grouped);
     } catch (error) {
       Alert.alert('새로고침 실패', error instanceof Error ? error.message : '리뷰를 다시 불러오지 못했어요.');
     } finally {
@@ -375,14 +371,15 @@ export default function ReviewManagementScreen() {
     [loadReviewedStores]
   );
 
-  const summaryCount = reviewResponse?.summary.reviewCount ?? 0;
-  const averageRating = reviewResponse?.summary.averageRating ?? null;
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, getTabScreenContentStyle(insets)]}
+          >
             {isLoading ? (
               <View style={styles.loadingCard}>
                 <ActivityIndicator color="#18a5a5" />
@@ -390,8 +387,8 @@ export default function ReviewManagementScreen() {
               </View>
             ) : !isLoggedIn ? (
               <LoginGatePanel
-                onLogin={() => router.replace('/views/user_login')}
-                onSignup={() => router.replace('/views/user_signup')}
+                onLogin={() => router.replace({ pathname: '/views/user_login', params: { returnTo } })}
+                onSignup={() => router.replace({ pathname: '/views/user_signup', params: { returnTo } })}
               />
             ) : (
               <>
@@ -422,11 +419,11 @@ export default function ReviewManagementScreen() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storeRow}>
                       {reviewedStores.map((item) => (
                         <StoreChip
-                          key={item.store.storeId}
-                          store={item.store}
+                          key={item.storeId}
+                          store={item}
                           reviewCount={item.reviews.length}
-                          selected={selectedStoreId === item.store.storeId}
-                          onPress={() => setSelectedStoreId(item.store.storeId)}
+                          selected={selectedStoreId === item.storeId}
+                          onPress={() => setSelectedStoreId(item.storeId)}
                         />
                       ))}
                     </ScrollView>
@@ -543,8 +540,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 26,
   },
   loadingCard: {
     marginTop: 24,

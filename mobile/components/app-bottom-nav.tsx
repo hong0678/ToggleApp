@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getBottomTabBarStyle } from './screen-layout';
 
 type TabKey = 'home' | 'map' | 'list' | 'saved' | 'my';
 
@@ -15,18 +17,24 @@ const NAV_ITEMS: {
   icon: keyof typeof Ionicons.glyphMap;
   route: Href;
 }[] = [
-  { key: 'home', label: '홈', icon: 'home', route: '/' },
-  { key: 'map', label: '지도', icon: 'location-outline', route: '/map' },
-  { key: 'list', label: '마이지도', icon: 'map-outline', route: '/list' },
-  { key: 'saved', label: '저장', icon: 'heart-outline', route: '/saved' },
-  { key: 'my', label: '마이', icon: 'person-outline', route: '/my' },
-];
+    { key: 'home', label: '홈', icon: 'home', route: '/' },
+    { key: 'map', label: '지도', icon: 'location-outline', route: '/map' },
+    { key: 'list', label: '마이지도', icon: 'map-outline', route: '/list' },
+    { key: 'saved', label: '저장', icon: 'heart-outline', route: '/saved' },
+    { key: 'my', label: '마이', icon: 'person-outline', route: '/my' },
+  ];
 
 export function AppBottomNav({ activeTab }: AppBottomNavProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.bottomTabBar}>
+    <View
+      style={[
+        styles.bottomTabBar,
+        getBottomTabBarStyle(insets),
+      ]}
+    >
       {NAV_ITEMS.map((item) => {
         const isActive = item.key === activeTab;
 
@@ -55,26 +63,24 @@ export function AppBottomNav({ activeTab }: AppBottomNavProps) {
 const styles = StyleSheet.create({
   bottomTabBar: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 10,
     left: 0,
     right: 0,
-    height: 78,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#f7f8fa',
     flexDirection: 'row',
     borderTopWidth: 1,
     borderColor: '#eceef3',
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 12 : 8,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 2,
   },
   tabText: {
     color: '#8b95a1',
     fontSize: 11,
-    marginTop: 4,
+    marginTop: 2,
   },
   tabTextActive: {
     color: '#18a5a5',

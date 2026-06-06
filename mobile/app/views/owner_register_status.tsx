@@ -11,8 +11,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSafeBack } from '@/components/use-safe-back';
+import { getScreenContentStyle } from '@/components/screen-layout';
 import { ownerApi, tokenStore } from '@/services/api';
 import type { OwnerApplicationSummaryResponse } from '@/services/api/owner';
 
@@ -81,6 +83,7 @@ function ApplicationCard({ item }: { item: OwnerApplicationSummaryResponse }) {
 export default function OwnerRegisterStatusScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/views/owner_dashboard');
+  const insets = useSafeAreaInsets();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState<OwnerApplicationSummaryResponse[]>([]);
@@ -132,7 +135,10 @@ export default function OwnerRegisterStatusScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, getScreenContentStyle(insets)]}
+      >
           <View style={styles.heroCard}>
             <View style={styles.heroBadge}>
               <Ionicons name="list-outline" size={14} color="#18a5a5" />
@@ -187,7 +193,7 @@ const styles = StyleSheet.create({
   backButton: { padding: 6 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#191f28' },
   headerAction: { padding: 6 },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
+  scrollContent: { paddingHorizontal: 18 },
   heroCard: {
     backgroundColor: '#f9fafb',
     borderRadius: 24,

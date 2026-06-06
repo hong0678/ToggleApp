@@ -16,12 +16,12 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          height: 78 + insets.bottom,
-          paddingTop: 8,
-          paddingBottom: Math.max(8, insets.bottom),
+          height: 56 + insets.bottom,
+          paddingTop: 4,
+          paddingBottom: Math.max(4, insets.bottom),
           borderTopWidth: 1,
           borderTopColor: '#eceef3',
-          backgroundColor: '#f9fafb',
+          backgroundColor: '#f7f8fa',
         },
         tabBarLabelStyle: {
           fontSize: 12,

@@ -16,6 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Link } from 'expo-router';
+import { useSafeBack } from '@/components/use-safe-back';
 import { authApi } from '@/services/api';
 
 const { width } = Dimensions.get('window');
@@ -23,6 +24,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function OwnerSignupScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/views/owner_login');
   const [role, setRole] = useState<'user' | 'owner'>('owner');
   const [storeName, setStoreName] = useState('');
   const [email, setEmail] = useState('');
@@ -96,7 +98,7 @@ export default function OwnerSignupScreen() {
   return (
     <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={28} color="#18a5a5" />
         </TouchableOpacity>
 

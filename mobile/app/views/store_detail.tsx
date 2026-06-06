@@ -16,6 +16,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
+import { useSafeBack } from '@/components/use-safe-back';
 import { ApiClientError, favoritesApi, myMapApi, storeMenusApi, storeReviewsApi, storesApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
 import type { StoreMenuItem } from '@/services/api/storeMenus';
 import type { StoreReviewItem } from '@/services/api/storeReviews';
@@ -188,6 +189,7 @@ function ReviewCard({ item, onPressImage }: { item: StoreReviewItem; onPressImag
 
 export default function StoreDetailScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/saved');
   const params = useLocalSearchParams<{
     storeId?: string | string[];
     storeName?: string | string[];
@@ -380,7 +382,7 @@ export default function StoreDetailScreen() {
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.85}>
               <Ionicons name="chevron-back" size={24} color="#18a5a5" />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
@@ -693,7 +695,7 @@ export default function StoreDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f4f6' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   scrollContent: { paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 14 : 20, paddingBottom: 28 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#edf8f8', alignItems: 'center', justifyContent: 'center' },
@@ -827,7 +829,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e5e8eb',

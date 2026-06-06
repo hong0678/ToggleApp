@@ -15,8 +15,10 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSafeBack } from '@/components/use-safe-back';
+import { getScreenContentStyle } from '@/components/screen-layout';
 import { ownerApi, tokenStore } from '@/services/api';
 
 type FieldKey =
@@ -110,6 +112,7 @@ function InputRow({
 export default function OwnerStoreRegisterScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/views/owner_dashboard');
+  const insets = useSafeAreaInsets();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [licenseFile, setLicenseFile] = useState<BusinessLicenseFile | null>(null);
@@ -278,7 +281,10 @@ export default function OwnerStoreRegisterScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContent, getScreenContentStyle(insets)]}
+        >
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.8}>
               <Ionicons name="chevron-back" size={24} color="#18a5a5" />
@@ -403,9 +409,9 @@ export default function OwnerStoreRegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f4f6' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   keyboardView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 32 },
+  scrollContent: { paddingHorizontal: 18 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   backButton: { paddingTop: 4, paddingRight: 4 },
   headerCopy: { flex: 1 },

@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   SafeAreaView,
   ScrollView,
   Share,
@@ -17,8 +18,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Linking from 'expo-linking';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MiniKakaoMapPreview, type MiniKakaoMapPlace } from '@/components/mini-kakao-map-preview';
+import { useSafeBack } from '@/components/use-safe-back';
+import { getScreenContentStyle } from '@/components/screen-layout';
 import {
   myMapApi,
   publicInstitutionsApi,
@@ -75,10 +80,12 @@ function IncludedPublicCard({ item }: { item: PublicInstitutionLookupItemRespons
 
 export default function MyMapDetailScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/my');
   const params = useLocalSearchParams<{ mapId?: string | string[]; title?: string | string[] }>();
   const mapIdParam = Array.isArray(params.mapId) ? params.mapId[0] : params.mapId;
   const titleParam = Array.isArray(params.title) ? params.title[0] : params.title;
   const mapId = mapIdParam ? Number(mapIdParam) : null;
+  const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<UserMapDetailResponse | null>(null);
@@ -114,11 +121,11 @@ export default function MyMapDetailScreen() {
       setPublics(publicResponse.institutions ?? []);
     } catch (error) {
       Alert.alert('내 지도', error instanceof Error ? error.message : '지도를 불러오지 못했어요.');
-      router.back();
+      goBack();
     } finally {
       setIsLoading(false);
     }
-  }, [mapId, router]);
+  }, [goBack, mapId]);
 
   useEffect(() => {
     void load();
@@ -213,14 +220,38 @@ export default function MyMapDetailScreen() {
 
   const shareMap = useCallback(async () => {
     if (!map) return;
+
+    if (!map.isPublic || !map.publicMapUuid) {
+      Alert.alert('공유 안내', '공개 지도로 설정한 뒤에 공유할 수 있어요.');
+      return;
+    }
+
     try {
-      await Share.share({
-        message: `${map.title} - ${map.isPublic ? '공개' : '비공개'} 마이지도`,
+      const shareUrl = Linking.createURL('/views/public_map_detail', {
+        isTripleSlashed: true,
+        queryParams: {
+          uuid: map.publicMapUuid,
+          mapId: String(mapId),
+          title: map.title,
+        },
       });
+
+      await Share.share(
+        Platform.OS === 'ios'
+          ? {
+              title: `${map.title} - 공개 지도`,
+              message: `${map.title} - 공개 지도`,
+              url: shareUrl,
+            }
+          : {
+              title: `${map.title} - 공개 지도`,
+              message: `${map.title} - 공개 지도\n${shareUrl}`,
+            }
+      );
     } catch {
       // ignore
     }
-  }, [map]);
+  }, [map, mapId]);
 
   return (
     <>
@@ -231,9 +262,12 @@ export default function MyMapDetailScreen() {
             <ActivityIndicator color="#18a5a5" />
           </View>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.content, getScreenContentStyle(insets)]}
+          >
             <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.9}>
+              <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.9}>
                 <Ionicons name="chevron-back" size={24} color="#f9fafb" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.shareButton} onPress={shareMap} activeOpacity={0.9}>

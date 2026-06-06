@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MiniKakaoMapPreview } from '@/components/mini-kakao-map-preview';
+import { HomeMapCard } from '@/components/home-map-card';
+import { getHomeScreenContentStyle } from '@/components/screen-layout';
 import { storesApi, tokenStore, type StoreLookupItemResponse } from '@/services/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -144,7 +145,13 @@ function PlaceCard({
   return (
     <TouchableOpacity style={styles.placeCard} onPress={onPress} activeOpacity={0.9}>
       <View style={[styles.placePhoto, { backgroundColor: accent }]}>
-        {imageUrl ? <Image source={{ uri: resolveAssetUrl(imageUrl) }} style={styles.placePhotoImage} /> : null}
+        {imageUrl ? (
+          <Image
+            source={{ uri: resolveAssetUrl(imageUrl) }}
+            style={styles.placePhotoImage}
+            resizeMode="cover"
+          />
+        ) : null}
         <View style={styles.placePhotoOverlay} />
         <View style={styles.placeStatusPill}>
           <Text style={styles.placeStatusText}>{status}</Text>
@@ -171,7 +178,6 @@ export default function LandingScreen() {
   const [popularPlacesError, setPopularPlacesError] = useState<string | null>(null);
   const [nearbyOpenPlaces, setNearbyOpenPlaces] = useState<PopularPlaceCardData[]>([]);
   const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [hasLiveLocation, setHasLiveLocation] = useState(false);
 
   const loadPopularPlaces = useCallback(async () => {
     setPopularPlacesLoading(true);
@@ -192,9 +198,6 @@ export default function LandingScreen() {
 
         latitude = currentLocation.coords.latitude;
         longitude = currentLocation.coords.longitude;
-        setHasLiveLocation(true);
-      } else {
-        setHasLiveLocation(false);
       }
 
       const response = await storesApi.nearby(
@@ -248,7 +251,6 @@ export default function LandingScreen() {
 
       setNearbyOpenPlaces(nextNearbyOpenPlaces);
     } catch (error) {
-      setHasLiveLocation(false);
       setPopularPlaces([]);
       setNearbyOpenPlaces([]);
       setPopularPlacesError(error instanceof Error ? error.message : '인기 장소를 불러오지 못했어요.');
@@ -310,17 +312,17 @@ export default function LandingScreen() {
     <View style={styles.container}>
       <LinearGradient
         pointerEvents="none"
-        colors={['#ffffff', '#f8fafc', '#f3f7fb', '#eef3f8']}
+        colors={['#f7f9fc', '#f7f9fc', '#f7f9fc', '#f7f9fc']}
         locations={[0, 0.38, 0.74, 1]}
         style={styles.pageBackdrop}
       />
       <SafeAreaView style={styles.safeArea}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, getHomeScreenContentStyle(insets)]}
           stickyHeaderIndices={[0]}
         >
-          <View style={[styles.heroStickyWrap, { paddingTop: insets.top + 6 }]}>
+          <View style={[styles.heroStickyWrap, { paddingTop: insets.top + 4 }]}>
             <View style={styles.heroShell}>
               <View style={styles.heroShade} pointerEvents="none" />
               <View style={styles.topRow}>
@@ -386,39 +388,24 @@ export default function LandingScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.mapCard}>
-            <View style={styles.mapCardAccent} pointerEvents="none" />
-            <View style={styles.mapChip}>
-              <Ionicons name="radio-button-on-outline" size={14} color={TOSS_BLUE} />
-              <Text style={styles.mapChipText}>내 주변</Text>
-            </View>
-            <View style={styles.mapPreview}>
-              <MiniKakaoMapPreview
-                height={250}
-                center={currentCoords}
-                showCenterMarker={hasLiveLocation}
-                lockToCenter={hasLiveLocation}
-                places={nearbyOpenPlaces
-                  .filter((place) => typeof place.latitude === 'number' && typeof place.longitude === 'number')
-                  .map((place) => ({
-                    id: String(place.storeId),
-                    name: place.title,
-                    latitude: place.latitude,
-                    longitude: place.longitude,
-                  }))}
-              />
-            </View>
-            <View style={styles.mapFooter}>
-              <View>
-                <Text style={styles.mapFooterTitle}>지금 열린 곳 {nearbyOpenPlaces.length}개</Text>
-                <Text style={styles.mapFooterSub}>내 위치 기준 도보 10분 이내</Text>
-              </View>
-              <TouchableOpacity style={styles.mapFooterButton} onPress={() => router.push('/map')} activeOpacity={0.9}>
-                <Text style={styles.mapFooterButtonText}>지도 전체보기</Text>
-                <Ionicons name="chevron-forward" size={16} color={TOSS_BLUE} />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <HomeMapCard
+            chipLabel="지금 인기"
+            title="인기 장소와 지도 미리보기"
+            subtitle="홈과 같은 톤으로 둘러보기를 이어가요"
+            buttonLabel="마이지도 보기"
+            onPress={() => router.push('/list')}
+            center={currentCoords}
+            places={nearbyOpenPlaces
+              .filter((place) => typeof place.latitude === 'number' && typeof place.longitude === 'number')
+              .map((place) => ({
+                id: String(place.storeId),
+                name: place.title,
+                latitude: place.latitude,
+                longitude: place.longitude,
+              }))}
+            showCenterMarker={Boolean(currentCoords)}
+            lockToCenter={Boolean(currentCoords)}
+          />
 
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
@@ -516,18 +503,14 @@ export default function LandingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f9fc' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   pageBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  safeArea: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 0,
-    paddingBottom: 26,
-  },
+  safeArea: { flex: 1, backgroundColor: '#f7f8fa' },
+  scrollContent: { paddingHorizontal: 18 },
   heroStickyWrap: {
-    backgroundColor: '#f7f9fc',
+    backgroundColor: '#f7f8fa',
     paddingBottom: 10,
     marginBottom: 0,
     zIndex: 5,
@@ -536,7 +519,7 @@ const styles = StyleSheet.create({
   topRow: {
     position: 'relative',
     zIndex: 2,
-    marginBottom: 2,
+    marginBottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -614,7 +597,7 @@ const styles = StyleSheet.create({
   searchBar: {
     position: 'relative',
     zIndex: 2,
-    marginTop: 8,
+    marginTop: 2,
     height: 58,
     borderRadius: 29,
     borderWidth: 0,
@@ -1104,8 +1087,10 @@ const styles = StyleSheet.create({
   },
   placePhoto: {
     height: 102,
-    padding: 8,
-    justifyContent: 'space-between',
+    padding: 0,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#eef1f5',
   },
   placePhotoImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1115,10 +1100,13 @@ const styles = StyleSheet.create({
   },
   placePhotoOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(249,250,251,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   placeStatusPill: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    zIndex: 3,
     backgroundColor: 'rgba(249,250,251,0.88)',
     borderRadius: 999,
     paddingHorizontal: 10,

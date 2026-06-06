@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -16,9 +15,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSafeBack } from '@/components/use-safe-back';
 import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
+import { getScreenContentStyle } from '@/components/screen-layout';
 import { filesApi, storeReviewsApi, storesApi, tokenStore } from '@/services/api';
 import type { StoreLookupItemResponse } from '@/services/api/types';
 import type { StoreReviewItem } from '@/services/api/storeReviews';
@@ -151,6 +152,7 @@ function ReviewCard({
 export default function StoreReviewsScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/views/my_map');
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ storeId?: string | string[]; storeName?: string | string[] }>();
   const storeIdParam = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   const storeNameParam = Array.isArray(params.storeName) ? params.storeName[0] : params.storeName;
@@ -339,7 +341,10 @@ export default function StoreReviewsScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, getScreenContentStyle(insets)]}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.85}>
               <Ionicons name="chevron-back" size={24} color="#18a5a5" />
@@ -499,12 +504,8 @@ export default function StoreReviewsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f4f6' },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 28 : 34,
-    paddingBottom: 32,
-  },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
+  scrollContent: { paddingHorizontal: 20 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 18 },
   backButton: { paddingTop: 10, paddingRight: 10, paddingBottom: 10 },
   headerCopy: { flex: 1 },

@@ -3,6 +3,7 @@ import { apiClient } from './client';
 export type StoreReviewItem = {
   reviewId: number;
   storeId: number;
+  storeName?: string | null;
   displayName: string | null;
   authorNickname?: string;
   rating: number;
@@ -29,6 +30,8 @@ export type StoreReviewMineResponse = StoreReviewPageResponse & {
   summary: StoreReviewSummaryResponse;
 };
 
+export type StoreReviewMinePageResponse = StoreReviewPageResponse;
+
 export type StoreReviewCreateRequest = {
   rating: number;
   content: string;
@@ -42,9 +45,9 @@ export type StoreReviewUpdateRequest = {
 };
 
 export const storeReviewsApi = {
-  async mine(page = 0, size = 20, sort = 'latest') {
-    return apiClient.request<StoreReviewMineResponse>(
-      `/api/v1/reviews/mine${apiClient.query({ page, size, sort })}`
+  async mine(page = 0, size = 20) {
+    return apiClient.request<StoreReviewMinePageResponse>(
+      `/api/v1/reviews/mine${apiClient.query({ page, size })}`
     );
   },
 

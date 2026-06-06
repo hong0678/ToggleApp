@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { BackHandler, Platform } from 'react-native';
-import { usePathname, useRootNavigationState, useRouter, type Href } from 'expo-router';
+import { usePathname, useRouter, type Href } from 'expo-router';
 
 const AUTH_FALLBACKS: Record<string, Href> = {
   '/views/user_login': '/',
@@ -29,33 +29,9 @@ const TAB_FALLBACKS: Record<string, Href> = {
   '/my': '/',
 };
 
-const routeHistory: string[] = [];
-
 export function AndroidBackHandler() {
   const pathname = usePathname();
-  const navigationState = useRootNavigationState();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!pathname) {
-      return;
-    }
-
-    const lastRoute = routeHistory[routeHistory.length - 1];
-
-    if (pathname === '/' || pathname === '/views/main_home') {
-      routeHistory.length = 0;
-      routeHistory.push(pathname);
-      return;
-    }
-
-    if (lastRoute !== pathname) {
-      routeHistory.push(pathname);
-      if (routeHistory.length > 30) {
-        routeHistory.shift();
-      }
-    }
-  }, [pathname]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') {
@@ -64,27 +40,15 @@ export function AndroidBackHandler() {
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       const canGoBack = router.canGoBack();
-      const stackDepth = navigationState?.routes?.length ?? 0;
-      const stackIndex = navigationState?.index ?? 0;
 
       if (__DEV__) {
         console.log('[AndroidBackHandler]', pathname, {
           canGoBack,
-          stackDepth,
-          stackIndex,
-          previousRoute: routeHistory.length > 1 ? routeHistory[routeHistory.length - 2] : null,
         });
       }
 
-      if (stackIndex > 0) {
+      if (canGoBack) {
         router.back();
-        return true;
-      }
-
-      const previousRoute = routeHistory.length > 1 ? routeHistory[routeHistory.length - 2] : null;
-      if (previousRoute && previousRoute !== pathname) {
-        routeHistory.pop();
-        router.replace(previousRoute as Href);
         return true;
       }
 
@@ -104,7 +68,7 @@ export function AndroidBackHandler() {
     });
 
     return () => subscription.remove();
-  }, [navigationState, pathname, router]);
+  }, [pathname, router]);
 
   return null;
 }

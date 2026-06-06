@@ -15,9 +15,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
+import { LoginGatePanel } from '@/components/login-gate-panel';
 import { PageHero } from '@/components/page-hero';
+import { getTabScreenContentStyle } from '@/components/screen-layout';
 import {
   ApiClientError,
   favoritesApi,
@@ -137,36 +140,11 @@ function SavedPlaceCard({
   );
 }
 
-function LoginGatePanel({
-  onLogin,
-  onSignup,
-}: {
-  onLogin: () => void;
-  onSignup: () => void;
-}) {
-  return (
-    <View style={styles.gateCard}>
-      <View style={styles.gateIconWrap}>
-        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
-      </View>
-      <Text style={styles.gateTitle}>저장한 장소를 보려면 로그인하세요</Text>
-      <Text style={styles.gateSubtitle}>찜한 장소, 내 지도 추가, 지도 선택까지 이어서 사용할 수 있어요.</Text>
-      <View style={styles.gateButtons}>
-        <TouchableOpacity style={styles.gateSecondaryButton} onPress={onLogin} activeOpacity={0.9}>
-          <Text style={styles.gateSecondaryButtonText}>로그인</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.gatePrimaryButton} onPress={onSignup} activeOpacity={0.9}>
-          <Text style={styles.gatePrimaryButtonText}>회원가입</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
 export default function SavedPlacesScreen() {
   const router = useRouter();
   const segments = useSegments();
   const showInternalTabBar = segments[0] !== '(tabs)';
+  const insets = useSafeAreaInsets();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
@@ -419,7 +397,10 @@ export default function SavedPlacesScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, getTabScreenContentStyle(insets)]}
+          >
             <PageHero
               title="저장, 지도에 담기"
               titleAccent="저장, "
@@ -432,6 +413,8 @@ export default function SavedPlacesScreen() {
 
             {!isLoggedIn ? (
               <LoginGatePanel
+                title="저장한 장소를 보려면 로그인하세요"
+                subtitle="찜한 장소, 내 지도 추가, 지도 선택까지 이어서 사용할 수 있어요."
                 onLogin={() => router.replace('/views/user_login')}
                 onSignup={() => router.replace('/views/user_signup')}
               />
@@ -612,15 +595,13 @@ export default function SavedPlacesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
   },
   safeArea: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 18,
-    paddingTop: Platform.OS === 'ios' ? 8 : 18,
-    paddingBottom: 26,
   },
   heroShell: {
     backgroundColor: '#f9fafb',
@@ -754,68 +735,6 @@ const styles = StyleSheet.create({
   sectionMore: {
     color: '#18a5a5',
     fontSize: 13,
-    fontWeight: '800',
-  },
-  gateCard: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#e5e8eb',
-    paddingHorizontal: 18,
-    paddingVertical: 20,
-    marginTop: 14,
-  },
-  gateIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#edf8f8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  gateTitle: {
-    color: '#191f28',
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  gateSubtitle: {
-    marginTop: 6,
-    color: '#6b7684',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  gateButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
-  },
-  gateSecondaryButton: {
-    flex: 1,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#edf8f8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gateSecondaryButtonText: {
-    color: '#18a5a5',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  gatePrimaryButton: {
-    flex: 1,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#18a5a5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gatePrimaryButtonText: {
-    color: '#f9fafb',
-    fontSize: 14,
     fontWeight: '800',
   },
   savedList: {
@@ -975,7 +894,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   modalSheet: {
-    backgroundColor: '#f2f4f6',
+    backgroundColor: '#f7f8fa',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,

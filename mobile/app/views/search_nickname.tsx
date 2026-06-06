@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeBack } from '@/components/use-safe-back';
 import { publicMapsApi, type PublicMapSearchItemResponse } from '@/services/api';
 import { tokenStore } from '@/services/api';
 
@@ -35,6 +36,7 @@ function LoginGatePanel({
 
 export default function SearchNicknameScreen() {
   const router = useRouter();
+  const goBack = useSafeBack('/');
   const [nickname, setNickname] = useState('');
   const [results, setResults] = useState<PublicMapSearchItemResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,13 +86,7 @@ export default function SearchNicknameScreen() {
         <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/');
-            }
-          }} style={styles.backButton}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton}>
             <Ionicons name="chevron-back" size={28} color="#f9fafb" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>마이지도 검색</Text>

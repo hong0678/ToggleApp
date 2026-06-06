@@ -153,7 +153,11 @@ export default function OwnerDashboardScreen() {
     (selectedStoreId ? (`${path}?storeId=${selectedStoreId}` as Href) : path);
 
   return (
-    <LinearGradient colors={['#f2f4f6', '#eef1f5', '#f9fafb']} style={styles.container}>
+    <LinearGradient
+      colors={['#ffffff', '#f8fafc', '#f3f7fb', '#eef3f8']}
+      locations={[0, 0.38, 0.74, 1]}
+      style={styles.container}
+    >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.push('/')} style={styles.headerIconButton} activeOpacity={0.8}>
@@ -318,14 +322,15 @@ export default function OwnerDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingTop: 24,
+    paddingBottom: 14,
   },
   headerIconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 8 },

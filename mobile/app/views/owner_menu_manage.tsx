@@ -406,7 +406,7 @@ export default function OwnerMenuManageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f2f4f6' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   scrollContent: { padding: 20, paddingBottom: 32 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   backButton: { paddingTop: 4, paddingRight: 4 },

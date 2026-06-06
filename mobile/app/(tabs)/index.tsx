@@ -52,7 +52,7 @@ export default function TabIndexScreen() {
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f4f6' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f7f8fa' }}>
         <ActivityIndicator color="#18a5a5" />
       </View>
     );
@@ -60,7 +60,7 @@ export default function TabIndexScreen() {
 
   if (isRedirectingAdmin) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f4f6' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f7f8fa' }}>
         <ActivityIndicator color="#18a5a5" />
       </View>
     );

@@ -35,6 +35,12 @@ export const publicMapsApi = {
     });
   },
 
+  async getByMapId(mapId: number) {
+    return apiClient.request<UserPublicMapResponse>(`/api/v1/maps/${mapId}`, {
+      auth: false,
+    });
+  },
+
   async getLikes(mapId: number) {
     return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`);
   },
