@@ -21,6 +21,7 @@ backend_connections.md
 *.swo
 
 # package manager files & dependencies
+/package-lock.json
 **/node_modules/
 node_modules/
 npm-debug.log*
