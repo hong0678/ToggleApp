@@ -7,3 +7,59 @@ daily_logs/
 
 # mock data logs
 temp/mock_data_log.md
+
+backend_connections.md
+
+# macOS system files
+**/.DS_Store
+.DS_Store
+
+# IDE configuration files
+**/.idea/
+**/.vscode/
+*.swp
+*.swo
+
+# package manager files & dependencies
+**/node_modules/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# expo local files
+**/.expo/
+.expo/
+**/.expo-shared/
+.expo-shared/
+mobile/expo-env.d.ts
+web-build/
+dist/
+coverage/
+
+# backend clone / local runtime files / backups
+Toggle_backend/
+backend/
+backend_backup_20260521_013517/
+backend_from_github/
+**/src/main/resources/application.yml
+**/src/main/resources/application-local.yml
+**/src/main/resources/application-dev.yml
+**/.env
+**/.env.local
+mobile/.env
+backend/.env
+backend/.env.local
+**/.gradle/
+**/build/
+
+# signing / local credential files
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+
+# misc local merge / temp files
+*.log
+*.tmp
+*.orig
