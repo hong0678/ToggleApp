@@ -300,17 +300,17 @@ export default function OwnerDashboardScreen() {
 
               {stats.stores.length > 0 ? (
                 <View style={styles.featureCard}>
-                <View style={styles.featureHeader}>
-                  <Text style={styles.featureTitle}>내 매장</Text>
-                  <TouchableOpacity onPress={() => router.push('/views/owner_status_manage')} activeOpacity={0.8}>
-                    <Text style={styles.featureLink}>관리하기</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.storeList}>
+                  <View style={styles.featureHeader}>
+                    <Text style={styles.featureTitle}>내 매장</Text>
+                    <TouchableOpacity onPress={() => router.push('/views/owner_status_manage')} activeOpacity={0.8}>
+                      <Text style={styles.featureLink}>관리하기</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.storeList}>
                     {stats.stores.slice(0, 3).map((store) => (
                       <StoreChip key={store.storeId} store={store} />
                     ))}
-                </View>
+                  </View>
                 </View>
               ) : null}
             </>

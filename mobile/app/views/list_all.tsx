@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,12 +14,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, usePathname, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBottomNav } from '@/components/app-bottom-nav';
+import { LoginGatePanel } from '@/components/login-gate-panel';
 import { PageHero } from '@/components/page-hero';
 import { getTabScreenContentStyle } from '@/components/screen-layout';
 import {
@@ -60,32 +61,14 @@ const formatDate = (value?: string | null) => {
   return `${year}.${month}.${day}`;
 };
 
-function LoginGate({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
-  return (
-    <View style={styles.gateCard}>
-      <View style={styles.gateIcon}>
-        <Ionicons name="lock-closed-outline" size={24} color="#18a5a5" />
-      </View>
-      <Text style={styles.gateTitle}>마이지도를 보려면 로그인하세요</Text>
-      <Text style={styles.gateText}>저장한 장소를 관리하고 다른 사람의 공개 지도를 찾아볼 수 있어요.</Text>
-      <View style={styles.gateActions}>
-        <TouchableOpacity style={styles.secondaryButton} onPress={onLogin} activeOpacity={0.9}>
-          <Text style={styles.secondaryButtonText}>로그인</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.primaryButton} onPress={onSignup} activeOpacity={0.9}>
-          <Text style={styles.primaryButtonText}>회원가입</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
 function MyMapCard({
   item,
   onPress,
+  onMorePress,
 }: {
   item: MyMapCardItem;
   onPress: () => void;
+  onMorePress: () => void;
 }) {
   const summary = item.summary;
   const imageUri = resolveAssetUrl(summary.profileImageUrl);
@@ -116,7 +99,7 @@ function MyMapCard({
               {item.storeCount + item.publicCount}개 장소 · {summary.isPublic ? '공개' : '비공개'}
             </Text>
           </View>
-          <TouchableOpacity style={styles.mapListMoreButton} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.mapListMoreButton} onPress={onMorePress} activeOpacity={0.85}>
             <Ionicons name="ellipsis-vertical" size={14} color="#6b7684" />
           </TouchableOpacity>
         </View>
@@ -188,6 +171,8 @@ function PublicMapCard({
 export default function ListAllScreen() {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useLocalSearchParams<{ mode?: string | string[] }>();
+  const modeParam = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const showInternalTabBar = pathname !== '/list';
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<ViewMode>('mine');
@@ -197,6 +182,8 @@ export default function ListAllScreen() {
   const [myMapStats, setMyMapStats] = useState({ mapCount: 0, totalPlaces: 0, likes: 0 });
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [mineError, setMineError] = useState<string | null>(null);
+  const [mapMenuTarget, setMapMenuTarget] = useState<MyMapCardItem | null>(null);
+  const [isDeletingMap, setIsDeletingMap] = useState(false);
   const [isCreateMapModalOpen, setIsCreateMapModalOpen] = useState(false);
   const [isCreatingMap, setIsCreatingMap] = useState(false);
   const [newMapTitle, setNewMapTitle] = useState('');
@@ -208,6 +195,17 @@ export default function ListAllScreen() {
   const [publicTotal, setPublicTotal] = useState(0);
   const [isSearchingPublic, setIsSearchingPublic] = useState(false);
   const [publicError, setPublicError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (modeParam === 'public') {
+      setMode('public');
+      return;
+    }
+
+    if (modeParam === 'mine') {
+      setMode('mine');
+    }
+  }, [modeParam]);
 
   const greeting = useMemo(() => {
     if (displayName) return `${displayName}님의 공간`;
@@ -224,6 +222,62 @@ export default function ListAllScreen() {
     setNewMapImage(null);
     setIsCreateMapModalOpen(true);
   }, []);
+
+  const openMapMenu = useCallback((item: MyMapCardItem) => {
+    setMapMenuTarget(item);
+  }, []);
+
+  const closeMapMenu = useCallback(() => {
+    setMapMenuTarget(null);
+  }, []);
+
+  const openMapEditor = useCallback(
+    (item: MyMapCardItem) => {
+      closeMapMenu();
+      router.push({
+        pathname: '/views/my_map_detail',
+        params: {
+          mapId: String(item.summary.mapId),
+          title: item.summary.title,
+          edit: '1',
+        },
+      });
+    },
+    [closeMapMenu, router]
+  );
+
+  const deleteMap = useCallback(
+    async (item: MyMapCardItem) => {
+      try {
+        setIsDeletingMap(true);
+        await userMapsApi.delete(item.summary.mapId);
+        await loadMyMap();
+        Alert.alert('삭제 완료', '지도를 삭제했어요.');
+      } catch (error) {
+        Alert.alert('삭제 실패', error instanceof Error ? error.message : '지도를 삭제하지 못했어요.');
+      } finally {
+        setIsDeletingMap(false);
+      }
+    },
+    [loadMyMap]
+  );
+
+  const confirmDeleteMap = useCallback(
+    (item: MyMapCardItem) => {
+      closeMapMenu();
+      Alert.alert('지도 삭제', `'${item.summary.title}' 지도를 삭제할까요?`, [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: () => {
+            void deleteMap(item);
+          },
+        },
+      ]);
+    },
+    [closeMapMenu, deleteMap]
+  );
 
   const pickNewMapImage = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -440,10 +494,14 @@ export default function ListAllScreen() {
           </View>
 
           {!isLoggedIn && mode === 'mine' ? (
-            <LoginGate
-              onLogin={() => router.replace('/views/user_login')}
-              onSignup={() => router.replace('/views/user_signup')}
-            />
+            <View style={styles.loginGateWrap}>
+              <LoginGatePanel
+                title="마이지도를 보려면 로그인하세요"
+                subtitle="저장한 장소를 관리하고 다른 사람의 공개 지도를 찾아볼 수 있어요."
+                onLogin={() => router.replace('/views/user_login')}
+                onSignup={() => router.replace('/views/user_signup')}
+              />
+            </View>
           ) : mode === 'mine' ? (
               <>
                 <View style={styles.mapCard}>
@@ -530,6 +588,7 @@ export default function ListAllScreen() {
                     <MyMapCard
                       key={item.summary.mapId}
                       item={item}
+                      onMorePress={() => openMapMenu(item)}
                       onPress={() =>
                         router.push({
                           pathname: '/views/my_map_detail',
@@ -545,12 +604,8 @@ export default function ListAllScreen() {
                 ) : (
                   <View style={styles.emptyState}>
                     <Ionicons name="bookmark-outline" size={42} color="#cbd5e1" />
-                    <Text style={styles.emptyTitle}>저장한 장소가 아직 없어요</Text>
-                    <Text style={styles.emptyText}>{mineError ?? '내 지도를 만들고 저장한 장소를 추가하면 여기에 보여요.'}</Text>
-                    <TouchableOpacity style={styles.primaryButtonWide} onPress={openCreateMapModal} activeOpacity={0.9}>
-                      <Text style={styles.primaryButtonText}>새 지도 만들기</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#f9fafb" />
-                    </TouchableOpacity>
+                    <Text style={styles.emptyTitle}>내 지도가 아직 없어요</Text>
+                    <Text style={styles.emptyText}>{mineError ?? '지도를 만들고 장소를 추가하면 여기에 보여요.'}</Text>
                   </View>
                 )}
 
@@ -561,8 +616,8 @@ export default function ListAllScreen() {
                   <Ionicons name="map-outline" size={18} color="#18a5a5" />
                 </View>
                 <View style={styles.saveCalloutBody}>
-                  <Text style={styles.saveCalloutTitle}>저장한 장소를 내 지도에 추가해보세요</Text>
-                  <Text style={styles.saveCalloutText}>저장 탭에서 원하는 장소를 선택해 내 지도에 추가할 수 있어요</Text>
+                  <Text style={styles.saveCalloutTitle}>원하는 장소를 내 지도에 추가해보세요</Text>
+                  <Text style={styles.saveCalloutText}>저장 탭이나 검색에서 원하는 장소를 선택해 내 지도에 추가할 수 있어요</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
               </TouchableOpacity>
@@ -720,6 +775,56 @@ export default function ListAllScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={mapMenuTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMapMenu}
+      >
+        <View style={styles.mapMenuBackdrop}>
+          <TouchableOpacity style={styles.createMapModalDimmer} activeOpacity={1} onPress={closeMapMenu} />
+          <View style={styles.mapMenuSheet}>
+            <View style={styles.createMapModalHandle} />
+            <Text style={styles.mapMenuTitle} numberOfLines={1}>
+              {mapMenuTarget?.summary.title ?? '내 지도'}
+            </Text>
+            <Text style={styles.mapMenuSubtitle}>원하는 작업을 선택하세요.</Text>
+
+            <TouchableOpacity
+              style={styles.mapMenuAction}
+              activeOpacity={0.9}
+              onPress={() => {
+                if (mapMenuTarget) {
+                  openMapEditor(mapMenuTarget);
+                }
+              }}
+              disabled={!mapMenuTarget || isDeletingMap}
+            >
+              <Ionicons name="create-outline" size={18} color="#18a5a5" />
+              <Text style={styles.mapMenuActionText}>수정</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.mapMenuAction, styles.mapMenuDeleteAction]}
+              activeOpacity={0.9}
+              onPress={() => {
+                if (mapMenuTarget) {
+                  confirmDeleteMap(mapMenuTarget);
+                }
+              }}
+              disabled={!mapMenuTarget || isDeletingMap}
+            >
+              <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              <Text style={[styles.mapMenuActionText, styles.mapMenuDeleteText]}>삭제</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.mapMenuCancelButton} onPress={closeMapMenu} activeOpacity={0.9}>
+              <Text style={styles.mapMenuCancelText}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -792,66 +897,8 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: '#f9fafb',
   },
-  gateCard: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#e5e8eb',
-    alignItems: 'center',
-  },
-  gateIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#edf8f8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  gateTitle: {
-    color: '#191f28',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  gateText: {
-    marginTop: 8,
-    color: '#6b7684',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-  gateActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 18,
-  },
-  primaryButton: {
-    height: 42,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    backgroundColor: '#18a5a5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: '#f9fafb',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  secondaryButton: {
-    height: 42,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    backgroundColor: '#eef1f5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: '#4e5968',
-    fontSize: 13,
-    fontWeight: '900',
+  loginGateWrap: {
+    marginTop: 0,
   },
   statGrid: {
     flexDirection: 'row',
@@ -1172,8 +1219,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   mapListMoreButton: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#eef1f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1272,6 +1321,70 @@ const styles = StyleSheet.create({
     color: '#6b7684',
     fontSize: 13,
     lineHeight: 19,
+  },
+  mapMenuBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15,23,42,0.38)',
+  },
+  mapMenuSheet: {
+    backgroundColor: '#f9fafb',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+    borderTopWidth: 1,
+    borderColor: '#e5e8eb',
+  },
+  mapMenuTitle: {
+    marginTop: 6,
+    color: '#191f28',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  mapMenuSubtitle: {
+    marginTop: 4,
+    color: '#6b7684',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mapMenuAction: {
+    marginTop: 12,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: '#edf8f8',
+    borderWidth: 1,
+    borderColor: '#d7f0ef',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mapMenuDeleteAction: {
+    backgroundColor: '#fff1f1',
+    borderColor: '#ffd6d6',
+  },
+  mapMenuActionText: {
+    color: '#191f28',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  mapMenuDeleteText: {
+    color: '#ef4444',
+  },
+  mapMenuCancelButton: {
+    marginTop: 12,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapMenuCancelText: {
+    color: '#191f28',
+    fontSize: 14,
+    fontWeight: '900',
   },
   createMapPhotoBox: {
     height: 164,

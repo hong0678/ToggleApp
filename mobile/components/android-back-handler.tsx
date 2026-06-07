@@ -10,6 +10,7 @@ const AUTH_FALLBACKS: Record<string, Href> = {
   '/views/search_nickname': '/',
   '/views/store_detail': '/saved',
   '/views/store_reviews': '/saved',
+  '/views/public_map_large': '/saved',
   '/views/my_map': '/my',
   '/views/owner_register_status': '/views/owner_dashboard',
   '/views/owner_store_register': '/views/owner_dashboard',

@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type {
+  LikedPublicMapListResponse,
   MapLikeResponse,
   PublicMapListResponse,
   PublicMapSearchResponse,
@@ -49,6 +50,13 @@ export const publicMapsApi = {
     return apiClient.request<MapLikeResponse>(`/api/v1/maps/${mapId}/likes`, {
       method: 'POST',
     });
+  },
+
+  async listLikedByMe(params?: { page?: number; size?: number }) {
+    return apiClient.request<LikedPublicMapListResponse>(`/api/v1/my-maps/liked${apiClient.query({
+      page: params?.page ?? 0,
+      size: params?.size ?? 20,
+    })}`);
   },
 
   async unlike(mapId: number) {

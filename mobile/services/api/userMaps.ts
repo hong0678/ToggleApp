@@ -98,6 +98,12 @@ export const userMapsApi = {
     });
   },
 
+  async delete(mapId: number) {
+    return requestUserMap<void>('delete', `/api/v1/my-maps/${mapId}`, {
+      method: 'DELETE',
+    });
+  },
+
   async addStore(mapId: number, storeId: number) {
     return requestUserMap<MyMapPlaceResponse>('addStore', `/api/v1/my-maps/${mapId}/stores/${storeId}`, {
       method: 'POST',

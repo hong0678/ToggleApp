@@ -1,15 +1,33 @@
-import React from 'react';
-import { Modal, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Modal, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 type FullscreenImageViewerProps = {
   visible: boolean;
   uri: string | null;
+  uris?: string[];
+  initialIndex?: number;
   onClose: () => void;
   title?: string;
 };
 
-export function FullscreenImageViewer({ visible, uri, onClose, title }: FullscreenImageViewerProps) {
+export function FullscreenImageViewer({ visible, uri, uris, initialIndex = 0, onClose, title }: FullscreenImageViewerProps) {
+  const scrollRef = useRef<ScrollView | null>(null);
+  const { width: windowWidth } = useWindowDimensions();
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const imageUris = uris && uris.length > 0 ? uris : uri ? [uri] : [];
+  const clampedInitialIndex = Math.max(0, Math.min(initialIndex, Math.max(imageUris.length - 1, 0)));
+  const imageFrameWidth = Math.max(windowWidth - 64, 0);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    setActiveIndex(clampedInitialIndex);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x: imageFrameWidth * clampedInitialIndex, animated: false });
+    });
+  }, [clampedInitialIndex, imageFrameWidth, visible]);
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -24,7 +42,32 @@ export function FullscreenImageViewer({ visible, uri, onClose, title }: Fullscre
             </TouchableOpacity>
           </View>
           <View style={styles.imageFrame}>
-            {uri ? <Image source={{ uri }} style={styles.image} resizeMode="contain" /> : null}
+            {imageUris.length > 0 ? (
+              <ScrollView
+                ref={scrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                onMomentumScrollEnd={(event) => {
+                  const nextIndex = Math.round(event.nativeEvent.contentOffset.x / Math.max(imageFrameWidth, 1));
+                  setActiveIndex(Math.max(0, Math.min(nextIndex, imageUris.length - 1)));
+                }}
+              >
+                {imageUris.map((imageUri, index) => (
+                  <View key={`${imageUri}-${index}`} style={[styles.imageSlide, { width: imageFrameWidth }]}>
+                    <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+            {imageUris.length > 1 ? (
+              <View style={styles.counterBadge}>
+                <Text style={styles.counterText}>
+                  {activeIndex + 1} / {imageUris.length}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -76,8 +119,27 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
   },
+  imageSlide: {
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   image: {
     width: '100%',
     height: '100%',
+  },
+  counterBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(25, 31, 40, 0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  counterText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

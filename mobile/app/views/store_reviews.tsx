@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,11 +30,16 @@ type ReviewDraft = {
   imageUrls: string[];
 };
 
+type ReviewScreenMode = 'all' | 'write';
+
 const EMPTY_DRAFT: ReviewDraft = {
   rating: 5,
   content: '',
   imageUrls: [],
 };
+
+const PUBLIC_REVIEW_PAGE_SIZE = 20;
+const MY_REVIEW_PAGE_SIZE = 100;
 
 const resolveAssetUrl = (url: string) => {
   if (/^https?:\/\//i.test(url)) {
@@ -69,21 +74,25 @@ function StarSelector({
 function ReviewImageChips({
   urls,
   onRemove,
+  onPressImage,
 }: {
   urls: string[];
   onRemove: (index: number) => void;
+  onPressImage: (url: string) => void;
 }) {
   if (urls.length === 0) return null;
 
   return (
-    <View style={styles.imageChipRow}>
+    <View style={styles.imagePreviewGrid}>
       {urls.map((url, index) => (
-        <View key={`${url}-${index}`} style={styles.imageChip}>
-          <Text style={styles.imageChipText} numberOfLines={1}>
-            {url}
-          </Text>
+        <View key={`${url}-${index}`} style={styles.imagePreviewCard}>
+          <TouchableOpacity style={styles.imagePreviewTouch} activeOpacity={0.9} onPress={() => onPressImage(resolveAssetUrl(url))}>
+            <Image source={{ uri: resolveAssetUrl(url) }} style={styles.imagePreviewPhoto} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => onRemove(index)} activeOpacity={0.85}>
-            <Ionicons name="close-circle" size={18} color="#ef4444" />
+            <View style={styles.imagePreviewRemove}>
+              <Ionicons name="close" size={14} color="#ffffff" />
+            </View>
           </TouchableOpacity>
         </View>
       ))}
@@ -102,7 +111,7 @@ function ReviewCard({
   isMine: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
-  onPressImage: (url: string) => void;
+  onPressImage: (index: number) => void;
 }) {
   return (
     <View style={styles.reviewCard}>
@@ -121,8 +130,8 @@ function ReviewCard({
       <Text style={styles.reviewContent}>{item.content}</Text>
       {item.imageUrls.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewImageRow}>
-          {item.imageUrls.map((url) => (
-            <TouchableOpacity key={url} style={styles.reviewImageCard} activeOpacity={0.9} onPress={() => onPressImage(resolveAssetUrl(url))}>
+          {item.imageUrls.map((url, index) => (
+            <TouchableOpacity key={`${url}-${index}`} style={styles.reviewImageCard} activeOpacity={0.9} onPress={() => onPressImage(index)}>
               <Image source={{ uri: resolveAssetUrl(url) }} style={styles.reviewImage} />
             </TouchableOpacity>
           ))}
@@ -153,21 +162,29 @@ export default function StoreReviewsScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/views/my_map');
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ storeId?: string | string[]; storeName?: string | string[] }>();
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const params = useLocalSearchParams<{ storeId?: string | string[]; storeName?: string | string[]; mode?: string | string[] }>();
   const storeIdParam = Array.isArray(params.storeId) ? params.storeId[0] : params.storeId;
   const storeNameParam = Array.isArray(params.storeName) ? params.storeName[0] : params.storeName;
+  const modeParam = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const storeId = storeIdParam ? Number(storeIdParam) : null;
+  const screenMode: ReviewScreenMode = modeParam === 'write' ? 'write' : 'all';
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedReviewId, setSelectedReviewId] = useState<number | null>(null);
   const [store, setStore] = useState<StoreLookupItemResponse | null>(null);
   const [publicReviews, setPublicReviews] = useState<StoreReviewItem[]>([]);
+  const [publicReviewPage, setPublicReviewPage] = useState(0);
+  const [hasMorePublicReviews, setHasMorePublicReviews] = useState(false);
   const [myReviews, setMyReviews] = useState<StoreReviewItem[]>([]);
   const [draft, setDraft] = useState<ReviewDraft>(EMPTY_DRAFT);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewImageUrls, setPreviewImageUrls] = useState<string[]>([]);
+  const [previewImageIndex, setPreviewImageIndex] = useState(0);
   const [previewImageTitle, setPreviewImageTitle] = useState('사진 보기');
 
   const load = useCallback(async () => {
@@ -183,22 +200,26 @@ export default function StoreReviewsScreen() {
 
       const [storeResponse, publicResponse, mineResponse] = await Promise.all([
         storesApi.listByIds([storeId]),
-        storeReviewsApi.list(storeId),
-        token ? storeReviewsApi.mineByStore(storeId) : Promise.resolve(null),
+        screenMode === 'all' ? storeReviewsApi.list(storeId, 0, PUBLIC_REVIEW_PAGE_SIZE) : Promise.resolve(null),
+        token ? storeReviewsApi.mineByStore(storeId, 0, MY_REVIEW_PAGE_SIZE) : Promise.resolve(null),
       ]);
 
       setStore(storeResponse.stores[0] ?? null);
-      setPublicReviews(publicResponse.content);
+      setPublicReviews(publicResponse?.content ?? []);
+      setPublicReviewPage(publicResponse?.page ?? 0);
+      setHasMorePublicReviews(publicResponse ? publicResponse.page + 1 < publicResponse.totalPages : false);
       setMyReviews(mineResponse?.content ?? []);
     } catch (error) {
       Alert.alert('리뷰 불러오기 실패', error instanceof Error ? error.message : '리뷰를 불러오지 못했어요.');
       setStore(null);
       setPublicReviews([]);
+      setPublicReviewPage(0);
+      setHasMorePublicReviews(false);
       setMyReviews([]);
     } finally {
       setIsLoading(false);
     }
-  }, [storeId]);
+  }, [screenMode, storeId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -215,16 +236,67 @@ export default function StoreReviewsScreen() {
 
   const storeTitle = store?.name ?? storeNameParam ?? '매장 리뷰';
   const storeAddress = store?.roadAddress ?? store?.address ?? store?.jibunAddress ?? '주소 정보 없음';
+  const totalReviewCount = store?.reviewCount ?? publicReviews.length;
   const averageRating = useMemo(() => {
     const rating = store?.reviewAverageRating ?? store?.rating;
     if (rating === null || rating === undefined) return '—';
     return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
   }, [store]);
+  const myReviewIds = useMemo(() => new Set(myReviews.map((review) => review.reviewId)), [myReviews]);
   const openPreview = useCallback((url: string, title: string) => {
     setPreviewImageUrl(url);
+    setPreviewImageUrls([url]);
+    setPreviewImageIndex(0);
     setPreviewImageTitle(title);
   }, []);
-  const closePreview = useCallback(() => setPreviewImageUrl(null), []);
+  const openPreviewGallery = useCallback((urls: string[], index: number, title: string) => {
+    if (urls.length === 0) return;
+    const nextIndex = Math.max(0, Math.min(index, urls.length - 1));
+    setPreviewImageUrls(urls);
+    setPreviewImageIndex(nextIndex);
+    setPreviewImageUrl(urls[nextIndex] ?? null);
+    setPreviewImageTitle(title);
+  }, []);
+  const closePreview = useCallback(() => {
+    setPreviewImageUrl(null);
+    setPreviewImageUrls([]);
+    setPreviewImageIndex(0);
+  }, []);
+
+  const loadMorePublicReviews = useCallback(async () => {
+    if (screenMode !== 'all' || !storeId || isLoading || isLoadingMore || !hasMorePublicReviews) {
+      return;
+    }
+
+    try {
+      setIsLoadingMore(true);
+      const nextPage = publicReviewPage + 1;
+      const response = await storeReviewsApi.list(storeId, nextPage, PUBLIC_REVIEW_PAGE_SIZE);
+      setPublicReviews((current) => [...current, ...response.content]);
+      setPublicReviewPage(response.page);
+      setHasMorePublicReviews(response.page + 1 < response.totalPages);
+    } catch (error) {
+      Alert.alert('리뷰 추가 불러오기 실패', error instanceof Error ? error.message : '리뷰를 더 불러오지 못했어요.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMorePublicReviews, isLoading, isLoadingMore, publicReviewPage, screenMode, storeId]);
+
+  const handleReviewListScroll = useCallback(
+    (offsetY: number, layoutHeight: number, contentHeight: number) => {
+      if (screenMode !== 'all' || !hasMorePublicReviews || isLoading || isLoadingMore) {
+        return;
+      }
+
+      const threshold = 220;
+      const reachedBottom = layoutHeight + offsetY >= contentHeight - threshold;
+
+      if (reachedBottom) {
+        void loadMorePublicReviews();
+      }
+    },
+    [hasMorePublicReviews, isLoading, isLoadingMore, loadMorePublicReviews, screenMode]
+  );
 
   const handlePickImage = async () => {
     if (!isLoggedIn) {
@@ -313,6 +385,7 @@ export default function StoreReviewsScreen() {
       content: item.content,
       imageUrls: item.imageUrls,
     });
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const handleDelete = async (reviewId: number) => {
@@ -342,16 +415,29 @@ export default function StoreReviewsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={[styles.scrollContent, getScreenContentStyle(insets)]}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={(event) =>
+            handleReviewListScroll(
+              event.nativeEvent.contentOffset.y,
+              event.nativeEvent.layoutMeasurement.height,
+              event.nativeEvent.contentSize.height
+            )
+          }
         >
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.85}>
               <Ionicons name="chevron-back" size={24} color="#18a5a5" />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
-              <Text style={styles.headerTitle}>리뷰 보기</Text>
-              <Text style={styles.headerSubtitle}>매장 리뷰를 보고 내 리뷰를 작성할 수 있어요.</Text>
+              <Text style={styles.headerTitle}>{screenMode === 'write' ? '리뷰 작성/수정' : '리뷰 전체보기'}</Text>
+              <Text style={styles.headerSubtitle}>
+                {screenMode === 'write'
+                  ? '이 가게에 남길 리뷰를 작성하고, 내가 작성한 리뷰를 수정할 수 있어요.'
+                  : '이 매장에 등록된 리뷰를 아래로 내려가며 모두 확인할 수 있어요.'}
+              </Text>
             </View>
           </View>
 
@@ -365,7 +451,7 @@ export default function StoreReviewsScreen() {
               </View>
               <View style={styles.metaPill}>
                 <Ionicons name="chatbubble-outline" size={14} color="#18a5a5" />
-                <Text style={styles.metaText}>{publicReviews.length}개 리뷰</Text>
+                <Text style={styles.metaText}>{totalReviewCount}개 리뷰</Text>
               </View>
             </View>
           </View>
@@ -377,128 +463,163 @@ export default function StoreReviewsScreen() {
             </View>
           ) : (
             <>
-              <View style={styles.card}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitle}>{selectedReviewId ? '리뷰 수정' : '리뷰 작성'}</Text>
-                  {selectedReviewId ? (
-                    <TouchableOpacity
-                      style={styles.cancelEditButton}
-                      onPress={() => {
-                        setSelectedReviewId(null);
-                        setDraft(EMPTY_DRAFT);
-                      }}
-                    >
-                      <Text style={styles.cancelEditText}>수정 취소</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                {!isLoggedIn ? (
-                  <View style={styles.loginCard}>
-                    <Text style={styles.loginTitle}>로그인이 필요해요</Text>
-                    <Text style={styles.loginSubtitle}>리뷰 작성, 수정, 삭제는 로그인 후 사용할 수 있어요.</Text>
-                    <View style={styles.loginButtons}>
-                      <TouchableOpacity style={styles.loginSecondaryButton} onPress={() => router.replace('/views/user_login')}>
-                        <Text style={styles.loginSecondaryButtonText}>로그인</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.loginPrimaryButton} onPress={() => router.replace('/views/user_signup')}>
-                        <Text style={styles.loginPrimaryButtonText}>회원가입</Text>
-                      </TouchableOpacity>
+              {screenMode === 'write' ? (
+                <>
+                  <View style={styles.card}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitle}>{selectedReviewId ? '리뷰 수정' : '리뷰 작성/수정'}</Text>
+                      {selectedReviewId ? (
+                        <TouchableOpacity
+                          style={styles.cancelEditButton}
+                          onPress={() => {
+                            setSelectedReviewId(null);
+                            setDraft(EMPTY_DRAFT);
+                          }}
+                        >
+                          <Text style={styles.cancelEditText}>수정 취소</Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
-                  </View>
-                ) : (
-                  <>
-                    <Text style={styles.fieldLabel}>별점</Text>
-                    <StarSelector rating={draft.rating} onChange={(next) => setDraft((current) => ({ ...current, rating: next }))} />
 
-                    <Text style={styles.fieldLabel}>내용</Text>
-                    <TextInput
-                      style={styles.contentInput}
-                      value={draft.content}
-                      onChangeText={(content) => setDraft((current) => ({ ...current, content }))}
-                      placeholder="이 매장에 대한 리뷰를 적어주세요."
-                      placeholderTextColor="#8b95a1"
-                      multiline
-                    />
+                    {!isLoggedIn ? (
+                      <View style={styles.loginCard}>
+                        <Text style={styles.loginTitle}>로그인이 필요해요</Text>
+                        <Text style={styles.loginSubtitle}>리뷰 작성, 수정, 삭제는 로그인 후 사용할 수 있어요.</Text>
+                        <View style={styles.loginButtons}>
+                          <TouchableOpacity style={styles.loginSecondaryButton} onPress={() => router.replace('/views/user_login')}>
+                            <Text style={styles.loginSecondaryButtonText}>로그인</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.loginPrimaryButton} onPress={() => router.replace('/views/user_signup')}>
+                            <Text style={styles.loginPrimaryButtonText}>회원가입</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={styles.fieldLabel}>별점</Text>
+                        <StarSelector rating={draft.rating} onChange={(next) => setDraft((current) => ({ ...current, rating: next }))} />
 
-                    <View style={styles.uploadRow}>
-                      <TouchableOpacity style={styles.uploadButton} onPress={() => void handlePickImage()} activeOpacity={0.9}>
-                        {isUploading ? (
-                          <ActivityIndicator color="#18a5a5" />
-                        ) : (
-                          <>
-                            <Ionicons name="image-outline" size={16} color="#18a5a5" />
-                            <Text style={styles.uploadButtonText}>사진 추가</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                      <Text style={styles.uploadHint}>리뷰 사진은 파일 업로드 API로 바로 올려요.</Text>
-                    </View>
+                        <Text style={styles.fieldLabel}>내용</Text>
+                        <TextInput
+                          style={styles.contentInput}
+                          value={draft.content}
+                          onChangeText={(content) => setDraft((current) => ({ ...current, content }))}
+                          placeholder="이 매장에 대한 리뷰를 적어주세요."
+                          placeholderTextColor="#8b95a1"
+                          multiline
+                        />
+
+                        <View style={styles.uploadRow}>
+                          <TouchableOpacity style={styles.uploadButton} onPress={() => void handlePickImage()} activeOpacity={0.9}>
+                            {isUploading ? (
+                              <ActivityIndicator color="#18a5a5" />
+                            ) : (
+                              <>
+                                <Ionicons name="image-outline" size={16} color="#18a5a5" />
+                                <Text style={styles.uploadButtonText}>사진 추가</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                          <Text style={styles.uploadHint}>리뷰 사진은 파일 업로드 API로 바로 올려요.</Text>
+                        </View>
 
                     <ReviewImageChips
                       urls={draft.imageUrls}
-                      onRemove={(index) =>
-                        setDraft((current) => ({
-                          ...current,
-                          imageUrls: current.imageUrls.filter((_, itemIndex) => itemIndex !== index),
-                        }))
-                      }
-                    />
+                      onPressImage={(url) => openPreview(url, '리뷰 사진')}
+                          onRemove={(index) =>
+                            setDraft((current) => ({
+                              ...current,
+                              imageUrls: current.imageUrls.filter((_, itemIndex) => itemIndex !== index),
+                            }))
+                          }
+                        />
 
-                    <TouchableOpacity style={styles.primaryButton} onPress={() => void handleSubmit()} activeOpacity={0.9} disabled={isSubmitting}>
-                      {isSubmitting ? <ActivityIndicator color="#f9fafb" /> : <Text style={styles.primaryButtonText}>{selectedReviewId ? '리뷰 수정' : '리뷰 등록'}</Text>}
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>모든 리뷰</Text>
-                {publicReviews.length === 0 ? (
-                  <Text style={styles.emptyText}>아직 리뷰가 없어요.</Text>
-                ) : (
-                  <View style={styles.reviewList}>
-                    {publicReviews.map((item) => (
-                      <ReviewCard
-                        key={item.reviewId}
-                        item={item}
-                        isMine={myReviews.some((review) => review.reviewId === item.reviewId)}
-                        onEdit={myReviews.some((review) => review.reviewId === item.reviewId) ? () => handleEdit(item) : undefined}
-                        onDelete={myReviews.some((review) => review.reviewId === item.reviewId) ? () => void handleDelete(item.reviewId) : undefined}
-                        onPressImage={(url) => openPreview(url, '리뷰 사진')}
-                      />
-                    ))}
+                        <TouchableOpacity style={styles.primaryButton} onPress={() => void handleSubmit()} activeOpacity={0.9} disabled={isSubmitting}>
+                          {isSubmitting ? <ActivityIndicator color="#f9fafb" /> : <Text style={styles.primaryButtonText}>{selectedReviewId ? '리뷰 수정 저장' : '리뷰 등록'}</Text>}
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
-                )}
-              </View>
 
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>내 리뷰</Text>
-                {!isLoggedIn ? (
-                  <Text style={styles.emptyText}>로그인 후 내 리뷰를 확인할 수 있어요.</Text>
-                ) : myReviews.length === 0 ? (
-                  <Text style={styles.emptyText}>작성한 리뷰가 없어요.</Text>
-                ) : (
-                  <View style={styles.reviewList}>
-                    {myReviews.map((item) => (
-                      <ReviewCard
-                        key={item.reviewId}
-                        item={item}
-                        isMine
-                        onEdit={() => handleEdit(item)}
-                        onDelete={() => void handleDelete(item.reviewId)}
-                        onPressImage={(url) => openPreview(url, '리뷰 사진')}
-                      />
-                    ))}
+                  <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>내 리뷰</Text>
+                    {!isLoggedIn ? (
+                      <Text style={styles.emptyText}>로그인 후 내 리뷰를 확인할 수 있어요.</Text>
+                    ) : myReviews.length === 0 ? (
+                      <Text style={styles.emptyText}>이 가게에 아직 작성한 리뷰가 없어요.</Text>
+                    ) : (
+                      <View style={styles.reviewList}>
+                        {myReviews.map((item) => (
+                          <ReviewCard
+                            key={item.reviewId}
+                            item={item}
+                            isMine
+                            onEdit={() => handleEdit(item)}
+                            onDelete={() => void handleDelete(item.reviewId)}
+                            onPressImage={(index) =>
+                              openPreviewGallery(
+                                item.imageUrls.map((url) => resolveAssetUrl(url)),
+                                index,
+                                '리뷰 사진'
+                              )
+                            }
+                          />
+                        ))}
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>모든 리뷰</Text>
+                    {publicReviews.length === 0 ? (
+                      <Text style={styles.emptyText}>아직 리뷰가 없어요.</Text>
+                    ) : (
+                      <>
+                        <View style={styles.reviewList}>
+                          {publicReviews.map((item) => (
+                            <ReviewCard
+                              key={item.reviewId}
+                              item={item}
+                              isMine={myReviewIds.has(item.reviewId)}
+                              onPressImage={(index) =>
+                                openPreviewGallery(
+                                  item.imageUrls.map((url) => resolveAssetUrl(url)),
+                                  index,
+                                  '리뷰 사진'
+                                )
+                              }
+                            />
+                          ))}
+                        </View>
+                        {isLoadingMore ? (
+                          <View style={styles.reviewFooterState}>
+                            <ActivityIndicator color="#18a5a5" />
+                            <Text style={styles.reviewFooterStateText}>리뷰를 더 불러오는 중이에요...</Text>
+                          </View>
+                        ) : null}
+                        {!hasMorePublicReviews && publicReviews.length > 0 ? (
+                          <Text style={styles.reviewEndText}>마지막 리뷰예요</Text>
+                        ) : null}
+                      </>
+                    )}
+                  </View>
+                </>
+              )}
             </>
           )}
         </ScrollView>
       </SafeAreaView>
 
-      <FullscreenImageViewer visible={Boolean(previewImageUrl)} uri={previewImageUrl} onClose={closePreview} title={previewImageTitle} />
+      <FullscreenImageViewer
+        visible={Boolean(previewImageUrl)}
+        uri={previewImageUrl}
+        uris={previewImageUrls}
+        initialIndex={previewImageIndex}
+        onClose={closePreview}
+        title={previewImageTitle}
+      />
     </>
   );
 }
@@ -589,19 +710,30 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: { color: '#18a5a5', fontSize: 12, fontWeight: '800' },
   uploadHint: { color: '#6b7684', fontSize: 12, lineHeight: 16 },
-  imageChipRow: { gap: 8, marginTop: 10 },
-  imageChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#f9fafb',
-    borderRadius: 14,
+  imagePreviewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  imagePreviewCard: {
+    position: 'relative',
+    width: 88,
+    height: 88,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#e5e8eb',
     borderWidth: 1,
     borderColor: '#e5e8eb',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
-  imageChipText: { flex: 1, color: '#4e5968', fontSize: 12 },
+  imagePreviewTouch: { width: '100%', height: '100%' },
+  imagePreviewPhoto: { width: '100%', height: '100%' },
+  imagePreviewRemove: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(25, 31, 40, 0.72)',
+  },
   primaryButton: {
     height: 52,
     borderRadius: 16,
@@ -700,5 +832,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
   },
   deletePillText: { color: '#ef4444' },
+  reviewFooterState: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  reviewFooterStateText: { color: '#6b7684', fontSize: 12, fontWeight: '700' },
+  reviewEndText: {
+    marginTop: 14,
+    textAlign: 'center',
+    color: '#8b95a1',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   emptyText: { color: '#6b7684', fontSize: 13, lineHeight: 18 },
 });

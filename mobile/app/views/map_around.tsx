@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
   Dimensions,
+  ImageBackground,
   InteractionManager,
   Modal,
   PanResponder,
+  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -20,19 +22,25 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { useSafeBack } from '@/components/use-safe-back';
-import { ApiClientError, favoritesApi, myMapApi, publicInstitutionsApi, publicMapsApi, storesApi, tokenStore, userMapsApi } from '@/services/api';
+import { ApiClientError, authApi, favoritesApi, myMapApi, publicInstitutionsApi, publicMapsApi, storesApi, tokenStore, userMapsApi } from '@/services/api';
 import { mapCache } from '@/services/mapCache';
 import { CATEGORY_KEYWORDS, CATEGORY_OPTIONS, type CategoryOption } from '@/services/placeCategories';
 import type { PublicInstitutionLookupItemResponse, StoreLookupItemResponse } from '@/services/api/types';
 
-const { height: windowHeight } = Dimensions.get('window');
+const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
 const MIN_SHEET_HEIGHT = 92;
 const BOTTOM_NAV_HEIGHT = 78;
 const NEARBY_PLACES_CACHE_KEY = 'toggle.nearbyPlaces';
 const DEFAULT_MAP_SEARCH_RADIUS_METERS = 1000;
-const NEARBY_PLACE_LIMIT_OPTIONS = [10, 20, 30, 40, 50];
+const MAX_NEARBY_PLACE_LIMIT = 50;
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
+const panelHeaderBackground = require('../../assets/images/패널배경.png');
+const panelLogo = require('../../assets/images/mainLogo.png');
+const CATEGORY_PANEL_WIDTH = Math.min(windowWidth * 0.82, 376);
+const PANEL_HEADER_ASPECT_RATIO = 2108 / 746;
 
 type KakaoPlacePreview = {
   id: string;
@@ -47,6 +55,12 @@ type KakaoPlacePreview = {
 
 const getStorePlaceId = (store: StoreLookupItemResponse) => {
   return store.externalPlaceId || `STORE_${store.storeId}`;
+};
+
+const resolveAssetUrl = (value?: string | null) => {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
 };
 
 const normalizeRegisteredStoreAsPlace = (store: StoreLookupItemResponse): KakaoPlacePreview => ({
@@ -171,10 +185,59 @@ const clamp = (value: number, min: number, max: number) => {
 const isConflictError = (error: unknown) => error instanceof ApiClientError && error.status === 409;
 const isNotFoundError = (error: unknown) => error instanceof ApiClientError && error.status === 404;
 
+const getRegisteredStoreStatus = (store?: StoreLookupItemResponse | null) => {
+  if (!store) return null;
+  return store.liveBusinessStatus ?? store.businessStatus ?? store.operationalState ?? null;
+};
+
+const isOpenRegisteredStore = (store?: StoreLookupItemResponse | null) => {
+  const status = getRegisteredStoreStatus(store);
+  return status === 'OPEN' || status === '영업중';
+};
+
+const getStoreSortMetric = (
+  store: StoreLookupItemResponse | undefined,
+  sortTitle: string,
+  favoriteCountOverride?: number
+) => {
+  if (!store) return Number.NEGATIVE_INFINITY;
+
+  if (sortTitle === '별점 높은 순') {
+    return store.reviewAverageRating ?? store.rating ?? Number.NEGATIVE_INFINITY;
+  }
+
+  if (sortTitle === '리뷰 많은 순') {
+    return store.reviewCount ?? Number.NEGATIVE_INFINITY;
+  }
+
+  if (sortTitle === '찜 많은 순') {
+    return favoriteCountOverride ?? store.favoriteCount ?? Number.NEGATIVE_INFINITY;
+  }
+
+  return Number.NEGATIVE_INFINITY;
+};
+
+const compareNumberDesc = (left: number, right: number) => right - left;
+
+const CATEGORY_ICON_NAMES: Record<string, keyof typeof Ionicons.glyphMap> = {
+  전체: 'grid-outline',
+  음식점: 'restaurant-outline',
+  카페: 'cafe-outline',
+  편의점: 'storefront-outline',
+  대형마트: 'cart-outline',
+  약국: 'medkit-outline',
+  병원: 'add-circle-outline',
+  공공기관: 'business-outline',
+  문화시설: 'library-outline',
+  학교: 'school-outline',
+  지하철역: 'train-outline',
+  기타: 'ellipsis-horizontal-outline',
+};
+
 export default function MapAroundScreen() {
   const router = useRouter();
-  const goBack = useSafeBack('/my');
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     query?: string | string[];
     mapId?: string | string[];
@@ -182,16 +245,24 @@ export default function MapAroundScreen() {
     publicMapUuid?: string | string[];
     publicMapTitle?: string | string[];
     mapNickname?: string | string[];
+    largeView?: string | string[];
   }>();
   const searchParam = Array.isArray(params.query) ? params.query[0] : params.query;
   const mapIdParam = Array.isArray(params.mapId) ? params.mapId[0] : params.mapId;
   const mapTitleParam = Array.isArray(params.mapTitle) ? params.mapTitle[0] : params.mapTitle;
   const publicMapUuidParam = Array.isArray(params.publicMapUuid) ? params.publicMapUuid[0] : params.publicMapUuid;
   const publicMapTitleParam = Array.isArray(params.publicMapTitle) ? params.publicMapTitle[0] : params.publicMapTitle;
+  const largeViewParam = Array.isArray(params.largeView) ? params.largeView[0] : params.largeView;
   const initialSearchQuery = (searchParam ?? '').trim();
   const isPublicMapMode = Boolean(publicMapUuidParam);
   const isDetailMapMode = Boolean(mapIdParam || publicMapUuidParam);
-  const showInternalTabBar = pathname !== '/map';
+  const isLargeMapView = largeViewParam === '1';
+  const goBack = useSafeBack(isLargeMapView ? '/saved' : '/my');
+  const [mapSessionId, setMapSessionId] = useState(0);
+  const mapViewKey = isDetailMapMode
+    ? `${isLargeMapView ? 'large' : 'detail'}-${mapIdParam ?? publicMapUuidParam ?? 'map'}`
+    : `current-location-${mapSessionId}`;
+  const showInternalTabBar = pathname !== '/map' && !isLargeMapView;
   const sheetBottomOffset = showInternalTabBar ? BOTTOM_NAV_HEIGHT : 0;
   const defaultSheetHeight = Math.min(windowHeight * 0.54, windowHeight - sheetBottomOffset - 12);
   const maxSheetHeight = windowHeight - sheetBottomOffset - 12;
@@ -220,10 +291,12 @@ export default function MapAroundScreen() {
     longitude: number;
   } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [accountRole, setAccountRole] = useState<'USER' | 'OWNER' | 'ADMIN' | null>(null);
   const [searchRadiusMeters, setSearchRadiusMeters] = useState(DEFAULT_MAP_SEARCH_RADIUS_METERS);
-  const [nearbyPlaceLimit, setNearbyPlaceLimit] = useState(10);
+  const [nearbyPlaceLimit] = useState(MAX_NEARBY_PLACE_LIMIT);
   const [favoritedPlaceIds, setFavoritedPlaceIds] = useState<string[]>([]);
   const [favoriteStoreIdByExternalPlaceId, setFavoriteStoreIdByExternalPlaceId] = useState<Record<string, number>>({});
+  const [favoriteCountOverridesByPlaceId, setFavoriteCountOverridesByPlaceId] = useState<Record<string, number>>({});
   const [registeredStoreIdsByExternalPlaceId, setRegisteredStoreIdsByExternalPlaceId] = useState<Record<string, number>>({});
   const [registeredStoreDetailsByExternalPlaceId, setRegisteredStoreDetailsByExternalPlaceId] = useState<Record<string, StoreLookupItemResponse>>({});
   const [myMapStoreIds, setMyMapStoreIds] = useState<number[]>([]);
@@ -239,8 +312,14 @@ export default function MapAroundScreen() {
   const [isCreateMapOpen, setIsCreateMapOpen] = useState(false);
   const [newMapTitle, setNewMapTitle] = useState('');
   const [newMapDescription, setNewMapDescription] = useState('');
+  const [openCategorySections, setOpenCategorySections] = useState({
+    explore: true,
+    features: true,
+    management: true,
+  });
 
   const categories = CATEGORY_OPTIONS;
+  const categoryMenuOptions = categories.filter((category) => category.label !== '주차장');
   const mapSortOptions = [
     { title: '영업중만', subtitle: '영업 중인 매장만 보기' },
     { title: '별점 높은 순', subtitle: '별점이 높은 순' },
@@ -254,9 +333,44 @@ export default function MapAroundScreen() {
       ? selectedMapSorts[0]
       : `${selectedMapSorts[0]} 외 ${selectedMapSorts.length - 1}개`;
   const searchRadiusLabel = formatSearchRadiusLabel(searchRadiusMeters);
-  const visibleNearbyPlaces = nearbyPlaces.slice(0, nearbyPlaceLimit);
+  const filteredNearbyPlaces = useMemo(() => {
+    let nextPlaces = nearbyPlaces.slice();
+
+    if (selectedMapSorts.includes('영업중만')) {
+      nextPlaces = nextPlaces.filter((place) => isOpenRegisteredStore(registeredStoreDetailsByExternalPlaceId[place.id]));
+    }
+
+    const sortTitles = selectedMapSorts.filter((title) => title !== '영업중만');
+    nextPlaces = nextPlaces
+      .map((place, index) => ({ place, index }))
+      .sort((left, right) => {
+        const leftStore = registeredStoreDetailsByExternalPlaceId[left.place.id];
+        const rightStore = registeredStoreDetailsByExternalPlaceId[right.place.id];
+        const leftRegisteredPriority = leftStore ? 1 : 0;
+        const rightRegisteredPriority = rightStore ? 1 : 0;
+
+        if (leftRegisteredPriority !== rightRegisteredPriority) {
+          return rightRegisteredPriority - leftRegisteredPriority;
+        }
+
+        for (const sortTitle of sortTitles) {
+          const leftMetric = getStoreSortMetric(leftStore, sortTitle, favoriteCountOverridesByPlaceId[left.place.id]);
+          const rightMetric = getStoreSortMetric(rightStore, sortTitle, favoriteCountOverridesByPlaceId[right.place.id]);
+
+          if (leftMetric !== rightMetric) {
+            return compareNumberDesc(leftMetric, rightMetric);
+          }
+        }
+
+        return left.index - right.index;
+      })
+      .map((entry) => entry.place);
+
+    return nextPlaces;
+  }, [favoriteCountOverridesByPlaceId, nearbyPlaces, registeredStoreDetailsByExternalPlaceId, selectedMapSorts]);
+
+  const visibleNearbyPlaces = filteredNearbyPlaces.slice(0, nearbyPlaceLimit);
   const visibleNearbyPlaceCount = visibleNearbyPlaces.length;
-  const totalNearbyPlaceCount = nearbyPlaces.length;
 
   const toggleMapSort = useCallback((title: string) => {
     setSelectedMapSorts((current) => (
@@ -273,6 +387,13 @@ export default function MapAroundScreen() {
 
   const closeMapSortPanel = useCallback(() => {
     setIsMapSortOpen(false);
+  }, []);
+
+  const toggleCategorySection = useCallback((section: keyof typeof openCategorySections) => {
+    setOpenCategorySections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
   }, []);
 
   const scrollCardListToTop = useCallback(() => {
@@ -417,16 +538,6 @@ export default function MapAroundScreen() {
     `);
   }, []);
 
-  const selectNearbyPlaceLimit = useCallback((limit: number) => {
-    setNearbyPlaceLimit(limit);
-    webViewRef.current?.injectJavaScript(`
-      if (window.setVisiblePlacesLimit) {
-        window.setVisiblePlacesLimit(${limit});
-      }
-      true;
-    `);
-  }, []);
-
   useEffect(() => {
     if (!isMapReady) return;
 
@@ -437,6 +548,22 @@ export default function MapAroundScreen() {
       true;
     `);
   }, [isMapReady, nearbyPlaceLimit]);
+
+  useEffect(() => {
+    if (!isMapReady || isDetailMapMode) return;
+
+    const context = mapCache.getNearbySearchContext();
+    webViewRef.current?.injectJavaScript(`
+      if (window.renderPlacesFromApp) {
+        window.renderPlacesFromApp(
+          ${JSON.stringify(filteredNearbyPlaces.map(toKakaoRenderablePlace))},
+          ${JSON.stringify(context.categoryLabel ?? '전체')},
+          ${JSON.stringify(context.categoryCode)}
+        );
+      }
+      true;
+    `);
+  }, [filteredNearbyPlaces, isDetailMapMode, isMapReady]);
 
   useEffect(() => {
     scrollCardListToTop();
@@ -540,6 +667,11 @@ export default function MapAroundScreen() {
   const moveMapToLocation = useCallback((latitude: number, longitude: number) => {
     webViewRef.current?.injectJavaScript(`
       window.moveToCurrentLocation(${latitude}, ${longitude});
+      setTimeout(function() {
+        if (window.moveToCurrentLocation) {
+          window.moveToCurrentLocation(${latitude}, ${longitude});
+        }
+      }, 120);
       true;
     `);
   }, []);
@@ -600,9 +732,32 @@ export default function MapAroundScreen() {
     }
   }, [moveMapToLocation]);
 
+  const featureMenuItems = [
+    { label: '지금 열린 곳', icon: 'location-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); void moveToCurrentLocation(true, true); } },
+    { label: '마이지도', icon: 'map-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push('/list'); } },
+    { label: '저장한 장소', icon: 'heart-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push('/saved'); } },
+    { label: '사람들 지도', icon: 'people-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push({ pathname: '/list', params: { mode: 'public' } }); } },
+  ];
+  const managementMenuItems = [
+    { label: '리뷰 관리', icon: 'create-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push('/views/review_management'); } },
+    { label: '좋아요한 지도', icon: 'thumbs-up-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push('/views/liked_maps'); } },
+    ...(accountRole === 'OWNER'
+      ? [{ label: '점주 페이지', icon: 'storefront-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push('/views/owner_dashboard'); } }]
+      : []),
+    { label: '내 정보', icon: 'person-outline' as const, onPress: () => { setIsCategoryMenuOpen(false); router.push('/my'); } },
+  ];
+
   useEffect(() => {
     moveToCurrentLocation(false);
   }, [moveToCurrentLocation]);
+
+  useEffect(() => {
+    if (pathname !== '/map' || isDetailMapMode) {
+      return;
+    }
+
+    setMapSessionId((current) => current + 1);
+  }, [isDetailMapMode, pathname]);
 
   useFocusEffect(
     useCallback(() => {
@@ -615,6 +770,7 @@ export default function MapAroundScreen() {
         setIsLoggedIn(loggedIn);
 
         if (!loggedIn) {
+          setAccountRole(null);
           setFavoritedPlaceIds([]);
           setFavoriteStoreIdByExternalPlaceId({});
           setMyMapStoreIds([]);
@@ -622,12 +778,14 @@ export default function MapAroundScreen() {
         }
 
         try {
-          const [favorites, myMap] = await Promise.all([
+          const [meResponse, favorites, myMap] = await Promise.all([
+            authApi.me(),
             favoritesApi.listStores(),
             myMapApi.get().catch(() => null),
           ]);
           if (!active) return;
 
+          setAccountRole(meResponse.role ?? null);
           setFavoritedPlaceIds(favorites.content.map((item) => item.externalPlaceId));
           setFavoriteStoreIdByExternalPlaceId(
             favorites.content.reduce<Record<string, number>>((acc, item) => {
@@ -638,6 +796,7 @@ export default function MapAroundScreen() {
           setMyMapStoreIds(myMap?.stores ?? []);
         } catch {
           if (!active) return;
+          setAccountRole(null);
           setFavoritedPlaceIds([]);
           setFavoriteStoreIdByExternalPlaceId({});
           setMyMapStoreIds([]);
@@ -657,6 +816,10 @@ export default function MapAroundScreen() {
       setMyMapPlaces([]);
       setMyMapLoading(false);
       setMyMapLabel(mapTitleParam?.trim() || publicMapTitleParam?.trim() || '내 지도');
+      setRegisteredStoreIdsByExternalPlaceId({});
+      setRegisteredStoreDetailsByExternalPlaceId({});
+      setMapCollections([]);
+      setActivePlaceMapIds([]);
       return;
     }
 
@@ -787,6 +950,33 @@ export default function MapAroundScreen() {
       true;
     `);
   }, [isDetailMapMode, isMapReady, myMapLabel, myMapPlaces, registeredStoreIdsByExternalPlaceId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isDetailMapMode) {
+        return;
+      }
+
+      setMyMapPlaces([]);
+      setMyMapLoading(false);
+      setMyMapLabel('내 지도');
+      setRegisteredStoreIdsByExternalPlaceId({});
+      setRegisteredStoreDetailsByExternalPlaceId({});
+      setMapCollections([]);
+      setActivePlaceMapIds([]);
+      mapCache.clearNearbyPlaces();
+      mapCache.clearNearbySearchContext();
+      currentCoordsRef.current = null;
+      setCurrentCoords(null);
+      setMapSearchQuery(initialSearchQuery);
+      setSelectedCategoryLabel('전체');
+      setActiveFilter(initialSearchQuery || '전체');
+
+      requestAnimationFrame(() => {
+        moveToCurrentLocation(false, true);
+      });
+    }, [initialSearchQuery, isDetailMapMode, moveToCurrentLocation])
+  );
 
   useEffect(() => {
     if (!initialSearchQuery || !isMapReady) return;
@@ -949,7 +1139,7 @@ export default function MapAroundScreen() {
           await myMapApi.removeStore(storeId);
         } catch (error) {
           if (!isNotFoundError(error)) {
-            throw error;
+            console.warn('[map_around] myMap removeStore failed after favorites remove', error);
           }
         }
 
@@ -959,6 +1149,14 @@ export default function MapAroundScreen() {
           delete next[place.id];
           return next;
         });
+        setFavoriteCountOverridesByPlaceId((current) => ({
+          ...current,
+          [place.id]: Math.max(
+            0,
+            (current[place.id] ?? registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0) - 1
+          ),
+        }));
+        setMyMapStoreIds((current) => current.filter((id) => id !== storeId));
         return;
       }
 
@@ -986,7 +1184,7 @@ export default function MapAroundScreen() {
         await myMapApi.addStore(resolvedStoreId);
       } catch (error) {
         if (!isConflictError(error)) {
-          throw error;
+          console.warn('[map_around] myMap addStore failed after favorites add', error);
         }
       }
 
@@ -995,10 +1193,22 @@ export default function MapAroundScreen() {
         ...current,
         [place.id]: resolvedStoreId,
       }));
+      setFavoriteCountOverridesByPlaceId((current) => ({
+        ...current,
+        [place.id]: (current[place.id] ?? registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0) + 1,
+      }));
+      setMyMapStoreIds((current) => (current.includes(resolvedStoreId) ? current : [...current, resolvedStoreId]));
     } catch {
       Alert.alert('찜 실패', '장소를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     }
-  }, [favoriteStoreIdByExternalPlaceId, favoritedPlaceIds, isLoggedIn, registeredStoreIdsByExternalPlaceId, router]);
+  }, [
+    favoriteStoreIdByExternalPlaceId,
+    favoritedPlaceIds,
+    isLoggedIn,
+    registeredStoreDetailsByExternalPlaceId,
+    registeredStoreIdsByExternalPlaceId,
+    router,
+  ]);
 
   const openMyMapPicker = useCallback(async (place: KakaoPlacePreview) => {
     if (!isLoggedIn) {
@@ -1080,11 +1290,13 @@ export default function MapAroundScreen() {
     try {
       await userMapsApi.addStore(mapId, resolvedStoreId);
       setActivePlaceMapIds((current) => (current.includes(mapId) ? current : [...current, mapId]));
+      setMyMapStoreIds((current) => (current.includes(resolvedStoreId) ? current : [...current, resolvedStoreId]));
       Alert.alert('추가 완료', '선택한 지도에 장소를 담았어요.');
       setIsMapPickerOpen(false);
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 409) {
         setActivePlaceMapIds((current) => (current.includes(mapId) ? current : [...current, mapId]));
+        setMyMapStoreIds((current) => (current.includes(resolvedStoreId) ? current : [...current, resolvedStoreId]));
         setIsMapPickerOpen(false);
         Alert.alert('추가 완료', '이미 추가된 지도예요.');
         return;
@@ -1122,6 +1334,7 @@ export default function MapAroundScreen() {
       await userMapsApi.addStore(createdMap.mapId, resolvedStoreId);
       setMapCollections((current) => [...current, { mapId: createdMap.mapId, title: createdMap.title, storeCount: 1 }]);
       setActivePlaceMapIds((current) => [...current, createdMap.mapId]);
+      setMyMapStoreIds((current) => (current.includes(resolvedStoreId) ? current : [...current, resolvedStoreId]));
       setIsCreateMapOpen(false);
       setIsMapPickerOpen(false);
       setNewMapTitle('');
@@ -1268,24 +1481,61 @@ export default function MapAroundScreen() {
             placeMarkers = [];
           }
 
-          function createMarkerImage(isRegistered) {
+          function escapeSvgText(text) {
+            return String(text || '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&apos;');
+          }
+
+          function createMarkerImage(order, isRegistered) {
             var color = isRegistered ? '#ff4d74' : '#18a5a5';
+            var number = Number(order) > 0 ? String(order) : '';
             var svg = [
-              '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">',
-              '<path d="M17 44s12-14.2 12-24.1C29 11.7 23.6 6 17 6S5 11.7 5 19.9C5 29.8 17 44 17 44Z" fill="',
+              '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="56" viewBox="0 0 44 56">',
+              '<defs>',
+              '<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">',
+              '<feDropShadow dx="0" dy="2" stdDeviation="1.8" flood-color="#191f28" flood-opacity="0.18"/>',
+              '</filter>',
+              '</defs>',
+              '<g filter="url(#shadow)">',
+              '<path d="M22 48s12-13.8 12-23.5C34 12.5 28.6 6.5 22 6.5S10 12.5 10 24.5C10 34.2 22 48 22 48Z" fill="',
               color,
               '"/>',
-              '<circle cx="17" cy="19" r="6.6" fill="#f9fafb"/>',
-              '<circle cx="17" cy="19" r="3.4" fill="',
-              color,
-              '"/>',
+              '<circle cx="22" cy="24" r="8.4" fill="#f9fafb"/>',
+              '</g>',
+              number ? [
+                '<text x="22" y="24" fill="',
+                color,
+                '" font-family="Arial, sans-serif" font-size="14" font-weight="900" text-anchor="middle" dominant-baseline="middle">',
+                escapeSvgText(number),
+                '</text>',
+              ].join('') : '',
               '</svg>',
             ].join('');
 
             return new kakao.maps.MarkerImage(
               'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-              new kakao.maps.Size(34, 46),
-              { offset: new kakao.maps.Point(17, 42) }
+              new kakao.maps.Size(44, 56),
+              { offset: new kakao.maps.Point(22, 50) }
+            );
+          }
+
+          function createCurrentLocationMarkerImage() {
+            var svg = [
+              '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42">',
+              '<circle cx="21" cy="21" r="16" fill="#18a5a5" opacity="0.18"/>',
+              '<circle cx="21" cy="21" r="10" fill="#18a5a5" stroke="#ffffff" stroke-width="3"/>',
+              '<circle cx="21" cy="21" r="4" fill="#ffffff"/>',
+              '</svg>',
+            ].join('');
+
+            return new kakao.maps.MarkerImage(
+              'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+              new kakao.maps.Size(42, 42),
+              { offset: new kakao.maps.Point(21, 21) }
             );
           }
 
@@ -1369,7 +1619,7 @@ export default function MapAroundScreen() {
                 map: map,
                 position: position,
                 title: place.place_name,
-                image: createMarkerImage(Boolean(registeredStoreIds[place.id]))
+                image: createMarkerImage(i + 1, Boolean(registeredStoreIds[place.id]))
               });
 
               kakao.maps.event.addListener(marker, 'click', function() {
@@ -1615,7 +1865,8 @@ export default function MapAroundScreen() {
             currentMarker = new kakao.maps.Marker({
               map: map,
               position: currentPosition,
-              title: '현재 위치'
+              title: '현재 위치',
+              image: createCurrentLocationMarkerImage()
             });
 
             if (placesService) {
@@ -1692,6 +1943,7 @@ export default function MapAroundScreen() {
       {/* 1. Kakao Map WebView: uncovered map space must receive drag and pinch touches directly. */}
       <View style={styles.mapPlaceholder} pointerEvents="auto">
         <WebView
+          key={mapViewKey}
           ref={webViewRef}
           originWhitelist={['*']}
           source={{ html: kakaoMapHtml, baseUrl: 'https://localhost' }}
@@ -1717,7 +1969,7 @@ export default function MapAroundScreen() {
       </View>
 
       {/* 2. Top UI Overlays: parent containers pass empty-area touches down to the WebView map. */}
-      <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
+      <SafeAreaView style={[styles.topOverlay, { top: insets.top + 6 }]} pointerEvents="box-none">
         {isDetailMapMode ? (
           <View style={styles.myMapBanner} pointerEvents="box-none">
             <TouchableOpacity
@@ -1800,14 +2052,26 @@ export default function MapAroundScreen() {
             </View>
 
             {/* GPS Button */}
-            <TouchableOpacity style={styles.gpsButton} onPress={() => moveToCurrentLocation(true, true)}>
+            <TouchableOpacity
+              style={styles.gpsButton}
+              onPress={() => void moveToCurrentLocation(true, true)}
+              activeOpacity={0.85}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
               <MaterialIcons name="my-location" size={24} color="#f9fafb" />
             </TouchableOpacity>
           </>
         )}
       </SafeAreaView>
 
-      {isCategoryMenuOpen ? (
+      <Modal
+        visible={isCategoryMenuOpen}
+        transparent
+        statusBarTranslucent
+        navigationBarTranslucent
+        animationType="fade"
+        onRequestClose={() => setIsCategoryMenuOpen(false)}
+      >
         <View style={styles.categoryOverlay}>
           <TouchableOpacity
             style={styles.categoryBackdrop}
@@ -1815,30 +2079,116 @@ export default function MapAroundScreen() {
             onPress={() => setIsCategoryMenuOpen(false)}
           />
           <SafeAreaView style={styles.categoryPanel}>
-            <Text style={styles.categoryTitle}>카테고리</Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
-              {categories.map((category) => {
-                const isActive = activeFilter === category.label;
+              <ImageBackground source={panelHeaderBackground} style={styles.categoryHero} imageStyle={styles.categoryHeroImage} resizeMode="cover">
+                <View style={styles.categoryHeroBrandRow}>
+                  <View style={styles.categoryHeroLogoWrap}>
+                    <Image source={panelLogo} style={styles.categoryHeroLogoImage} resizeMode="contain" />
+                  </View>
+                  <View style={styles.categoryHeroTextWrap}>
+                    <Text style={styles.categoryHeroTitle}>Toggle</Text>
+                    <Text style={styles.categoryHeroSubtitle}>우리 동네를 더 쉽게, Toggle</Text>
+                  </View>
+                </View>
+              </ImageBackground>
 
-                return (
-                  <TouchableOpacity
-                    key={category.label}
-                    style={[styles.categoryItem, isActive ? styles.categoryItemActive : null]}
-                    onPress={() => selectCategory(category)}
-                  >
-                    <Text style={[styles.categoryItemText, isActive ? styles.categoryItemTextActive : null]}>
-                      {category.label}
-                    </Text>
+              <View style={styles.categoryBody}>
+                <View style={styles.categorySection}>
+                  <TouchableOpacity style={styles.categorySectionHeaderCompact} onPress={() => toggleCategorySection('explore')} activeOpacity={0.9}>
+                    <View style={styles.categorySectionHeaderLeft}>
+                      <Ionicons name="search-outline" size={24} color="#18a5a5" />
+                      <Text style={styles.categorySectionHeaderCompactTitle}>탐색</Text>
+                    </View>
+                    <Ionicons name={openCategorySections.explore ? 'chevron-up' : 'chevron-down'} size={22} color="#7a8798" />
                   </TouchableOpacity>
-                );
-              })}
+                  {openCategorySections.explore ? (
+                    <View style={[styles.categorySectionContent, styles.exploreGrid]}>
+                      {categoryMenuOptions.map((category) => {
+                        const isActive = activeFilter === category.label;
+
+                        return (
+                          <TouchableOpacity
+                            key={category.label}
+                            style={[styles.exploreItem, isActive ? styles.exploreItemActive : null]}
+                            onPress={() => selectCategory(category)}
+                          >
+                            <View style={[styles.exploreItemIconWrap, isActive ? styles.exploreItemIconWrapActive : null]}>
+                              <Ionicons
+                                name={CATEGORY_ICON_NAMES[category.label] ?? 'ellipse-outline'}
+                                size={22}
+                                color="#18a5a5"
+                              />
+                            </View>
+                            <Text style={[styles.exploreItemText, isActive ? styles.exploreItemTextActive : null]}>{category.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.categorySection}>
+                  <TouchableOpacity style={styles.categorySectionHeaderCompact} onPress={() => toggleCategorySection('features')} activeOpacity={0.9}>
+                    <View style={styles.categorySectionHeaderLeft}>
+                      <Ionicons name="star" size={22} color="#18a5a5" />
+                      <Text style={styles.categorySectionHeaderCompactTitle}>내 활동</Text>
+                    </View>
+                    <Ionicons name={openCategorySections.features ? 'chevron-up' : 'chevron-down'} size={22} color="#7a8798" />
+                  </TouchableOpacity>
+                  {openCategorySections.features ? (
+                    <View style={[styles.categorySectionContent, styles.categoryListCard]}>
+                      {featureMenuItems.map((item) => (
+                        <TouchableOpacity
+                          key={item.label}
+                          style={styles.categoryListItem}
+                          onPress={() => item.onPress()}
+                        >
+                          <View style={styles.categoryListItemIconWrap}>
+                            <Ionicons name={item.icon} size={22} color="#18a5a5" />
+                          </View>
+                          <Text style={styles.categoryListItemText}>{item.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.categorySection}>
+                  <TouchableOpacity style={styles.categorySectionHeaderCompact} onPress={() => toggleCategorySection('management')} activeOpacity={0.9}>
+                    <View style={styles.categorySectionHeaderLeft}>
+                      <Ionicons name="settings" size={22} color="#18a5a5" />
+                      <Text style={styles.categorySectionHeaderCompactTitle}>관리</Text>
+                    </View>
+                    <Ionicons name={openCategorySections.management ? 'chevron-up' : 'chevron-down'} size={22} color="#7a8798" />
+                  </TouchableOpacity>
+                  {openCategorySections.management ? (
+                    <View style={[styles.categorySectionContent, styles.categoryListCard]}>
+                      {managementMenuItems.map((item) => (
+                        <TouchableOpacity
+                          key={item.label}
+                          style={styles.categoryListItem}
+                          onPress={() => item.onPress()}
+                        >
+                          <View style={styles.categoryListItemIconWrap}>
+                            <Ionicons name={item.icon} size={22} color="#18a5a5" />
+                          </View>
+                          <Text style={styles.categoryListItemText}>{item.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
             </ScrollView>
           </SafeAreaView>
         </View>
-      ) : null}
+      </Modal>
 
       {/* 3. Bottom Sheet UI: keep only the visible sheet as the touch target so the WebView can receive map gestures. */}
-      <Animated.View pointerEvents="auto" style={[styles.bottomSheet, { bottom: sheetBottomOffset, height: sheetHeight }]}>
+      <Animated.View
+        pointerEvents={isCategoryMenuOpen ? 'none' : 'auto'}
+        style={[styles.bottomSheet, { bottom: sheetBottomOffset, height: sheetHeight }]}
+      >
         <View
           style={styles.sheetToggle}
           {...sheetPanResponder.panHandlers}
@@ -1897,7 +2247,7 @@ export default function MapAroundScreen() {
                   ) : myMapPlaces.length === 0 ? (
                     <Text style={styles.emptyText}>이 지도에 담긴 장소가 없어요.</Text>
                   ) : (
-                    myMapPlaces.map((place) => {
+                    myMapPlaces.map((place, index) => {
                       const resolvedStoreId = registeredStoreIdsByExternalPlaceId[place.id] ?? favoriteStoreIdByExternalPlaceId[place.id] ?? null;
                       const isRegisteredStore = Boolean(resolvedStoreId);
 
@@ -1922,12 +2272,24 @@ export default function MapAroundScreen() {
                             });
                           }}
                         >
+                          <View style={styles.myMapPlaceNumberBadge}>
+                            <Text style={styles.myMapPlaceNumberText}>{index + 1}</Text>
+                          </View>
                           <View style={styles.myMapPlaceIconWrap}>
-                            <Ionicons
-                              name={isRegisteredStore ? 'storefront-outline' : 'information-circle-outline'}
-                              size={18}
-                              color="#18a5a5"
-                            />
+                            {isRegisteredStore && registeredStoreDetailsByExternalPlaceId[place.id]?.imageUrls?.[0] ? (
+                              <Image
+                                source={{
+                                  uri: resolveAssetUrl(registeredStoreDetailsByExternalPlaceId[place.id].imageUrls[0]) ?? undefined,
+                                }}
+                                style={styles.myMapPlaceImage}
+                              />
+                            ) : (
+                              <Ionicons
+                                name={isRegisteredStore ? 'storefront-outline' : 'information-circle-outline'}
+                                size={18}
+                                color="#18a5a5"
+                              />
+                            )}
                           </View>
                           <View style={styles.myMapPlaceBody}>
                             <Text style={styles.myMapPlaceName} numberOfLines={1}>
@@ -1997,35 +2359,8 @@ export default function MapAroundScreen() {
             ) : null}
 
             <View style={styles.nearbyPlaceMetaRow}>
-              <Text style={styles.nearbyPlaceMetaText}>
-                장소 {visibleNearbyPlaceCount}개 / 전체 {totalNearbyPlaceCount}개
-              </Text>
-              <Text style={styles.nearbyPlaceMetaHint}>표시 개수</Text>
+              <Text style={styles.nearbyPlaceMetaText}>장소 {visibleNearbyPlaceCount}개</Text>
             </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.nearbyPlaceLimitScrollView}
-              contentContainerStyle={styles.nearbyPlaceLimitScroll}
-            >
-              {NEARBY_PLACE_LIMIT_OPTIONS.map((limit) => {
-                const isActive = nearbyPlaceLimit === limit;
-
-                return (
-                  <TouchableOpacity
-                    key={limit}
-                    style={[styles.nearbyPlaceLimitChip, isActive ? styles.nearbyPlaceLimitChipActive : null]}
-                    activeOpacity={0.85}
-                    onPress={() => selectNearbyPlaceLimit(limit)}
-                  >
-                    <Text style={[styles.nearbyPlaceLimitText, isActive ? styles.nearbyPlaceLimitTextActive : null]}>
-                      {limit}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
 
             <ScrollView
               ref={cardScrollRef}
@@ -2041,15 +2376,26 @@ export default function MapAroundScreen() {
               ) : nearbyPlaces.length === 0 ? (
                 <Text style={styles.emptyText}>주변 장소가 없어요.</Text>
               ) : (
-                visibleNearbyPlaces.map((place) => {
+                visibleNearbyPlaces.map((place, index) => {
                   const resolvedStoreId = registeredStoreIdsByExternalPlaceId[place.id] ?? favoriteStoreIdByExternalPlaceId[place.id] ?? null;
+                  const isRegisteredStore = Boolean(registeredStoreDetailsByExternalPlaceId[place.id]);
                   const isInMyMap = resolvedStoreId ? myMapStoreIds.includes(resolvedStoreId) : false;
+                  const favoriteCount = favoriteCountOverridesByPlaceId[place.id] ?? registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0;
 
                   return (
-                    <View style={styles.storeCard} key={place.id}>
+                    <View style={[styles.storeCard, isRegisteredStore ? styles.storeCardRegistered : null]} key={place.id}>
                       <View style={styles.cardHeader}>
-                        <Text style={styles.storeName}>{place.name}</Text>
-                        <TouchableOpacity onPress={() => handleFavoritePress(place)} activeOpacity={0.8}>
+                        <View style={styles.storeNameRow}>
+                          <View style={[styles.placeNumberBadge, isRegisteredStore ? styles.placeNumberBadgeRegistered : null]}>
+                            <Text style={styles.placeNumberText}>{index + 1}</Text>
+                          </View>
+                          <Text style={styles.storeName} numberOfLines={1}>{place.name}</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPressIn={(event) => event.stopPropagation()}
+                          onPress={() => handleFavoritePress(place)}
+                          activeOpacity={0.8}
+                        >
                           <Ionicons
                             name={favoritedPlaceIds.includes(place.id) ? 'heart' : 'heart-outline'}
                             size={24}
@@ -2058,17 +2404,17 @@ export default function MapAroundScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      {registeredStoreDetailsByExternalPlaceId[place.id] ? (
-                        <Text style={styles.favoriteCountText}>
-                          찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
-                          {' · 저장된 매장'}
-                        </Text>
-                      ) : (
-                        <Text style={styles.favoriteCountText}>미등록 장소</Text>
-                      )}
-
-                      <View style={styles.categoryBadge}>
-                        <Text style={styles.categoryText}>{place.category || activeFilter}</Text>
+                      <View style={styles.storeMetaPillRow}>
+                        <View style={isRegisteredStore ? styles.registeredMetaPill : styles.unregisteredMetaPill}>
+                          <Text style={isRegisteredStore ? styles.registeredMetaPillText : styles.unregisteredMetaPillText}>
+                            {isRegisteredStore
+                              ? `찜 ${favoriteCount} · 저장된 매장`
+                              : '미등록 장소'}
+                          </Text>
+                        </View>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryText}>{place.category || activeFilter}</Text>
+                        </View>
                       </View>
 
                       {registeredStoreDetailsByExternalPlaceId[place.id] ? (
@@ -2097,11 +2443,11 @@ export default function MapAroundScreen() {
                       )}
 
                       <View style={styles.infoRow}>
-                        <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.6)" />
+                        <Ionicons name="location-outline" size={16} color="#aab4c1" />
                         <Text style={styles.infoText}>{place.address || '주소 정보 없음'}</Text>
                       </View>
                       <View style={styles.infoRow}>
-                        <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.6)" />
+                        <Ionicons name="call-outline" size={16} color="#aab4c1" />
                         <Text style={styles.infoText}>
                           {registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '전화번호 정보 없음'}
                         </Text>
@@ -2129,62 +2475,42 @@ export default function MapAroundScreen() {
                             <View style={styles.footerItem}>
                               <Ionicons name="heart" size={14} color="#f44336" />
                               <Text style={styles.footerText}>
-                                찜 {registeredStoreDetailsByExternalPlaceId[place.id]?.favoriteCount ?? 0}
+                                찜 {favoriteCount}
                               </Text>
                             </View>
                           </View>
+
+                          <View style={styles.cardActionRow}>
+                            <TouchableOpacity
+                              style={styles.detailButton}
+                              onPressIn={(event) => event.stopPropagation()}
+                              onPress={() =>
+                                router.push({
+                                  pathname: '/views/store_detail',
+                                  params: {
+                                    storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
+                                    storeName: place.name,
+                                    storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
+                                  },
+                                })
+                              }
+                              activeOpacity={0.9}
+                            >
+                              <Text style={styles.detailButtonText}>상세 보기</Text>
+                              <Ionicons name="chevron-forward" size={16} color="#18a5a5" />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.myMapButton}
+                              onPressIn={(event) => event.stopPropagation()}
+                              onPress={() => void openMyMapPicker(place)}
+                              activeOpacity={0.9}
+                            >
+                              <Ionicons name="bookmark-outline" size={16} color="#18a5a5" />
+                              <Text style={styles.myMapButtonText}>{isInMyMap ? '내 지도 관리' : '마이지도 추가'}</Text>
+                            </TouchableOpacity>
+                          </View>
                         </>
-                      ) : null}
-
-                      {registeredStoreIdsByExternalPlaceId[place.id] ? (
-                        <TouchableOpacity
-                          style={styles.myMapButton}
-                          onPress={() => void openMyMapPicker(place)}
-                          activeOpacity={0.9}
-                        >
-                          <Ionicons name="bookmark-outline" size={16} color="#18a5a5" />
-                          <Text style={styles.myMapButtonText}>{isInMyMap ? '내 지도 관리' : '내 지도에 추가'}</Text>
-                        </TouchableOpacity>
-                      ) : null}
-
-                      {registeredStoreIdsByExternalPlaceId[place.id] ? (
-                        <TouchableOpacity
-                          style={styles.detailButton}
-                          onPress={() =>
-                            router.push({
-                              pathname: '/views/store_detail',
-                              params: {
-                                storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
-                                storeName: place.name,
-                                storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
-                              },
-                            })
-                          }
-                          activeOpacity={0.9}
-                        >
-                          <Text style={styles.detailButtonText}>상세 보기</Text>
-                          <Ionicons name="chevron-forward" size={16} color="#18a5a5" />
-                        </TouchableOpacity>
-                      ) : null}
-
-                      {registeredStoreIdsByExternalPlaceId[place.id] ? (
-                        <TouchableOpacity
-                          style={styles.reviewButton}
-                          onPress={() =>
-                            router.push({
-                              pathname: '/views/store_reviews',
-                              params: {
-                                storeId: String(registeredStoreIdsByExternalPlaceId[place.id]),
-                                storeName: place.name,
-                                storePhone: registeredStoreDetailsByExternalPlaceId[place.id]?.phone || place.phone || '',
-                              },
-                            })
-                          }
-                          activeOpacity={0.9}
-                        >
-                          <Text style={styles.reviewButtonText}>리뷰 보기</Text>
-                          <Ionicons name="chevron-forward" size={16} color="#18a5a5" />
-                        </TouchableOpacity>
                       ) : null}
                     </View>
                   );
@@ -2446,88 +2772,200 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  nearbyPlaceLimitScroll: {
-    paddingHorizontal: 0,
-    gap: 8,
-    paddingBottom: 8,
-    alignItems: 'center',
-  },
-  nearbyPlaceLimitScrollView: {
-    width: '100%',
-    flexGrow: 0,
-    flexShrink: 0,
+  gpsButton: {
+    position: 'absolute',
+    right: 16,
+    top: 200,
+    width: 48,
     height: 48,
-    marginBottom: 4,
-  },
-  nearbyPlaceLimitChip: {
-    minWidth: 48,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e5e8eb',
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: 24,
+    backgroundColor: '#18a5a5',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    shadowColor: '#191f28',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 20,
   },
-  nearbyPlaceLimitChipActive: {
-    borderColor: '#18a5a5',
-    backgroundColor: '#edf8f8',
-  },
-  nearbyPlaceLimitText: {
-    color: '#6b7684',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  nearbyPlaceLimitTextActive: {
-    color: '#18a5a5',
-  },
-
-  gpsButton: { position: 'absolute', right: 16, top: 200, width: 44, height: 44, borderRadius: 22, backgroundColor: '#18a5a5', alignItems: 'center', justifyContent: 'center', shadowColor: '#191f28', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 3 },
 
   categoryOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 30,
     flexDirection: 'row',
+    backgroundColor: 'transparent',
   },
   categoryBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(17, 24, 39, 0.42)',
   },
   categoryPanel: {
-    width: 284,
-    backgroundColor: '#f9fafb',
-    paddingHorizontal: 22,
-    paddingTop: 22,
+    width: CATEGORY_PANEL_WIDTH,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 0,
+    paddingTop: 0,
     paddingBottom: 20,
-  },
-  categoryTitle: {
-    color: '#191f28',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 4, height: 0 },
+    borderTopRightRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   categoryList: {
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
-  categoryItem: {
-    height: 52,
-    borderRadius: 8,
+  categoryBody: {
+    paddingHorizontal: 18,
+  },
+  categoryHero: {
+    width: CATEGORY_PANEL_WIDTH,
+    height: CATEGORY_PANEL_WIDTH / PANEL_HEADER_ASPECT_RATIO,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eef2f6',
+    marginBottom: 18,
+    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: 18,
+    justifyContent: 'flex-end',
+    backgroundColor: '#f7fbfd',
+    position: 'relative',
+  },
+  categoryHeroImage: {
+    left: 0,
+    right: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  categoryHeroBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
+    marginBottom: 2,
+  },
+  categoryHeroLogoWrap: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: '#f8fbfc',
+    marginRight: 12,
   },
-  categoryItemActive: {
-    backgroundColor: '#edf8f8',
+  categoryHeroLogoImage: {
+    width: 52,
+    height: 52,
   },
-  categoryItemText: {
-    color: '#6b7684',
-    fontSize: 18,
+  categoryHeroTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  categoryHeroTitle: {
+    color: '#0f1728',
+    fontSize: 23,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  categoryHeroSubtitle: {
+    marginTop: 4,
+    color: '#5f6f82',
+    fontSize: 12,
     fontWeight: '700',
   },
-  categoryItemTextActive: {
+  categorySection: {
+    marginBottom: 16,
+  },
+  categorySectionHeaderCompact: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+  },
+  categorySectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  categorySectionHeaderCompactTitle: {
     color: '#18a5a5',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  categorySectionContent: {
+    marginTop: 12,
+  },
+  exploreGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  exploreItem: {
+    width: '48.3%',
+    minHeight: 58,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#edf1f4',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  exploreItemActive: {
+    backgroundColor: '#f9fffe',
+    borderColor: '#daf1ef',
+  },
+  exploreItemIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f4fbfb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  exploreItemIconWrapActive: {
+    backgroundColor: '#eef9f8',
+  },
+  exploreItemText: {
+    flex: 1,
+    color: '#1b2533',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  exploreItemTextActive: {
+    color: '#18a5a5',
+  },
+  categoryListCard: {
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#edf1f4',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  categoryListItem: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  categoryListItemIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f8fbfb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  categoryListItemText: {
+    color: '#152031',
+    fontSize: 15,
+    fontWeight: '700',
   },
 
   bottomSheet: {
@@ -2711,11 +3149,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   myMapPlaceCard: {
+    position: 'relative',
     backgroundColor: '#f9fafb',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e5e8eb',
     padding: 14,
+    paddingTop: 22,
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2726,12 +3166,41 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   myMapPlaceIconWrap: {
+    position: 'relative',
     width: 38,
     height: 38,
     borderRadius: 19,
     backgroundColor: '#edf8f8',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  myMapPlaceImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  myMapPlaceNumberBadge: {
+    position: 'absolute',
+    left: 12,
+    top: -10,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    backgroundColor: '#18a5a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#f9fafb',
+    zIndex: 2,
+    elevation: 3,
+  },
+  myMapPlaceNumberText: {
+    color: '#f9fafb',
+    fontSize: 11,
+    fontWeight: '900',
+    lineHeight: 12,
   },
   myMapPlaceBody: {
     flex: 1,
@@ -2755,28 +3224,99 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
   },
-  storeCard: { backgroundColor: '#f9fafb', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e8eb', marginBottom: 10, shadowColor: '#191f28', shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  storeName: { fontSize: 17, fontWeight: 'bold', color: '#191f28' },
-  favoriteCountText: { color: '#18a5a5', fontSize: 12, fontWeight: '700', marginBottom: 10 },
-  categoryBadge: { backgroundColor: '#eefbfb', alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7, marginBottom: 12 },
-  categoryText: { color: '#18a5a5', fontSize: 12 },
+  storeCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    marginBottom: 8,
+  },
+  storeCardRegistered: {
+    backgroundColor: '#f3fdfc',
+    borderColor: '#bfe9e6',
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  storeNameRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 4,
+  },
+  placeNumberBadge: {
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    paddingHorizontal: 7,
+    backgroundColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeNumberBadgeRegistered: {
+    backgroundColor: '#18a5a5',
+  },
+  placeNumberText: { color: '#f9fafb', fontSize: 11, fontWeight: '900' },
+  storeName: { flex: 1, fontSize: 15, fontWeight: '800', color: '#191f28' },
+  storeMetaPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 38,
+    marginBottom: 7,
+  },
+  registeredMetaPill: {
+    alignSelf: 'flex-start',
+  },
+  registeredMetaPillText: {
+    color: '#18a5a5',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  unregisteredMetaPill: {
+    backgroundColor: '#f0f3f7',
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  unregisteredMetaPillText: {
+    color: '#6b7684',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  categoryBadge: { backgroundColor: '#eefbfb', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  categoryText: { color: '#18a5a5', fontSize: 11, fontWeight: '700' },
 
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  statusBadge: { backgroundColor: '#00e676', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
-  statusText: { color: '#f9fafb', fontSize: 12, fontWeight: 'bold' },
-  unknownStatusBadge: { backgroundColor: '#eef1f5', borderWidth: 1, borderColor: '#e5e8eb', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
-  unknownStatusText: { color: '#4e5968', fontSize: 12, fontWeight: 'bold' },
-  statusUpdateText: { color: '#6b7684', fontSize: 12 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginLeft: 38, marginBottom: 7 },
+  statusBadge: { backgroundColor: '#00e676', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginRight: 6 },
+  statusText: { color: '#f9fafb', fontSize: 11, fontWeight: 'bold' },
+  unknownStatusBadge: { backgroundColor: '#eef1f5', borderWidth: 1, borderColor: '#e5e8eb', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginRight: 6 },
+  unknownStatusText: { color: '#4e5968', fontSize: 11, fontWeight: 'bold' },
+  statusUpdateText: { color: '#6b7684', fontSize: 11 },
 
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  infoText: { color: '#6b7684', fontSize: 14, marginLeft: 8 },
-  cardFooterDivider: { height: 1, backgroundColor: '#e5e8eb', marginVertical: 14 },
-  cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginLeft: 38, marginBottom: 4 },
+  infoText: { color: '#6b7684', fontSize: 12, marginLeft: 6, fontWeight: '600' },
+  cardFooterDivider: { height: 1, backgroundColor: '#e5e8eb', marginLeft: 38, marginTop: 8, marginBottom: 9 },
+  cardFooter: {
+    marginLeft: 38,
+    marginBottom: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
   footerItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  footerText: { color: '#191f28', fontSize: 13, fontWeight: '500' },
+  footerText: { color: '#191f28', fontSize: 12, fontWeight: '500' },
+  cardActionRow: {
+    marginLeft: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   reviewButton: {
-    marginTop: 10,
+    marginTop: 8,
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
@@ -2785,26 +3325,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#edf8f8',
     backgroundColor: '#eef1f5',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   reviewButtonText: {
     color: '#18a5a5',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   myMapButton: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
+    flex: 1,
+    justifyContent: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: 999,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#edf8f8',
-    backgroundColor: '#edf8f8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: '#18a5a5',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
   },
   myMapButtonActive: {
     borderColor: '#18a5a5',
@@ -2812,28 +3352,28 @@ const styles = StyleSheet.create({
   },
   myMapButtonText: {
     color: '#18a5a5',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   myMapButtonTextActive: {
     color: '#f9fafb',
   },
   detailButton: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
+    flex: 1,
+    justifyContent: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: 999,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#cfe0ff',
-    backgroundColor: '#f4f8ff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: '#18a5a5',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
   },
   detailButtonText: {
     color: '#18a5a5',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   mapPickerModalBackdrop: {

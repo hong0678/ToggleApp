@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,7 +42,13 @@ const resolveAssetUrl = (value?: string | null) => {
   return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
 };
 
-function IncludedStoreCard({ store }: { store: StoreLookupItemResponse }) {
+function IncludedStoreCard({
+  store,
+  onRemove,
+}: {
+  store: StoreLookupItemResponse;
+  onRemove: () => void;
+}) {
   return (
     <View style={styles.placeCard}>
       <View style={styles.placeThumb}>
@@ -58,11 +64,20 @@ function IncludedStoreCard({ store }: { store: StoreLookupItemResponse }) {
           {store.roadAddress ?? store.address ?? store.jibunAddress ?? '주소 정보 없음'}
         </Text>
       </View>
+      <TouchableOpacity style={styles.placeRemoveButton} onPress={onRemove} activeOpacity={0.85}>
+        <Ionicons name="trash-outline" size={16} color="#ef4444" />
+      </TouchableOpacity>
     </View>
   );
 }
 
-function IncludedPublicCard({ item }: { item: PublicInstitutionLookupItemResponse }) {
+function IncludedPublicCard({
+  item,
+  onRemove,
+}: {
+  item: PublicInstitutionLookupItemResponse;
+  onRemove: () => void;
+}) {
   return (
     <View style={styles.placeCard}>
       <View style={[styles.placeThumb, styles.publicThumb]}>
@@ -74,6 +89,9 @@ function IncludedPublicCard({ item }: { item: PublicInstitutionLookupItemRespons
           {item.address ?? '주소 정보 없음'}
         </Text>
       </View>
+      <TouchableOpacity style={styles.placeRemoveButton} onPress={onRemove} activeOpacity={0.85}>
+        <Ionicons name="trash-outline" size={16} color="#ef4444" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -81,11 +99,13 @@ function IncludedPublicCard({ item }: { item: PublicInstitutionLookupItemRespons
 export default function MyMapDetailScreen() {
   const router = useRouter();
   const goBack = useSafeBack('/my');
-  const params = useLocalSearchParams<{ mapId?: string | string[]; title?: string | string[] }>();
+  const params = useLocalSearchParams<{ mapId?: string | string[]; title?: string | string[]; edit?: string | string[] }>();
   const mapIdParam = Array.isArray(params.mapId) ? params.mapId[0] : params.mapId;
   const titleParam = Array.isArray(params.title) ? params.title[0] : params.title;
+  const editParam = Array.isArray(params.edit) ? params.edit[0] : params.edit;
   const mapId = mapIdParam ? Number(mapIdParam) : null;
   const insets = useSafeAreaInsets();
+  const didAutoOpenEditRef = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<UserMapDetailResponse | null>(null);
@@ -131,6 +151,10 @@ export default function MyMapDetailScreen() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    didAutoOpenEditRef.current = false;
+  }, [mapId]);
+
   const map = detail?.map;
   const coverImage = resolveAssetUrl(map?.profileImageUrl ?? null);
   const placeCount = stores.length + publics.length;
@@ -155,6 +179,16 @@ export default function MyMapDetailScreen() {
     setIsPublicDraft(Boolean(map?.isPublic));
     setIsEditModalVisible(true);
   }, [map?.description, map?.isPublic, map?.title]);
+
+  useEffect(() => {
+    const shouldAutoOpenEdit = editParam === '1' || editParam === 'true';
+    if (!shouldAutoOpenEdit || didAutoOpenEditRef.current || isLoading || !map) {
+      return;
+    }
+
+    didAutoOpenEditRef.current = true;
+    openEditModal();
+  }, [editParam, isLoading, map, openEditModal]);
 
   const saveMetadata = useCallback(async () => {
     if (!mapId || !map) return;
@@ -184,6 +218,58 @@ export default function MyMapDetailScreen() {
       setIsSavingMetadata(false);
     }
   }, [descriptionDraft, isPublicDraft, map, mapId, titleDraft]);
+
+  const removeStore = useCallback((store: StoreLookupItemResponse) => {
+    if (!mapId) return;
+
+    Alert.alert('장소 삭제', `${store.name}을(를) 이 지도에서 삭제할까요?`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await myMapApi.removeStore(store.storeId);
+            setStores((current) => current.filter((item) => item.storeId !== store.storeId));
+            setDetail((current) => (
+              current
+                ? { ...current, stores: current.stores.filter((id) => id !== store.storeId) }
+                : current
+            ));
+            Alert.alert('삭제 완료', '장소를 이 지도에서 삭제했어요.');
+          } catch (error) {
+            Alert.alert('삭제 실패', error instanceof Error ? error.message : '장소를 삭제하지 못했어요.');
+          }
+        },
+      },
+    ]);
+  }, [mapId]);
+
+  const removePublicInstitution = useCallback((item: PublicInstitutionLookupItemResponse) => {
+    if (!mapId) return;
+
+    Alert.alert('장소 삭제', `${item.name ?? '공공 장소'}를 이 지도에서 삭제할까요?`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await myMapApi.removePublicInstitution(item.id);
+            setPublics((current) => current.filter((place) => place.id !== item.id));
+            setDetail((current) => (
+              current
+                ? { ...current, publicInstitutions: current.publicInstitutions.filter((id) => id !== item.id) }
+                : current
+            ));
+            Alert.alert('삭제 완료', '장소를 이 지도에서 삭제했어요.');
+          } catch (error) {
+            Alert.alert('삭제 실패', error instanceof Error ? error.message : '장소를 삭제하지 못했어요.');
+          }
+        },
+      },
+    ]);
+  }, [mapId]);
 
   const setRepresentativeImage = useCallback(async () => {
     if (!mapId) return;
@@ -339,10 +425,10 @@ export default function MyMapDetailScreen() {
             <Text style={styles.sectionTitle}>포함된 장소</Text>
             <View style={styles.placeList}>
               {stores.map((store) => (
-                <IncludedStoreCard key={store.storeId} store={store} />
+                <IncludedStoreCard key={store.storeId} store={store} onRemove={() => void removeStore(store)} />
               ))}
               {publics.map((item) => (
-                <IncludedPublicCard key={item.id} item={item} />
+                <IncludedPublicCard key={item.id} item={item} onRemove={() => void removePublicInstitution(item)} />
               ))}
             </View>
 
@@ -731,6 +817,15 @@ const styles = StyleSheet.create({
   placeBody: {
     flex: 1,
     minWidth: 0,
+  },
+  placeRemoveButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fef2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   placeName: {
     color: '#191f28',

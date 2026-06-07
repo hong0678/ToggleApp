@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Platform,
+  Modal,
   Share,
   SafeAreaView,
   ScrollView,
@@ -18,7 +19,7 @@ import * as Linking from 'expo-linking';
 
 import { MiniKakaoMapPreview, type MiniKakaoMapPlace } from '@/components/mini-kakao-map-preview';
 import { useSafeBack } from '@/components/use-safe-back';
-import { myMapApi, publicInstitutionsApi, publicMapsApi, storesApi, tokenStore, type MapLikeResponse, type PublicInstitutionLookupItemResponse, type StoreLookupItemResponse, type UserPublicMapResponse } from '@/services/api';
+import { myMapApi, publicInstitutionsApi, publicMapsApi, storesApi, tokenStore, userMapsApi, type MapLikeResponse, type PublicInstitutionLookupItemResponse, type StoreLookupItemResponse, type UserMapSummaryResponse, type UserPublicMapResponse } from '@/services/api';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
 
@@ -32,6 +33,22 @@ function formatCount(value: number | null | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '0';
   return value.toLocaleString('ko-KR');
 }
+
+const isConflictError = (error: unknown) => error instanceof Error && 'status' in error && (error as { status?: number }).status === 409;
+
+const buildUniqueSaveCopyTitle = (maps: UserMapSummaryResponse[], baseTitle: string) => {
+  const existingTitles = new Set(maps.map((map) => map.title.trim()));
+  if (!existingTitles.has(baseTitle)) {
+    return baseTitle;
+  }
+
+  let suffix = 1;
+  while (existingTitles.has(`${baseTitle} ${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `${baseTitle} ${suffix}`;
+};
 
 function IncludedStoreCard({
   store,
@@ -122,6 +139,11 @@ export default function PublicMapDetailScreen() {
   const [likeState, setLikeState] = useState<MapLikeResponse | null>(null);
   const [isTogglingLike, setIsTogglingLike] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  const [isSaveOptionsOpen, setIsSaveOptionsOpen] = useState(false);
+  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+  const [isLoadingMaps, setIsLoadingMaps] = useState(false);
+  const [isCreatingSaveCopy, setIsCreatingSaveCopy] = useState(false);
+  const [mapCollections, setMapCollections] = useState<UserMapSummaryResponse[]>([]);
 
   const title = titleParam?.trim() || detail?.title || '공개 지도';
   const nickname = nicknameParam?.trim() || detail?.nickname || '작성자';
@@ -202,6 +224,129 @@ export default function PublicMapDetailScreen() {
     })),
   ];
 
+  const ensureMyMapExists = useCallback(async () => {
+    const maps = await userMapsApi.list();
+    if (maps.length > 0) {
+      return false;
+    }
+
+    await userMapsApi.create({
+      title: `${title} 저장본`,
+      description: `${nickname}님의 공개 지도에서 담은 장소예요.`,
+      isPublic: false,
+    });
+    return true;
+  }, [nickname, title]);
+
+  const saveStoreToMyMap = useCallback(async (storeId: number) => {
+    await ensureMyMapExists();
+    return myMapApi.addStore(storeId);
+  }, [ensureMyMapExists]);
+
+  const savePublicInstitutionToMyMap = useCallback(async (publicInstitutionId: number) => {
+    await ensureMyMapExists();
+    return myMapApi.addPublicInstitution(publicInstitutionId);
+  }, [ensureMyMapExists]);
+
+  const createSaveCopy = useCallback(async () => {
+    const maps = await userMapsApi.list();
+    const nextTitle = buildUniqueSaveCopyTitle(maps, `${title} 저장본`);
+
+    return userMapsApi.create({
+      title: nextTitle,
+      description: `${nickname}님의 공개 지도에서 복사한 지도예요.`,
+      isPublic: false,
+    });
+  }, [nickname, title]);
+
+  const savePlacesToMap = useCallback(async (mapIdToSave: number) => {
+    const storeResults = await Promise.all(
+      stores.map(async (store) => {
+        try {
+          await userMapsApi.addStore(mapIdToSave, store.storeId);
+          return 'saved' as const;
+        } catch (error) {
+          if (isConflictError(error)) {
+            return 'exists' as const;
+          }
+          throw error;
+        }
+      })
+    );
+
+    const publicResults = await Promise.all(
+      publics.map(async (publicInstitution) => {
+        try {
+          await userMapsApi.addPublicInstitution(mapIdToSave, publicInstitution.id);
+          return 'saved' as const;
+        } catch (error) {
+          if (isConflictError(error)) {
+            return 'exists' as const;
+          }
+          throw error;
+        }
+      })
+    );
+
+    return storeResults.length + publicResults.length;
+  }, [publics, stores]);
+
+  const loadMyMapsForSave = useCallback(async () => {
+    setIsLoadingMaps(true);
+    try {
+      const maps = await userMapsApi.list();
+      setMapCollections(maps);
+    } catch (error) {
+      Alert.alert('내 지도 목록 실패', error instanceof Error ? error.message : '내 지도 목록을 불러오지 못했어요.');
+      setMapCollections([]);
+    } finally {
+      setIsLoadingMaps(false);
+    }
+  }, []);
+
+  const openExistingMapPicker = useCallback(() => {
+    setIsSaveOptionsOpen(false);
+    setIsMapPickerOpen(true);
+    void loadMyMapsForSave();
+  }, [loadMyMapsForSave]);
+
+  const saveAllPlacesToExistingMap = useCallback(async (map: UserMapSummaryResponse) => {
+    try {
+      setIsSavingAll(true);
+      const mapDetail = await userMapsApi.get(map.mapId);
+      const hasAllStores = stores.every((store) => mapDetail.stores.includes(store.storeId));
+      const hasAllPublics = publics.every((publicInstitution) => mapDetail.publicInstitutions.includes(publicInstitution.id));
+
+      if (hasAllStores && hasAllPublics) {
+        setIsMapPickerOpen(false);
+        Alert.alert('이미 저장 완료', '선택한 지도에는 이 공개 지도의 장소가 이미 모두 저장되어 있어요.');
+        return;
+      }
+
+      const savedCount = await savePlacesToMap(map.mapId);
+      setIsMapPickerOpen(false);
+      Alert.alert('저장 완료', `선택한 지도에 총 ${savedCount}개의 장소를 담았어요.`);
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : '장소를 내 지도에 저장하지 못했어요.');
+    } finally {
+      setIsSavingAll(false);
+    }
+  }, [savePlacesToMap]);
+
+  const saveAsNewCopy = useCallback(async () => {
+    try {
+      setIsCreatingSaveCopy(true);
+      setIsSaveOptionsOpen(false);
+      const createdMap = await createSaveCopy();
+      const savedCount = await savePlacesToMap(createdMap.mapId);
+      Alert.alert('저장 완료', `새 저장본을 만들고 총 ${savedCount}개의 장소를 담았어요.`);
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : '새 저장본을 만들지 못했어요.');
+    } finally {
+      setIsCreatingSaveCopy(false);
+    }
+  }, [createSaveCopy, savePlacesToMap]);
+
   const toggleLike = useCallback(async () => {
     if (!mapId) return;
     const token = await tokenStore.getAccessToken();
@@ -230,28 +375,24 @@ export default function PublicMapDetailScreen() {
       return;
     }
 
-    try {
-      setIsSavingAll(true);
-      const storeResults = await Promise.allSettled(stores.map((store) => myMapApi.addStore(store.storeId)));
-      const publicResults = await Promise.allSettled(publics.map((publicInstitution) => myMapApi.addPublicInstitution(publicInstitution.id)));
-      const successCount = [...storeResults, ...publicResults].filter((result) => result.status === 'fulfilled').length;
-      Alert.alert('저장 완료', `총 ${successCount}개의 장소를 내 지도에 담았어요.`);
-    } catch (error) {
-      Alert.alert('저장 실패', error instanceof Error ? error.message : '장소를 내 지도에 저장하지 못했어요.');
-    } finally {
-      setIsSavingAll(false);
+    if (stores.length === 0 && publics.length === 0) {
+      Alert.alert('저장할 장소 없음', '이 공개 지도에는 담을 장소가 없어요.');
+      return;
     }
+
+    setIsSaveOptionsOpen(true);
   }, [publics, router, stores]);
 
   const openLargeMap = useCallback(() => {
     router.push({
-      pathname: '/map',
+      pathname: '/views/public_map_large',
       params: {
         publicMapUuid,
         mapId: mapId ? String(mapId) : '',
         mapTitle: title,
         publicMapTitle: title,
         mapNickname: nickname,
+        largeView: '1',
       },
     });
   }, [mapId, nickname, publicMapUuid, router, title]);
@@ -366,7 +507,7 @@ export default function PublicMapDetailScreen() {
             {stores.length > 0 ? (
               <View style={styles.sectionList}>
                 {stores.map((store) => (
-                  <IncludedStoreCard key={store.storeId} store={store} onAdd={async () => myMapApi.addStore(store.storeId)} />
+                  <IncludedStoreCard key={store.storeId} store={store} onAdd={() => void saveStoreToMyMap(store.storeId)} />
                 ))}
               </View>
             ) : null}
@@ -377,7 +518,7 @@ export default function PublicMapDetailScreen() {
                   <IncludedPublicCard
                     key={publicInstitution.id}
                     publicInstitution={publicInstitution}
-                    onAdd={async () => myMapApi.addPublicInstitution(publicInstitution.id)}
+                    onAdd={() => void savePublicInstitutionToMyMap(publicInstitution.id)}
                   />
                 ))}
               </View>
@@ -400,6 +541,79 @@ export default function PublicMapDetailScreen() {
           </ScrollView>
         )}
       </SafeAreaView>
+
+      <Modal visible={isSaveOptionsOpen} transparent animationType="fade" onRequestClose={() => setIsSaveOptionsOpen(false)}>
+        <View style={styles.optionModalBackdrop}>
+          <TouchableOpacity style={styles.optionModalDimmer} activeOpacity={1} onPress={() => setIsSaveOptionsOpen(false)} />
+          <View style={styles.optionModalSheet}>
+            <View style={styles.optionModalHandle} />
+            <Text style={styles.optionModalTitle}>내 지도에 저장</Text>
+            <Text style={styles.optionModalSubtitle}>기존 마이 지도에 담거나, 공개 지도를 그대로 복사해 새 저장본으로 만들 수 있어요.</Text>
+
+            <TouchableOpacity style={styles.optionCard} onPress={openExistingMapPicker} activeOpacity={0.9}>
+              <View style={styles.optionIconWrap}>
+                <Ionicons name="layers-outline" size={20} color="#18a5a5" />
+              </View>
+              <View style={styles.optionTextWrap}>
+                <Text style={styles.optionTitle}>기존 내 지도에 담기</Text>
+                <Text style={styles.optionText}>이미 만들어둔 내 지도 중 하나를 골라 넣어요.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionCard} onPress={() => void saveAsNewCopy()} activeOpacity={0.9} disabled={isCreatingSaveCopy}>
+              <View style={styles.optionIconWrap}>
+                {isCreatingSaveCopy ? <ActivityIndicator color="#18a5a5" /> : <Ionicons name="duplicate-outline" size={20} color="#18a5a5" />}
+              </View>
+              <View style={styles.optionTextWrap}>
+                <Text style={styles.optionTitle}>저장본으로 새 마이 지도 만들기</Text>
+                <Text style={styles.optionText}>이 공개 지도의 장소를 그대로 복사해 새 지도를 만들어요.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={isMapPickerOpen} transparent animationType="fade" onRequestClose={() => setIsMapPickerOpen(false)}>
+        <View style={styles.optionModalBackdrop}>
+          <TouchableOpacity style={styles.optionModalDimmer} activeOpacity={1} onPress={() => setIsMapPickerOpen(false)} />
+          <View style={styles.mapPickerSheet}>
+            <View style={styles.optionModalHandle} />
+            <Text style={styles.optionModalTitle}>어느 내 지도에 담을까요?</Text>
+            <Text style={styles.optionModalSubtitle}>기존 내 지도를 선택하면 이 공개 지도의 장소를 그대로 더해요.</Text>
+
+            <ScrollView style={styles.mapPickerScroll} contentContainerStyle={styles.mapPickerScrollContent} showsVerticalScrollIndicator={false}>
+              {isLoadingMaps ? (
+                <View style={styles.mapPickerEmpty}>
+                  <ActivityIndicator color="#18a5a5" />
+                  <Text style={styles.mapPickerEmptyText}>내 지도를 불러오는 중이에요</Text>
+                </View>
+              ) : mapCollections.length > 0 ? (
+                mapCollections.map((map) => (
+                  <TouchableOpacity key={map.mapId} style={styles.mapPickerRow} activeOpacity={0.9} onPress={() => void saveAllPlacesToExistingMap(map)}>
+                    <View style={styles.mapPickerRowIcon}>
+                      <Ionicons name="bookmark-outline" size={18} color="#18a5a5" />
+                    </View>
+                    <View style={styles.mapPickerRowText}>
+                      <Text style={styles.mapPickerRowTitle}>{map.title}</Text>
+                      <Text style={styles.mapPickerRowSubtitle}>{map.description ?? '설명 없음'}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.mapPickerEmpty}>
+                  <Text style={styles.mapPickerEmptyText}>아직 만든 내 지도가 없어요</Text>
+                  <TouchableOpacity style={styles.mapPickerPrimaryButton} onPress={() => void saveAsNewCopy()} activeOpacity={0.9}>
+                    <Text style={styles.mapPickerPrimaryButtonText}>저장본으로 새로 만들기</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -689,6 +903,162 @@ const styles = StyleSheet.create({
     color: '#191f28',
     fontSize: 12,
     fontWeight: '700',
+  },
+  optionModalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15,23,42,0.38)',
+  },
+  optionModalDimmer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  optionModalSheet: {
+    backgroundColor: '#f9fafb',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+    borderTopWidth: 1,
+    borderColor: '#e5e8eb',
+  },
+  mapPickerSheet: {
+    backgroundColor: '#f9fafb',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+    borderTopWidth: 1,
+    borderColor: '#e5e8eb',
+    maxHeight: '84%',
+  },
+  optionModalHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#d7e8ea',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  optionModalTitle: {
+    color: '#191f28',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  optionModalSubtitle: {
+    marginTop: 6,
+    marginBottom: 14,
+    color: '#6b7684',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#f7f8fa',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    marginBottom: 10,
+  },
+  optionIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#edf8f8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  optionTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  optionTitle: {
+    color: '#191f28',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  optionText: {
+    marginTop: 4,
+    color: '#6b7684',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  mapPickerScroll: {
+    maxHeight: '100%',
+  },
+  mapPickerScrollContent: {
+    paddingBottom: 8,
+  },
+  mapPickerEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: '#f7f8fa',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+  },
+  mapPickerEmptyText: {
+    marginTop: 10,
+    color: '#6b7684',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  mapPickerPrimaryButton: {
+    marginTop: 14,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: '#18a5a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPickerPrimaryButtonText: {
+    color: '#f9fafb',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  mapPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#f7f8fa',
+    borderWidth: 1,
+    borderColor: '#e5e8eb',
+    marginBottom: 10,
+  },
+  mapPickerRowIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#edf8f8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPickerRowText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mapPickerRowTitle: {
+    color: '#191f28',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  mapPickerRowSubtitle: {
+    marginTop: 4,
+    color: '#6b7684',
+    fontSize: 12,
+    fontWeight: '600',
   },
   publicSortRow: {
     flexDirection: 'row',

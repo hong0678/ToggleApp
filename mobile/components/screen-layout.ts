@@ -38,7 +38,7 @@ export const getTabScreenContentStyle = (insets: EdgeInsets) =>
   });
 
 export const getBottomTabBarStyle = (insets: EdgeInsets) => ({
-  height: BOTTOM_TAB_BAR_HEIGHT,
-  paddingTop: 0,
-  paddingBottom: 0,
+  height: 56 + insets.bottom,
+  paddingTop: 4,
+  paddingBottom: Math.max(4, insets.bottom),
 });

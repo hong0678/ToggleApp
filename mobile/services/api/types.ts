@@ -312,6 +312,25 @@ export type PublicMapListResponse = {
   totalPages: number;
 };
 
+export type LikedPublicMapListItemResponse = {
+  mapId: number;
+  publicMapUuid: string;
+  nickname: string;
+  title: string | null;
+  description: string | null;
+  profileImageUrl: string | null;
+  likeCount: number;
+  likedAt: string;
+};
+
+export type LikedPublicMapListResponse = {
+  content: LikedPublicMapListItemResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 export type UserPublicMapResponse = {
   publicMapUuid: string;
   nickname: string;

@@ -312,50 +312,57 @@ export default function MyMapScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[styles.scrollContent, getTabScreenContentStyle(insets)]}
           >
+            <PageHero
+              title="마이페이지"
+              subtitle="나의 활동과 설정을 한눈에 확인해요"
+              rightIcon={isLoggedIn ? 'log-out-outline' : 'log-in-outline'}
+              rightIconColor="#18a5a5"
+              rightIconBackground="#edf8f8"
+              onRightPress={() => {
+                if (isLoggedIn) {
+                  void handleLogout();
+                } else {
+                  router.replace('/views/user_login');
+                }
+              }}
+            />
+
             {isLoading ? (
               <View style={styles.loadingCard}>
                 <ActivityIndicator color="#18a5a5" />
                 <Text style={styles.loadingText}>내 정보를 불러오는 중이에요</Text>
               </View>
             ) : !isLoggedIn ? (
-              <LoginGatePanel
-                title="마이페이지를 보려면 로그인하세요"
-                subtitle="나의 활동과 설정을 이어서 확인할 수 있어요."
-                onLogin={() => router.replace('/views/user_login')}
-                onSignup={() => router.replace('/views/user_signup')}
-              />
+              <View style={styles.loginGateWrap}>
+                <LoginGatePanel
+                  title="마이페이지를 보려면 로그인하세요"
+                  subtitle="나의 활동과 설정을 이어서 확인할 수 있어요."
+                  onLogin={() => router.replace('/views/user_login')}
+                  onSignup={() => router.replace('/views/user_signup')}
+                />
+              </View>
             ) : (
               <>
-                <PageHero
-                  title="마이페이지"
-                  subtitle="나의 활동과 설정을 한눈에 확인해요"
-                  rightIcon="log-out-outline"
-                  rightIconColor="#18a5a5"
-                  rightIconBackground="#edf8f8"
-                  onRightPress={() => void handleLogout()}
-                />
-
                 <View style={styles.profileHero}>
                   <View style={styles.heroContent}>
-                    <TouchableOpacity
-                      style={styles.avatarCircle}
-                      activeOpacity={0.9}
-                      onPress={() => {
-                        if (profileImageSource) {
-                          setPreviewImageUrl(profileImageSource);
-                        }
-                      }}
-                      disabled={!profileImageSource}
-                    >
-                      {profileImageSource ? (
-                        <Image source={{ uri: profileImageSource }} style={styles.avatarImage} />
-                      ) : (
-                        <Text style={styles.avatarLetter}>{(displayName || nicknameDraft || 'T').trim().charAt(0).toUpperCase()}</Text>
-                      )}
-                      <View style={styles.avatarEditBadge}>
-                        <Ionicons name="pencil" size={11} color="#18a5a5" />
-                      </View>
-                    </TouchableOpacity>
+                    <View style={styles.avatarWrap}>
+                      <TouchableOpacity
+                        style={styles.avatarCircle}
+                        activeOpacity={0.9}
+                        onPress={() => {
+                          if (profileImageSource) {
+                            setPreviewImageUrl(profileImageSource);
+                          }
+                        }}
+                        disabled={!profileImageSource}
+                      >
+                        {profileImageSource ? (
+                          <Image source={{ uri: profileImageSource }} style={styles.avatarImage} />
+                        ) : (
+                          <Text style={styles.avatarLetter}>{(displayName || nicknameDraft || 'T').trim().charAt(0).toUpperCase()}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                     <View style={styles.heroTextWrap}>
                       <Text style={styles.heroName}>{displayName || nicknameDraft || 'Toggle'}님</Text>
                       <Text style={styles.heroSubtitle}>나만의 장소를 기록하고 공유해보세요</Text>
@@ -380,7 +387,7 @@ export default function MyMapScreen() {
                   <StatCard icon="thumbs-up-outline" value={receivedLikeCount} label="좋아요 받은 수" tone="pink" />
                 </View>
 
-                <Text style={styles.sectionTitle}>주요 메뉴</Text>
+                <Text style={styles.sectionTitle}>내 기능</Text>
                 <View style={styles.menuCard}>
                   <MenuRow
                     icon="map-outline"
@@ -403,7 +410,10 @@ export default function MyMapScreen() {
                     tone="pink"
                     onPress={() => router.push('/views/liked_maps')}
                   />
-                  <View style={styles.menuDivider} />
+                </View>
+
+                <Text style={styles.sectionTitle}>관리</Text>
+                <View style={styles.menuCard}>
                   <MenuRow
                     icon="chatbubble-ellipses-outline"
                     title="리뷰 관리"
@@ -411,20 +421,18 @@ export default function MyMapScreen() {
                     tone="violet"
                     onPress={() => router.push('/views/review_management')}
                   />
+                  {accountRole === 'OWNER' ? (
+                    <>
+                      <View style={styles.menuDivider} />
+                      <MenuRow
+                        icon="storefront-outline"
+                        title="점주 페이지"
+                        subtitle="매장 알림과 운영 상태를 바로 확인해요"
+                        onPress={() => router.push('/views/owner_dashboard')}
+                      />
+                    </>
+                  ) : null}
                 </View>
-
-                {accountRole === 'OWNER' ? (
-                  <TouchableOpacity style={styles.ownerCard} onPress={() => router.push('/views/owner_dashboard')} activeOpacity={0.9}>
-                    <View style={styles.ownerIconWrap}>
-                      <Ionicons name="storefront-outline" size={24} color="#18a5a5" />
-                    </View>
-                    <View style={styles.ownerTextWrap}>
-                      <Text style={styles.ownerTitle}>점주 페이지</Text>
-                      <Text style={styles.ownerSubtitle}>매장 알림과 운영 상태를 바로 확인해요</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={19} color="#6b7684" />
-                  </TouchableOpacity>
-                ) : null}
 
                 <Text style={styles.sectionTitle}>설정</Text>
                 <View style={styles.menuCard}>
@@ -624,6 +632,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 18,
   },
+  loginGateWrap: {
+    marginTop: 58,
+  },
   pageHeroCard: {
     backgroundColor: '#f9fafb',
     borderRadius: 22,
@@ -782,6 +793,12 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingRight: 86,
   },
+  avatarWrap: {
+    width: 84,
+    height: 84,
+    position: 'relative',
+    overflow: 'visible',
+  },
   avatarCircle: {
     width: 76,
     height: 76,
@@ -800,19 +817,6 @@ const styles = StyleSheet.create({
     color: '#f9fafb',
     fontSize: 28,
     fontWeight: '900',
-  },
-  avatarEditBadge: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#edf8f8',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   heroTextWrap: {
     flex: 1,

@@ -536,7 +536,7 @@ export default function ReviewManagementScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f8fb' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   safeArea: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 18,

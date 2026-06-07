@@ -157,14 +157,35 @@ export function MiniKakaoMapPreview({
                 });
               });
 
-              if (lockToCenter && center) {
-                map.setCenter(new kakao.maps.LatLng(center.latitude, center.longitude));
-                map.setLevel(4);
-              } else if (places.length > 1 || center) {
-                map.setBounds(bounds, 30, 30, 30, 30);
-              } else if (places.length === 1) {
-                map.setCenter(new kakao.maps.LatLng(places[0].latitude, places[0].longitude));
+              function fitToAllPlaces() {
+                if (lockToCenter && center) {
+                  map.setCenter(new kakao.maps.LatLng(center.latitude, center.longitude));
+                  map.setLevel(4);
+                  return;
+                }
+
+                if (places.length > 1 || center) {
+                  map.relayout();
+                  map.setBounds(bounds, 56, 56, 56, 56);
+                  return;
+                }
+
+                if (places.length === 1) {
+                  map.setCenter(new kakao.maps.LatLng(places[0].latitude, places[0].longitude));
+                }
               }
+
+              if (lockToCenter && center) {
+                fitToAllPlaces();
+              } else if (places.length > 1 || center) {
+                fitToAllPlaces();
+              } else if (places.length === 1) {
+                fitToAllPlaces();
+              }
+
+              setTimeout(function() {
+                fitToAllPlaces();
+              }, 60);
             }
 
             var script = document.createElement('script');

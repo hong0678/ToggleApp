@@ -1,5 +1,8 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { useFonts } from 'expo-font';
 import { Redirect, Stack, useLocalSearchParams, usePathname } from 'expo-router';
+import { useEffect } from 'react';
+import { Text, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -30,6 +33,15 @@ function buildQueryString(params: Record<string, string | string[] | undefined>)
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    'Pretendard-ExtraLight': require('../assets/fonts/Pretendard-ExtraLight.ttf'),
+    'Pretendard-Light': require('../assets/fonts/Pretendard-Light.ttf'),
+    'Pretendard-Regular': require('../assets/fonts/Pretendard-Regular.ttf'),
+    'Pretendard-Medium': require('../assets/fonts/Pretendard-Medium.ttf'),
+    'Pretendard-SemiBold': require('../assets/fonts/Pretendard-SemiBold.ttf'),
+    'Pretendard-Bold': require('../assets/fonts/Pretendard-Bold.ttf'),
+    'Pretendard-ExtraBold': require('../assets/fonts/Pretendard-ExtraBold.ttf'),
+  });
   const colorScheme = useColorScheme();
   const pathname = usePathname();
   const params = useLocalSearchParams() as Record<string, string | string[] | undefined>;
@@ -40,6 +52,22 @@ export default function RootLayout() {
       background: '#f7f8fa',
     },
   };
+
+  useEffect(() => {
+    if (!fontsLoaded) return;
+
+    const sharedTextStyle = { fontFamily: 'Pretendard-Regular' };
+
+    Text.defaultProps = Text.defaultProps ?? {};
+    Text.defaultProps.style = [sharedTextStyle, Text.defaultProps.style];
+
+    TextInput.defaultProps = TextInput.defaultProps ?? {};
+    TextInput.defaultProps.style = [sharedTextStyle, TextInput.defaultProps.style];
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   if (pathname?.startsWith('/--/')) {
     const normalizedPath = pathname.replace(/^\/--/, '');

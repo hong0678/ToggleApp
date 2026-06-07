@@ -18,8 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeMapCard } from '@/components/home-map-card';
 import { getHomeScreenContentStyle } from '@/components/screen-layout';
-import { authApi, favoritesApi, myMapApi, publicMapsApi, storesApi, tokenStore, type MeResponse, type StoreLookupItemResponse } from '@/services/api';
-import type { MyMapResponse } from '@/services/api/myMap';
+import { authApi, favoritesApi, publicMapsApi, storesApi, tokenStore, userMapsApi, type MeResponse, type StoreLookupItemResponse } from '@/services/api';
 import type { PublicMapListItemResponse } from '@/services/api/types';
 
 type PopularPlaceCardData = {
@@ -150,27 +149,44 @@ const normalizePopularPlace = (
 
 function ShortcutCard({
   title,
-  subtitle,
   icon,
+  count,
+  countSuffix,
+  accent,
+  iconColor,
+  countColor,
+  countBgColor,
+  countBorderColor,
   onPress,
-  accentStyle,
 }: {
   title: string;
-  subtitle: string;
   icon: keyof typeof Ionicons.glyphMap;
+  count: number;
+  countSuffix: '곳' | '개';
+  accent: string;
+  iconColor: string;
+  countColor: string;
+  countBgColor: string;
+  countBorderColor: string;
   onPress: () => void;
-  accentStyle: object;
 }) {
   return (
-    <TouchableOpacity style={[styles.shortcutCard, accentStyle]} onPress={onPress} activeOpacity={0.9}>
-      <View style={styles.shortcutIconWrap}>
-        <Ionicons name={icon} size={22} color="#18a5a5" />
+    <TouchableOpacity style={styles.shortcutMetricCard} onPress={onPress} activeOpacity={0.9}>
+      <View style={[styles.shortcutMetricIconWrap, { backgroundColor: accent }]}>
+        <View style={[styles.shortcutMetricDot, { backgroundColor: countColor }]} />
+        <Ionicons name={icon} size={30} color={iconColor} />
       </View>
-      <View style={styles.shortcutTextWrap}>
-        <Text style={styles.shortcutTitle} numberOfLines={1}>{title}</Text>
-        <Text style={styles.shortcutSubtitle} numberOfLines={2}>{subtitle}</Text>
+      <View style={styles.shortcutMetricTextWrap}>
+        <Text style={styles.shortcutMetricTitle} numberOfLines={2}>
+          {title}
+        </Text>
+        <View style={[styles.shortcutMetricCountPill, { backgroundColor: countBgColor, borderColor: countBorderColor }]}>
+          <Text style={[styles.shortcutMetricCountText, { color: countColor }]}>
+            {count.toLocaleString('ko-KR')}
+            {countSuffix}
+          </Text>
+        </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#18a5a5" />
     </TouchableOpacity>
   );
 }
@@ -295,14 +311,15 @@ export default function MainHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [myMap, setMyMap] = useState<MyMapResponse | null>(null);
   const [favoriteCount, setFavoriteCount] = useState(0);
+  const [myMapCount, setMyMapCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [popularPlaces, setPopularPlaces] = useState<PopularPlaceCardData[]>([]);
   const [popularPlacesLoading, setPopularPlacesLoading] = useState(true);
   const [popularPlacesError, setPopularPlacesError] = useState<string | null>(null);
   const [nearbyOpenPlaces, setNearbyOpenPlaces] = useState<PopularPlaceCardData[]>([]);
   const [peopleMaps, setPeopleMaps] = useState<PeopleMapCardData[]>([]);
+  const [peopleMapsTotalCount, setPeopleMapsTotalCount] = useState(0);
   const [peopleMapsLoading, setPeopleMapsLoading] = useState(true);
   const [peopleMapsError, setPeopleMapsError] = useState<string | null>(null);
   const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -312,25 +329,25 @@ export default function MainHomeScreen() {
     const token = await tokenStore.getAccessToken();
     if (!token) {
       setMe(null);
-      setMyMap(null);
       setFavoriteCount(0);
+      setMyMapCount(0);
       return;
     }
 
     try {
-      const [meResponse, myMapResponse, favoritesResponse] = await Promise.all([
+      const [meResponse, myMapsResponse, favoritesResponse] = await Promise.all([
         authApi.me(),
-        myMapApi.get(),
+        userMapsApi.list(),
         favoritesApi.listStores(),
       ]);
 
       setMe(meResponse);
-      setMyMap(myMapResponse);
+      setMyMapCount(myMapsResponse.length);
       setFavoriteCount(favoritesResponse.content.length);
     } catch {
       setMe(null);
-      setMyMap(null);
       setFavoriteCount(0);
+      setMyMapCount(0);
     }
   }, []);
 
@@ -438,9 +455,11 @@ export default function MainHomeScreen() {
           profileImageUrl: item.profileImageUrl,
         }));
 
+      setPeopleMapsTotalCount(response.totalElements);
       setPeopleMaps(nextPeopleMaps);
     } catch (error) {
       setPeopleMaps([]);
+      setPeopleMapsTotalCount(0);
       setPeopleMapsError(error instanceof Error ? error.message : '사람들 지도를 불러오지 못했어요.');
     } finally {
       setPeopleMapsLoading(false);
@@ -457,7 +476,6 @@ export default function MainHomeScreen() {
 
   const displayName = me?.displayName ?? me?.nickname ?? null;
   const savedPlacesCount = me?.favorites.stores.length ?? favoriteCount;
-  const myMapCount = myMap?.stores.length ?? 0;
   const nearbyOpenPlacesCount = nearbyOpenPlaces.length;
   const nearbyOpenPlacesPreview = nearbyOpenPlaces.slice(0, 12);
   const submitHomeSearch = () => {
@@ -564,34 +582,54 @@ export default function MainHomeScreen() {
             </View>
           </View>
 
-          <View style={styles.shortcutGrid}>
+          <View style={styles.shortcutMetricGrid}>
             <ShortcutCard
               title="지금 열린 곳"
-              subtitle="내 주변 영업 중인 장소"
               icon="location-outline"
+              count={nearbyOpenPlacesCount}
+              countSuffix="곳"
+              accent="#eaf8f7"
+              iconColor="#19a5a7"
+              countColor="#18a5a5"
+              countBgColor="#f5fbfb"
+              countBorderColor="#d9ecee"
               onPress={() => router.push('/map')}
-              accentStyle={styles.shortcutA}
-            />
-            <ShortcutCard
-              title="마이지도"
-              subtitle="저장한 장소와 공개 지도"
-              icon="map-outline"
-              onPress={() => router.push('/list')}
-              accentStyle={styles.shortcutB}
             />
             <ShortcutCard
               title="저장한 장소"
-              subtitle={`내가 찜한 곳 ${savedPlacesCount}개`}
               icon="heart-outline"
+              count={savedPlacesCount}
+              countSuffix="곳"
+              accent="#fdecef"
+              iconColor="#ec5e72"
+              countColor="#ec5e72"
+              countBgColor="#fff5f7"
+              countBorderColor="#f4dde2"
               onPress={() => router.push('/saved')}
-              accentStyle={styles.shortcutC}
             />
             <ShortcutCard
-              title="내 지도"
-              subtitle={`나만의 지도 ${myMapCount}개`}
-              icon="bookmark-outline"
-              onPress={() => router.push('/my')}
-              accentStyle={styles.shortcutD}
+              title="마이지도"
+              icon="map-outline"
+              count={myMapCount}
+              countSuffix="개"
+              accent="#eaf8f7"
+              iconColor="#19a5a7"
+              countColor="#18a5a5"
+              countBgColor="#f5fbfb"
+              countBorderColor="#d9ecee"
+              onPress={() => router.push('/list')}
+            />
+            <ShortcutCard
+              title="사람들 지도"
+              icon="people-outline"
+              count={peopleMapsTotalCount}
+              countSuffix="개"
+              accent="#f0ebfb"
+              iconColor="#7f68db"
+              countColor="#7f68db"
+              countBgColor="#faf7ff"
+              countBorderColor="#e5dcfb"
+              onPress={() => router.push('/list')}
             />
           </View>
 
@@ -842,52 +880,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shortcutGrid: {
+  shortcutMetricGrid: {
     position: 'relative',
     zIndex: 2,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 16,
+    justifyContent: 'space-between',
+    rowGap: 14,
+    marginTop: 14,
   },
-  shortcutCard: {
-    width: '48%',
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 96,
-    justifyContent: 'center',
+  shortcutMetricCard: {
+    width: '24%',
+    alignItems: 'center',
   },
-  shortcutA: { backgroundColor: '#ffffff', borderColor: '#e5e8eb' },
-  shortcutB: { backgroundColor: '#ffffff', borderColor: '#e5e8eb' },
-  shortcutC: { backgroundColor: '#ffffff', borderColor: '#e5e8eb' },
-  shortcutD: { backgroundColor: '#ffffff', borderColor: '#e5e8eb' },
-  ownerAction: { marginTop: 4, marginBottom: 14 },
-  shortcutIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
+  shortcutMetricIconWrap: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  shortcutTextWrap: {
-    flex: 1,
-    minWidth: 0,
+  shortcutMetricDot: {
+    position: 'absolute',
+    right: -2,
+    top: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
-  shortcutTitle: {
+  shortcutMetricTextWrap: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  shortcutMetricTitle: {
+    minHeight: 34,
+    textAlign: 'center',
     fontSize: 13,
+    lineHeight: 17,
     fontWeight: '900',
     color: '#191f28',
-    marginBottom: 2,
+    marginBottom: 8,
   },
-  shortcutSubtitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    color: '#6b7684',
+  shortcutMetricCountPill: {
+    minWidth: 56,
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
+  shortcutMetricCountText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '900',
+  },
+  ownerAction: { marginTop: 4, marginBottom: 14 },
   actionCard: {
     position: 'relative',
     zIndex: 2,

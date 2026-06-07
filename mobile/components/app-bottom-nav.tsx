@@ -63,27 +63,27 @@ export function AppBottomNav({ activeTab }: AppBottomNavProps) {
 const styles = StyleSheet.create({
   bottomTabBar: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: '#f7f8fa',
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderColor: '#eceef3',
+    borderTopColor: '#eceef3',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 2,
+    justifyContent: 'center',
   },
   tabText: {
     color: '#8b95a1',
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
   },
   tabTextActive: {
     color: '#18a5a5',
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

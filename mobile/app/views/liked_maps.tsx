@@ -18,11 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBottomNav } from '@/components/app-bottom-nav';
 import { PageHero } from '@/components/page-hero';
 import { getTabScreenContentStyle } from '@/components/screen-layout';
-import { publicMapsApi, tokenStore, type MapLikeResponse, type PublicMapListItemResponse } from '@/services/api';
+import { publicMapsApi, tokenStore, type LikedPublicMapListItemResponse } from '@/services/api';
 
-type LikedMapItem = PublicMapListItemResponse & {
-  likeState: MapLikeResponse;
-};
+type LikedMapItem = LikedPublicMapListItemResponse;
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
 
@@ -136,30 +134,17 @@ export default function LikedMapsScreen() {
     setIsLoggedIn(true);
 
     try {
-      const pages = await Promise.all(
-        Array.from({ length: 4 }, (_, page) => publicMapsApi.list({ sort: 'likes', page, size: 20 }))
+      const firstPage = await publicMapsApi.listLikedByMe({ page: 0, size: 50 });
+      const remainingPages = Array.from({ length: Math.max(firstPage.totalPages - 1, 0) }, (_, index) => index + 1);
+      const otherPages = remainingPages.length
+        ? await Promise.all(remainingPages.map((page) => publicMapsApi.listLikedByMe({ page, size: 50 })))
+        : [];
+      const nextLikedMaps = Array.from(
+        [firstPage, ...otherPages]
+          .flatMap((page) => page.content)
+          .reduce((map, item) => map.set(item.mapId, item), new Map<number, LikedMapItem>())
+          .values()
       );
-
-      const candidates = pages.flatMap((page) => page.content);
-      const withLikeState = await Promise.all(
-        candidates.map(async (item) => {
-          const likeState = await publicMapsApi.getLikes(item.mapId).catch(() => ({
-            mapId: item.mapId,
-            likeCount: item.likeCount,
-            likedByMe: false,
-          }));
-
-          return {
-            ...item,
-            likeState,
-          };
-        })
-      );
-
-      const nextLikedMaps = withLikeState
-        .filter((item) => item.likeState.likedByMe)
-        .sort((left, right) => right.likeState.likeCount - left.likeState.likeCount)
-        .slice(0, 20);
 
       setLikedMaps(nextLikedMaps);
     } catch (loadError) {
@@ -279,7 +264,7 @@ export default function LikedMapsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f8fb' },
+  container: { flex: 1, backgroundColor: '#f7f8fa' },
   safeArea: { flex: 1 },
   scrollContent: { paddingHorizontal: 18 },
   loadingCard: {

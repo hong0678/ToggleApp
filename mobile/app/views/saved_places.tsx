@@ -412,12 +412,14 @@ export default function SavedPlacesScreen() {
             />
 
             {!isLoggedIn ? (
-              <LoginGatePanel
-                title="저장한 장소를 보려면 로그인하세요"
-                subtitle="찜한 장소, 내 지도 추가, 지도 선택까지 이어서 사용할 수 있어요."
-                onLogin={() => router.replace('/views/user_login')}
-                onSignup={() => router.replace('/views/user_signup')}
-              />
+              <View style={styles.loginGateWrap}>
+                <LoginGatePanel
+                  title="저장한 장소를 보려면 로그인하세요"
+                  subtitle="찜한 장소, 내 지도 추가, 지도 선택까지 이어서 사용할 수 있어요."
+                  onLogin={() => router.replace('/views/user_login')}
+                  onSignup={() => router.replace('/views/user_signup')}
+                />
+              </View>
             ) : (
               <>
                 <View style={styles.quickRow}>
@@ -602,6 +604,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 18,
+  },
+  loginGateWrap: {
+    marginTop: 58,
   },
   heroShell: {
     backgroundColor: '#f9fafb',
